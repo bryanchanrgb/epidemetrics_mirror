@@ -1,0 +1,316 @@
+adm_area_1 is CTY.##_1 ,  last digit is always 1
+_1 suffix on the end of the code for every area level
+weather is at adm_area_2, e.g. BOL.8.8_1
+
+3 letter country code, adm_area_1_number, adm_area_2_number, 
+
+
+Model 1 with partial list of regressors:
+
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:               erf_p_pc   R-squared:                       0.492
+Model:                            OLS   Adj. R-squared:                  0.370
+Method:                 Least Squares   F-statistic:                     4.049
+Date:                Sun, 28 Jun 2020   Prob (F-statistic):           1.11e-06
+Time:                        19:52:09   Log-Likelihood:                 503.52
+No. Observations:                 115   AIC:                            -961.0
+Df Residuals:                      92   BIC:                            -897.9
+Df Model:                          22                                         
+Covariance Type:            nonrobust                                         
+===========================================================================================
+                              coef    std err          t      P>|t|      [0.025      0.975]
+-------------------------------------------------------------------------------------------
+const                      -0.0302      0.082     -0.368      0.713      -0.193       0.133
+EN.POP.DNST              2.232e-07   4.67e-07      0.478      0.634   -7.04e-07    1.15e-06
+SE.PRM.TENR              6.194e-05   3.81e-05      1.624      0.108   -1.38e-05       0.000
+SH.DYN.MORT             -2.081e-06   5.27e-05     -0.040      0.969      -0.000       0.000
+SH.IMM.MEAS              2.354e-05   4.28e-05      0.550      0.584   -6.15e-05       0.000
+SM.POP.NETM_pc              0.0641      0.022      2.901      0.005       0.020       0.108
+SP.POP.GROW              6.094e-05      0.001      0.061      0.951      -0.002       0.002
+SP.URB.GROW                -0.0007      0.001     -0.820      0.414      -0.002       0.001
+SP.URB.TOTL_pc            302.0577    819.986      0.368      0.713   -1326.505    1930.620
+EG.ELC.ACCS.ZS          -1.244e-05   3.42e-05     -0.364      0.717   -8.03e-05    5.54e-05
+IP.JRN.ARTC.SC_pc          -2.1436      1.227     -1.747      0.084      -4.580       0.293
+IT.NET.USER.ZS           1.091e-05   3.77e-05      0.290      0.773   -6.39e-05    8.57e-05
+NY.GDP.PCAP.CN           1.586e-12   1.88e-11      0.084      0.933   -3.58e-11     3.9e-11
+SH.MED.BEDS.ZS             -0.0002      0.000     -1.241      0.218      -0.001       0.000
+SH.STA.DIAB.ZS            3.24e-05      0.000      0.295      0.769      -0.000       0.000
+SL.EMP.VULN.ZS          -1.274e-05   3.87e-05     -0.329      0.743   -8.97e-05    6.42e-05
+SP.DYN.LE00.IN          -6.262e-05      0.000     -0.347      0.729      -0.000       0.000
+SP.RUR.TOTL.ZS              0.0003      0.001      0.374      0.709      -0.001       0.002
+EN.ATM.CO2E.KD.GD          -0.0013      0.001     -1.059      0.292      -0.004       0.001
+EN.ATM.PM25.MC.M3        9.282e-05   2.35e-05      3.954      0.000    4.62e-05       0.000
+SE.ENR.PRSC.FM.ZS          -0.0055      0.006     -0.911      0.365      -0.018       0.007
+SH.XPD.CHEX.PP.CD        4.954e-07   3.76e-07      1.317      0.191   -2.51e-07    1.24e-06
+SH.XPD.GHED.PC.CD_ratio     0.0009      0.003      0.290      0.772      -0.005       0.007
+SP.URB.TOTL.IN.ZS          -3.0202      8.199     -0.368      0.713     -19.304      13.264
+==============================================================================
+Omnibus:                      116.327   Durbin-Watson:                   1.798
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):             2234.848
+Skew:                           3.300   Prob(JB):                         0.00
+Kurtosis:                      23.563   Cond. No.                     2.24e+23
+==============================================================================
+
+Warnings:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+[2] The smallest eigenvalue is 8.49e-31. This might indicate that there are
+strong multicollinearity problems or that the design matrix is singular.
+
+Only net migration and PM25 are of note.
+
+Model 2 with full list of regressors:
+
+"""
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:               erf_p_pc   R-squared:                       0.670
+Model:                            OLS   Adj. R-squared:                  0.253
+Method:                 Least Squares   F-statistic:                     1.607
+Date:                Sun, 28 Jun 2020   Prob (F-statistic):              0.123
+Time:                        20:03:44   Log-Likelihood:                 274.19
+No. Observations:                  53   AIC:                            -488.4
+Df Residuals:                      23   BIC:                            -429.3
+Df Model:                          29                                         
+Covariance Type:            nonrobust                                         
+===========================================================================================
+                              coef    std err          t      P>|t|      [0.025      0.975]
+-------------------------------------------------------------------------------------------
+const                       0.0233      0.733      0.032      0.975      -1.494       1.541
+EN.POP.DNST             -4.614e-06   3.53e-06     -1.306      0.204   -1.19e-05    2.69e-06
+EN.URB.LCTY_pc             -0.0059      0.004     -1.509      0.145      -0.014       0.002
+SE.PRM.TENR              8.439e-05    6.2e-05      1.362      0.186   -4.38e-05       0.000
+SH.DYN.MORT              6.997e-05    8.1e-05      0.864      0.397   -9.76e-05       0.000
+SH.IMM.MEAS              -5.12e-05    5.4e-05     -0.948      0.353      -0.000    6.06e-05
+SH.PRV.SMOK                -0.0002    6.9e-05     -2.183      0.040      -0.000   -7.87e-06
+SI.POV.DDAY             -2.353e-05   5.92e-05     -0.398      0.694      -0.000    9.89e-05
+SM.POP.NETM_pc              0.0641      0.035      1.811      0.083      -0.009       0.137
+SP.POP.GROW                -0.0004      0.001     -0.420      0.678      -0.003       0.002
+SP.URB.GROW                -0.0004      0.001     -0.639      0.529      -0.002       0.001
+SP.URB.TOTL_pc           -271.9806   8568.581     -0.032      0.975    -1.8e+04    1.75e+04
+EG.ELC.ACCS.ZS          -3.546e-05    4.5e-05     -0.788      0.439      -0.000    5.76e-05
+IP.JRN.ARTC.SC_pc          -0.9289      2.463     -0.377      0.710      -6.025       4.167
+IT.NET.USER.ZS           7.942e-05   4.62e-05      1.720      0.099   -1.61e-05       0.000
+NY.GDP.PCAP.CN           1.139e-11    1.7e-11      0.671      0.509   -2.37e-11    4.65e-11
+SE.ADT.LITR.ZS          -8.355e-06   5.59e-05     -0.149      0.882      -0.000       0.000
+SH.MED.BEDS.ZS              0.0008      0.000      1.951      0.063   -4.73e-05       0.002
+SH.STA.DIAB.ZS              0.0001      0.000      0.720      0.479      -0.000       0.000
+SI.DST.FRST.20             -0.0006      0.000     -1.650      0.112      -0.001       0.000
+SL.EMP.VULN.ZS           2.167e-05   5.01e-05      0.432      0.670    -8.2e-05       0.000
+SP.DYN.LE00.IN              0.0001      0.000      0.417      0.681      -0.000       0.001
+SP.RUR.TOTL.ZS             -0.0004      0.007     -0.053      0.958      -0.016       0.015
+BX.GRT.EXTA.CD.WD_pc     1.201e-05   1.21e-05      0.995      0.330    -1.3e-05     3.7e-05
+EN.ATM.CO2E.KD.GD          -0.0022      0.001     -1.518      0.143      -0.005       0.001
+EN.ATM.PM25.MC.M3        3.128e-05   2.94e-05      1.064      0.298   -2.95e-05    9.21e-05
+IS.AIR.GOOD.MT.K1_pc        2.8227      2.626      1.075      0.293      -2.609       8.254
+MS.MIL.TOTL.TF.ZS           0.0005      0.001      1.035      0.311      -0.001       0.002
+SE.ENR.PRSC.FM.ZS           0.0074      0.009      0.793      0.436      -0.012       0.027
+SH.XPD.CHEX.PP.CD       -2.386e-06   2.17e-06     -1.098      0.283   -6.88e-06    2.11e-06
+SH.XPD.GHED.PC.CD_ratio     0.0045      0.005      0.827      0.417      -0.007       0.016
+SP.URB.TOTL.IN.ZS           2.7195     85.678      0.032      0.975    -174.520     179.959
+==============================================================================
+Omnibus:                       10.664   Durbin-Watson:                   2.169
+Prob(Omnibus):                  0.005   Jarque-Bera (JB):               13.910
+Skew:                           0.686   Prob(JB):                     0.000954
+Kurtosis:                       5.102   Cond. No.                     5.30e+17
+==============================================================================
+
+Warnings:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+[2] The smallest eigenvalue is 1.47e-19. This might indicate that there are
+strong multicollinearity problems or that the design matrix is singular.
+
+
+Model 3: with further filtered regressor list to try to reduce collinearity, and with robust SEs
+
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:               erf_p_pc   R-squared:                       0.469
+Model:                            OLS   Adj. R-squared:                  0.379
+Method:                 Least Squares   F-statistic:                     1.721
+Date:                Sun, 28 Jun 2020   Prob (F-statistic):             0.0544
+Time:                        21:42:12   Log-Likelihood:                 515.25
+No. Observations:                 118   AIC:                            -994.5
+Df Residuals:                     100   BIC:                            -944.6
+Df Model:                          17                                         
+Covariance Type:                  HC3                                         
+===========================================================================================
+                              coef    std err          z      P>|z|      [0.025      0.975]
+-------------------------------------------------------------------------------------------
+const                      -0.0019      0.008     -0.248      0.804      -0.017       0.013
+EN.POP.DNST              4.312e-08   8.85e-07      0.049      0.961   -1.69e-06    1.78e-06
+SE.PRM.TENR              6.501e-05   5.01e-05      1.298      0.194   -3.32e-05       0.000
+SH.IMM.MEAS              2.396e-05   3.69e-05      0.650      0.516   -4.83e-05    9.62e-05
+SM.POP.NETM_pc              0.0664      0.040      1.675      0.094      -0.011       0.144
+SP.POP.GROW                -0.0006      0.001     -0.981      0.327      -0.002       0.001
+SP.URB.GROW_ratio       -6.026e-07   6.35e-05     -0.009      0.992      -0.000       0.000
+EG.ELC.ACCS.ZS          -3.299e-06   3.42e-05     -0.097      0.923   -7.03e-05    6.37e-05
+NY.GDP.PCAP.CN          -4.861e-12   1.12e-11     -0.434      0.664   -2.68e-11    1.71e-11
+SH.MED.BEDS.ZS             -0.0002      0.000     -0.968      0.333      -0.001       0.000
+SH.STA.DIAB.ZS              0.0001      0.000      0.861      0.389      -0.000       0.000
+SP.DYN.LE00.IN          -8.343e-05    9.3e-05     -0.897      0.370      -0.000    9.88e-05
+EN.ATM.CO2E.KD.GD          -0.0009      0.001     -0.952      0.341      -0.003       0.001
+EN.ATM.PM25.MC.M3        9.113e-05   7.27e-05      1.254      0.210   -5.13e-05       0.000
+SE.ENR.PRSC.FM.ZS          -0.0044      0.006     -0.785      0.432      -0.015       0.007
+SH.XPD.CHEX.PP.CD        2.259e-07    3.1e-07      0.728      0.466   -3.82e-07    8.34e-07
+SH.XPD.GHED.PC.CD_ratio    -0.0006      0.003     -0.217      0.828      -0.006       0.005
+SP.URB.TOTL.IN.ZS        7.475e-05   3.22e-05      2.318      0.020    1.16e-05       0.000
+==============================================================================
+Omnibus:                      118.304   Durbin-Watson:                   1.870
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):             2283.736
+Skew:                           3.290   Prob(JB):                         0.00
+Kurtosis:                      23.523   Cond. No.                     1.28e+09
+==============================================================================
+
+Warnings:
+[1] Standard Errors are heteroscedasticity robust (HC3)
+[2] The condition number is large, 1.28e+09. This might indicate that there are
+strong multicollinearity or other numerical problems.
+
+
+Model 4: log model with narrowed down list
+using log_erf_p_pc as y, also taking log of population density and GDP per capita
+also correcting urban population growth measure to be minus total pop growth rather than divided by
+
+
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:           log_erf_p_pc   R-squared:                       0.596
+Model:                            OLS   Adj. R-squared:                  0.527
+Method:                 Least Squares   F-statistic:                     9.213
+Date:                Sun, 28 Jun 2020   Prob (F-statistic):           6.72e-14
+Time:                        22:31:54   Log-Likelihood:                -196.48
+No. Observations:                 118   AIC:                             429.0
+Df Residuals:                     100   BIC:                             478.8
+Df Model:                          17                                         
+Covariance Type:                  HC3                                         
+===========================================================================================
+                              coef    std err          z      P>|z|      [0.025      0.975]
+-------------------------------------------------------------------------------------------
+const                      -5.8104      3.682     -1.578      0.115     -13.028       1.407
+log_EN.POP.DNST             0.0135      0.123      0.109      0.913      -0.228       0.255
+SE.PRM.TENR                -0.0054      0.014     -0.385      0.700      -0.033       0.022
+SH.IMM.MEAS                 0.0108      0.018      0.585      0.558      -0.025       0.047
+SM.POP.NETM_pc             20.5659     12.711      1.618      0.106      -4.347      45.479
+SP.POP.GROW                -0.0923      0.238     -0.388      0.698      -0.559       0.375
+SP.URB.GROW_relative       -0.9787      0.344     -2.849      0.004      -1.652      -0.305
+EG.ELC.ACCS.ZS              0.0230      0.015      1.507      0.132      -0.007       0.053
+log_NY.GDP.PCAP.CN         -0.0398      0.083     -0.480      0.631      -0.202       0.123
+SH.MED.BEDS.ZS             -0.0402      0.094     -0.427      0.670      -0.225       0.144
+SH.STA.DIAB.ZS             -0.0933      0.054     -1.722      0.085      -0.200       0.013
+SP.DYN.LE00.IN             -0.0388      0.057     -0.677      0.499      -0.151       0.074
+EN.ATM.CO2E.KD.GD          -0.7368      0.570     -1.293      0.196      -1.853       0.380
+EN.ATM.PM25.MC.M3           0.0188      0.013      1.498      0.134      -0.006       0.043
+SE.ENR.PRSC.FM.ZS          -1.8412      2.540     -0.725      0.469      -6.820       3.137
+SH.XPD.CHEX.PP.CD           0.0002      0.000      1.614      0.106   -4.16e-05       0.000
+SH.XPD.GHED.PC.CD_ratio    -1.4788      1.237     -1.195      0.232      -3.904       0.946
+SP.URB.TOTL.IN.ZS           0.0362      0.010      3.456      0.001       0.016       0.057
+==============================================================================
+Omnibus:                        2.005   Durbin-Watson:                   1.819
+Prob(Omnibus):                  0.367   Jarque-Bera (JB):                2.032
+Skew:                          -0.302   Prob(JB):                        0.362
+Kurtosis:                       2.782   Cond. No.                     1.83e+05
+==============================================================================
+
+Warnings:
+[1] Standard Errors are heteroscedasticity robust (HC3)
+[2] The condition number is large, 1.83e+05. This might indicate that there are
+strong multicollinearity or other numerical problems.
+
+
+Model 4a: log model on erf_a
+
+"""
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:                  erf_a   R-squared:                       0.305
+Model:                            OLS   Adj. R-squared:                  0.187
+Method:                 Least Squares   F-statistic:                     2.391
+Date:                Sun, 28 Jun 2020   Prob (F-statistic):            0.00386
+Time:                        22:55:06   Log-Likelihood:                 270.53
+No. Observations:                 118   AIC:                            -505.1
+Df Residuals:                     100   BIC:                            -455.2
+Df Model:                          17                                         
+Covariance Type:                  HC3                                         
+===========================================================================================
+                              coef    std err          z      P>|z|      [0.025      0.975]
+-------------------------------------------------------------------------------------------
+const                       0.0166      0.067      0.247      0.805      -0.115       0.149
+log_EN.POP.DNST            -0.0012      0.002     -0.505      0.614      -0.006       0.003
+SE.PRM.TENR                 0.0003      0.000      1.297      0.195      -0.000       0.001
+SH.IMM.MEAS                -0.0005      0.000     -0.992      0.321      -0.001       0.000
+SM.POP.NETM_pc             -0.1516      0.250     -0.607      0.544      -0.641       0.338
+SP.POP.GROW                 0.0067      0.006      1.072      0.284      -0.006       0.019
+SP.URB.GROW_relative        0.0119      0.008      1.469      0.142      -0.004       0.028
+EG.ELC.ACCS.ZS          -8.474e-05      0.000     -0.344      0.731      -0.001       0.000
+log_NY.GDP.PCAP.CN         -0.0019      0.002     -1.002      0.316      -0.006       0.002
+SH.MED.BEDS.ZS              0.0037      0.003      1.342      0.179      -0.002       0.009
+SH.STA.DIAB.ZS              0.0025      0.001      3.199      0.001       0.001       0.004
+SP.DYN.LE00.IN              0.0004      0.001      0.457      0.648      -0.001       0.002
+EN.ATM.CO2E.KD.GD           0.0014      0.016      0.087      0.931      -0.030       0.033
+EN.ATM.PM25.MC.M3          -0.0002      0.000     -1.224      0.221      -0.001       0.000
+SE.ENR.PRSC.FM.ZS           0.0212      0.062      0.341      0.733      -0.101       0.143
+SH.XPD.CHEX.PP.CD        2.855e-07   3.44e-06      0.083      0.934   -6.46e-06    7.03e-06
+SH.XPD.GHED.PC.CD_ratio     0.0384      0.024      1.574      0.115      -0.009       0.086
+SP.URB.TOTL.IN.ZS          -0.0005      0.000     -2.733      0.006      -0.001      -0.000
+==============================================================================
+Omnibus:                       81.283   Durbin-Watson:                   2.107
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):              612.177
+Skew:                           2.245   Prob(JB):                    1.17e-133
+Kurtosis:                      13.215   Cond. No.                     1.83e+05
+==============================================================================
+
+Warnings:
+[1] Standard Errors are heteroscedasticity robust (HC3)
+[2] The condition number is large, 1.83e+05. This might indicate that there are
+strong multicollinearity or other numerical problems.
+"""
+
+Model 4b: log model on erf_b
+
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:                  erf_b   R-squared:                       0.270
+Model:                            OLS   Adj. R-squared:                  0.146
+Method:                 Least Squares   F-statistic:                     2.342
+Date:                Sun, 28 Jun 2020   Prob (F-statistic):            0.00470
+Time:                        22:55:53   Log-Likelihood:                -557.93
+No. Observations:                 118   AIC:                             1152.
+Df Residuals:                     100   BIC:                             1202.
+Df Model:                          17                                         
+Covariance Type:                  HC3                                         
+===========================================================================================
+                              coef    std err          z      P>|z|      [0.025      0.975]
+-------------------------------------------------------------------------------------------
+const                      94.7645     93.291      1.016      0.310     -88.083     277.612
+log_EN.POP.DNST            -3.2386      2.572     -1.259      0.208      -8.279       1.802
+SE.PRM.TENR                -0.0811      0.398     -0.203      0.839      -0.862       0.700
+SH.IMM.MEAS                -0.1179      0.411     -0.287      0.774      -0.923       0.687
+SM.POP.NETM_pc            186.7170    230.426      0.810      0.418    -264.909     638.343
+SP.POP.GROW                -2.9935      3.966     -0.755      0.450     -10.766       4.779
+SP.URB.GROW_relative        1.8020      9.401      0.192      0.848     -16.623      20.227
+EG.ELC.ACCS.ZS              0.3446      0.438      0.787      0.431      -0.514       1.203
+log_NY.GDP.PCAP.CN         -0.2108      1.352     -0.156      0.876      -2.862       2.440
+SH.MED.BEDS.ZS             -2.6897      1.531     -1.757      0.079      -5.691       0.312
+SH.STA.DIAB.ZS             -1.3615      1.016     -1.340      0.180      -3.353       0.630
+SP.DYN.LE00.IN             -0.3611      1.437     -0.251      0.802      -3.178       2.456
+EN.ATM.CO2E.KD.GD           4.2429     17.066      0.249      0.804     -29.207      37.692
+EN.ATM.PM25.MC.M3           0.3301      0.365      0.905      0.366      -0.385       1.045
+SE.ENR.PRSC.FM.ZS          -7.6360     58.647     -0.130      0.896    -122.582     107.310
+SH.XPD.CHEX.PP.CD           0.0032      0.004      0.850      0.396      -0.004       0.011
+SH.XPD.GHED.PC.CD_ratio   -57.5372     33.396     -1.723      0.085    -122.993       7.918
+SP.URB.TOTL.IN.ZS           0.4504      0.251      1.795      0.073      -0.042       0.942
+==============================================================================
+Omnibus:                        6.111   Durbin-Watson:                   1.920
+Prob(Omnibus):                  0.047   Jarque-Bera (JB):                9.967
+Skew:                          -0.032   Prob(JB):                      0.00685
+Kurtosis:                       4.422   Cond. No.                     1.83e+05
+==============================================================================
+
+Warnings:
+[1] Standard Errors are heteroscedasticity robust (HC3)
+[2] The condition number is large, 1.83e+05. This might indicate that there are
+strong multicollinearity or other numerical problems.
+"""
+
+
