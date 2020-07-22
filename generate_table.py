@@ -16,6 +16,7 @@ warnings.filterwarnings('ignore')
 INTITALISE SCRIPT PARAMETERS
 '''
 
+SAVE_PLOTS=False
 DISTANCE = 21  # Distance between peaks
 THRESHOLD = 25  # Threshold for duration calculation
 SMOOTH = 0.001  # Smoothing parameter for the spline fit
@@ -99,6 +100,7 @@ for country in countries:
 countries = raw_mobility['countrycode'].unique()
 mobility = pd.DataFrame(columns=['countrycode','country','date','transit_stations','residential',
                                      'workplace','parks','retail_recreation','grocery_pharmacy'])
+
 for country in countries:
     data = raw_mobility[raw_mobility['countrycode']==country].set_index('date')
     data = data.reindex([x.date() for x in pd.date_range(data.index.values[0],data.index.values[-1])])
@@ -122,14 +124,76 @@ for country in countries:
     continue
 
 ##EXCLUSION LOOP (DATA FOR EACH COUNTRY MUST BE AVAILABLE IN ALL THREE TABLES)
-exclude=[]
+countries = np.union1d(np.union1d(epidemiology['countrycode'].unique(),mobility['countrycode'].unique()),
+                       government_response['countrycode'].unique())
+exclude = []
 for country in countries:
-    if len(epidemiology[epidemiology['countrycode'] == country])==0 or \
-            len(mobility[mobility['countrycode'] == country]) == 0 or \
-        len(government_response[government_response['countrycode'] == country]) == 0:
+    if len(epidemiology[epidemiology['countrycode'] == country]) == 0 \
+            or len(mobility[mobility['countrycode'] == country]) == 0 or \
+            len(government_response[government_response['countrycode'] == country]) == 0:
         exclude.append(country)
 
 epidemiology = epidemiology[~epidemiology['countrycode'].isin(exclude)]
 mobility = mobility[~mobility['countrycode'].isin(exclude)]
 government_response = government_response[~government_response['countrycode'].isin(exclude)]
 
+'''
+INITIALISE COLUMNS FOR MASTER TABLE
+'''
+
+##EPIDEMIOLOGY TABLE
+epidemiology_columns={
+    'countrycode':np.empty(0),
+    'country':np.empty(0),
+    'date':np.empty(0),
+    'confirmed':np.empty(0),
+    'new_per_day':np.empty(0),
+    'new_per_day_ma':np.empty(0),
+    'new_per_day_smooth':np.empty(0),
+    'peak_dates':np.empty(0),
+    'peak_heights':np.empty(0),
+    'peak_widths':np.empty(0),
+    'peak_prominence':np.empty(0),
+    'peak_width_boundaries':np.empty(0), #NOT INCLUDED IN FINAL TABLE
+    'peak_width_heights':np.empty(0), #NOT INCLUDED IN FINAL TABLE
+    'threshold_dates':np.empty(0),
+    'threshold_average_height':np.empty(0),
+    'threshold_max_height':np.empty(0)
+    }
+
+##MOBILITY TABLE
+mobility_columns={
+    'countrycode':np.empty(0),
+    'country':np.empty(0),
+    'date':np.empty(0)
+    }
+
+for mobility_type in mobilities:
+    mobility_columns[mobility_type+'_smooth'] = np.empty(0)
+    mobility_columns[mobility_type] = np.empty(0)
+    mobility_columns[mobility_type+'_peak_dates'] = np.empty(0)
+    mobility_columns[mobility_type+'_trough_dates'] = np.empty(0)
+    mobility_columns[mobility_type+'_peak_heights'] = np.empty(0)
+    mobility_columns[mobility_type+'_trough_heights'] = np.empty(0)
+    mobility_columns[mobility_type+'_peak_prominences'] = np.empty(0)
+    mobility_columns[mobility_type+'_trough_prominences'] = np.empty(0)
+    mobility_columns[mobility_type+'_peak_widths'] = np.empty(0)
+    mobility_columns[mobility_type+'_trough_widths'] = np.empty(0)
+    if SAVE_PLOTS:
+        os.makedirs(PATH+'mobility/'+mobility_type+'/',exist_ok=True)
+
+##GOVERNMENT_RESPONSE
+government_response_columns={
+    'countrycode': np.empty(0),
+    'country': np.empty(0),
+    'date': np.empty(0)
+}
+
+'''
+EPIDEMIOLOGY PROCESSING
+'''
+
+countries = np.sort(epidemiology['countrycode'].unique())
+
+for country in tqdm(countries,desc='Processing Epidemiological Data'):
+    data = epidemiology[epidemiology['countrycode'] == country]
