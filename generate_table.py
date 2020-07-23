@@ -22,7 +22,7 @@ THRESHOLD = 25  # Threshold for duration calculation
 SMOOTH = 0.001  # Smoothing parameter for the spline fit
 MIN_PERIOD = 14  # Minimum number of days above threshold
 ROLLING_WINDOW = 3  # Window size for Moving Average for epidemiological data
-PATH = './charts/final_figures/' #Path to save master table and corresponding plots
+PATH = './charts/table_figures/' #Path to save master table and corresponding plots
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -135,6 +135,11 @@ epidemiology = epidemiology[~epidemiology['countrycode'].isin(exclude)]
 mobility = mobility[~mobility['countrycode'].isin(exclude)]
 government_response = government_response[~government_response['countrycode'].isin(exclude)]
 
+### Ensure all countries appear in the three tables
+assert np.all(epidemiology['countrycode'].unique()==mobility['countrycode'].unique())
+assert np.all(government_response['countrycode'].unique()==mobility['countrycode'].unique())
+
+
 '''
 INITIALISE COLUMNS FOR MASTER TABLE
 '''
@@ -159,12 +164,16 @@ epidemiology_columns={
     'threshold_max_height':np.empty(0)
     }
 
+os.makedirs(PATH+'epidemiological/',exist_ok=True)
+
 ##MOBILITY TABLE
 mobility_columns={
     'countrycode':np.empty(0),
     'country':np.empty(0),
     'date':np.empty(0)
     }
+
+os.makedirs(PATH+'mobility/',exist_ok=True)
 
 for mobility_type in mobilities:
     mobility_columns[mobility_type+'_smooth'] = np.empty(0)
@@ -208,16 +217,200 @@ for country in tqdm(countries, desc = 'Processing Epidemiological Data'):
     for i in range(len(peak_locations)):
         peak_mask[peak_locations[i]] = i + 1
     peak_heights = np.array([ys[i] if peak_mask[i] != 0 else 0 for i in range(len(data['date']))])
-    peak_dates =
 
-    continue
+    # noinspection PyTupleAssignmentBalance
+    widths, width_heights, width_left, width_right = peak_widths(ys, peak_locations, rel_height=1)
+    peak_width_values_mask = np.zeros(len(data['date']))
+    peak_width_dates_mask = np.zeros(len(data['date']))
+    peak_width_heights_mask = np.zeros(len(data['date']))
+
+    prominences = peak_prominences(ys,peak_locations)[0]
+    peak_prominence_mask = np.zeros(len(data['date']))
+
+    for i in range(len(peak_locations)):
+        peak_width_values_mask[peak_locations[i]] = widths[i]
+        peak_width_heights_mask[peak_locations[i]] = width_heights[i]
+        peak_width_dates_mask[int(np.rint(width_left[i])):int(np.rint(width_right[i]))+1] = i+1
+        peak_prominence_mask[peak_locations[i]] = prominences[i]
+
+    ###Upserting data
+    epidemiology_columns['countrycode']=np.concatenate((
+        epidemiology_columns['countrycode'],data['countrycode'].values))
+    epidemiology_columns['country'] = np.concatenate(
+        (epidemiology_columns['country'], data['country'].values))
+    epidemiology_columns['date'] = np.concatenate(
+        (epidemiology_columns['date'], data['date'].values))
+    epidemiology_columns['confirmed'] = np.concatenate(
+        (epidemiology_columns['confirmed'], data['confirmed'].values))
+    epidemiology_columns['new_per_day'] = np.concatenate(
+        (epidemiology_columns['new_per_day'], data['new_per_day'].values))
+    epidemiology_columns['new_per_day_ma'] = np.concatenate(
+        (epidemiology_columns['new_per_day_ma'], data['new_per_day_ma'].values))
+    epidemiology_columns['new_per_day_smooth'] = np.concatenate(
+        (epidemiology_columns['new_per_day_smooth'], ys))
+    epidemiology_columns['peak_dates'] = np.concatenate(
+        (epidemiology_columns['peak_dates'], peak_mask))
+    epidemiology_columns['peak_heights'] = np.concatenate(
+        (epidemiology_columns['peak_heights'], peak_heights))
+    epidemiology_columns['peak_widths'] = np.concatenate(
+        (epidemiology_columns['peak_widths'], peak_width_values_mask))
+    epidemiology_columns['peak_prominence'] = np.concatenate(
+        (epidemiology_columns['peak_prominence'], peak_prominence_mask))
+    epidemiology_columns['peak_width_boundaries'] = np.concatenate(
+        (epidemiology_columns['peak_width_boundaries'], peak_width_dates_mask))
+    epidemiology_columns['peak_width_heights'] = np.concatenate(
+        (epidemiology_columns['peak_width_heights'], peak_width_heights_mask))
+
+    ###Finding dates above threshold
+    thresh = np.percentile(ys, THRESHOLD)
+    days_above = pd.Series((ys>np.percentile(ys,THRESHOLD)).astype(int))
+    waves = [(cat[1], grp.shape[0]) for cat, grp in days_above.groupby([
+        days_above.ne(days_above.shift()).cumsum(), days_above])]
+
+
+    wave_number = 0
+    for i,wave in enumerate(waves):
+        if wave[0]==0:
+            continue
+        if wave[1]<MIN_PERIOD:
+            days_above.iloc[sum([wave[1] for x in range(i)]):
+                            sum([wave[1] for x in range(i)]) + wave[1]] = 0
+            continue
+        wave_number += 1
+        days_above.iloc[sum([waves[x][1] for x in range(i)]):
+                        sum([waves[x][1] for x in range(i)]) + wave[1]] = wave_number
+
+    threshold_average_height_mask = np.zeros(len(data['date']))
+    threshold_max_height_mask = np.zeros(len(data['date']))
+
+    for i in range(wave_number):
+        threshold_average_height_mask[i] = (ys[np.where(days_above == (i+1))]/np.max(ys)).mean()
+        threshold_max_height_mask[i] = np.max(ys[np.where(days_above == (i+1))])/np.max(ys)
+
+    ###Upserting data
+    epidemiology_columns['threshold_dates'] = np.concatenate((epidemiology_columns['threshold_dates'],
+                                                              days_above))
+    epidemiology_columns['threshold_average_height'] = np.concatenate((epidemiology_columns['threshold_average_height'],
+                                                              threshold_average_height_mask))
+    epidemiology_columns['threshold_max_height'] = np.concatenate((epidemiology_columns['threshold_max_height'],
+                                                              threshold_max_height_mask))
+    if SAVE_PLOTS:
+        plt.figure(figsize = (20,7))
+        plt.title('New Cases Per Day with Spline Fit for ' + country)
+        plt.ylabel('new_per_day')
+        plt.xlabel('date')
+
+        ###Plotting new_per_day curves
+        plt.plot(data['date'].values, data['new_per_day'].values, label = 'new_per_day')
+        plt.plot(data['date'].values, data['new_per_day_ma'].values, label = 'new_per_day_ma')
+        plt.plot(data['date'].values, ys, label = 'new_per_day_smooth')
+        plt.plot([data['date'].values[i] for i in peak_locations], [ys[i] for i in peak_locations], "X", ms=20)
+
+        ###Plotting peak_widths
+        for i in range(len(peak_locations)):
+            plt.hlines(y=width_heights[i], xmin=data['date'].values[int(width_left[i])],
+                       xmax=data['date'].values[int(width_right[i])],
+                       linestyle='dotted', label='width_peak_' + str(i + 1))
+
+        ###Plotting wave_threshold
+        plt.hlines(y=thresh, xmin=data['date'].values[0],
+                   xmax=data['date'].values[-1], label=str(THRESHOLD) + 'th_percentile',
+                   linestyles='dashed', color='red')
+        plt.legend()
+        plt.savefig(PATH+'epidemiological/'+country+'.png')
+        plt.close()
+
 
 '''
 MOBILITY PROCESSING
 '''
 
 for country in tqdm(countries, desc = 'Processing Mobility Data'):
-    continue
+    data = mobility[mobility['countrycode'] == country]
+
+    mobility_columns['countrycode'] = np.concatenate((mobility_columns['countrycode'], data['countrycode'].values))
+    mobility_columns['country'] = np.concatenate((mobility_columns['country'], data['country'].values))
+    mobility_columns['date'] = np.concatenate((mobility_columns['date'], data['date'].values))
+
+    for mobility_type in mobilities:
+        x = np.arange(len(data['date']))
+        y = data[mobility_type].values
+        ys = csaps(x, y, x, smooth=SMOOTH)
+
+        peak_locations = find_peaks(ys,distance=DISTANCE)[0]
+        trough_locations = find_peaks(-ys,distance=DISTANCE)[0]
+        peak_mask = np.zeros(len(data['date']))
+        trough_mask = np.zeros(len(data['date']))
+        peak_heights_mask = np.zeros(len(data['date']))
+        trough_heights_mask = np.zeros(len(data['date']))
+
+        p_prominences = peak_prominences(ys, peak_locations)[0]
+        t_prominences = peak_prominences(-ys, trough_locations)[0]
+        p_prominences_mask = np.zeros(len(data['date']))
+        t_prominences_mask = np.zeros(len(data['date']))
+
+        # noinspection PyTupleAssignmentBalance
+        p_widths, p_width_heights, p_left, p_right = peak_widths(ys, peak_locations, rel_height = 1.0)
+        # noinspection PyTupleAssignmentBalance
+        t_widths, t_width_heights, t_left, t_right = peak_widths(-ys, trough_locations, rel_height = 1.0)
+        p_widths_mask = np.zeros(len(data['date']))
+        t_widths_mask = np.zeros(len(data['date']))
+
+        for i in range(len(peak_locations)):
+            peak_mask[peak_locations[i]] = i + 1
+            peak_heights_mask[peak_locations[i]] = ys[peak_locations[i]]
+            p_prominences_mask[peak_locations[i]] = p_prominences_mask[i]
+            p_widths_mask[peak_locations[i]] = p_widths[i]
+
+        for i in range(len(trough_locations)):
+            trough_mask[trough_locations[i]] = i + 1
+            trough_heights_mask[trough_locations[i]] = ys[trough_locations[i]]
+            t_prominences_mask[trough_locations[i]] = t_prominences_mask[i]
+            t_widths_mask[trough_locations[i]] = t_widths[i]
+
+        mobility_columns[mobility_type] = np.concatenate((
+            mobility_columns[mobility_type],data[mobility_type].values))
+        mobility_columns[mobility_type+'_smooth'] = np.concatenate((
+            mobility_columns[mobility_type+'_smooth'], ys))
+        mobility_columns[mobility_type+'_peak_dates'] = np.concatenate((
+            mobility_columns[mobility_type+'_peak_dates'], peak_mask))
+        mobility_columns[mobility_type+'_trough_dates'] = np.concatenate((
+            mobility_columns[mobility_type+'_trough_dates'], trough_mask))
+        mobility_columns[mobility_type+'_peak_heights'] = np.concatenate((
+            mobility_columns[mobility_type+'_peak_heights'], peak_heights_mask))
+        mobility_columns[mobility_type+'_trough_heights'] = np.concatenate((
+            mobility_columns[mobility_type+'_trough_heights'], trough_heights_mask))
+        mobility_columns[mobility_type+'_peak_prominences'] = np.concatenate((
+            mobility_columns[mobility_type+'_peak_prominences'], p_prominences_mask))
+        mobility_columns[mobility_type+'_trough_prominences'] = np.concatenate((
+            mobility_columns[mobility_type+'_trough_prominences'], t_prominences_mask))
+        mobility_columns[mobility_type+'_peak_widths'] = np.concatenate((
+            mobility_columns[mobility_type+'_peak_widths'], p_widths_mask))
+        mobility_columns[mobility_type+'_trough_widths'] = np.concatenate((
+            mobility_columns[mobility_type+'_trough_widths'], t_widths_mask))
+
+        if SAVE_PLOTS:
+            plt.figure(figsize = (20,7))
+            plt.title('Change in' + mobility_type + ' mobility with Spline Fit for ' + country)
+            plt.ylabel('change_from_baseline')
+            plt.xlabel('date')
+
+            plt.plot(data['date'].values, data[mobility_type], label = 'change_from_baseline')
+            plt.plot(data['date'].values, ys, label = 'spline_fit')
+            plt.plot([data['date'].values[i] for i in peak_locations], [ys[i] for i in peak_locations], "X", ms=20)
+            plt.plot([data['date'].values[i] for i in trough_locations], [ys[i] for i in trough_locations], "X", ms=20)
+
+            for i in range(len(peak_locations)):
+                plt.hlines(y=p_width_heights[i], xmin=data['date'].values[int(p_left[i])],
+                           xmax=data['date'].values[int(p_right[i])],
+                           linestyle='dotted', label='width_peak_' + str(i + 1))
+            for i in range(len(trough_locations)):
+                plt.hlines(y=t_width_heights[i], xmin=data['date'].values[int(t_left[i])],
+                           xmax=data['date'].values[int(t_right[i])],
+                           linestyle='dotted', label='width_trough_' + str(i + 1))
+            plt.legend()
+            plt.savefig(PATH+'mobility/'+mobility_type+'/'+country+'.png')
+            plt.close()
 
 '''
 GOVERNMENT_RESPONSE PROCESSING
@@ -225,3 +418,11 @@ GOVERNMENT_RESPONSE PROCESSING
 
 for country in tqdm(countries, desc = 'Processing Government Response Data'):
     continue
+
+'''
+CONSOLIDATING TABLES
+'''
+
+epidemiology_results = pd.DataFrame.from_dict(epidemiology_columns)
+mobility_results = pd.DataFrame.from_dict(mobility_columns)
+government_response_results = pd.DataFrame.from_dict(government_response_columns)

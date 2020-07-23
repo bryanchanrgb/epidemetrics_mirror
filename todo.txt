@@ -1,0 +1,7 @@
+things to implement:
+
+generate_table.py:
+- Finish epidemiology columns V
+- Finish mobility columns V
+- Finish gov response columns
+- Consolidate into one dataframe
