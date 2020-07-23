@@ -50,8 +50,7 @@ mobilities=['transit_stations','residential','workplace','parks','retail_recreat
 
 sql_command = """SELECT * FROM mobility WHERE source = %(source)s AND adm_area_1 is NULL"""
 raw_mobility = pd.read_sql(sql_command, conn, params={'source': source})
-raw_mobility = raw_mobility[['countrycode','country','date','transit_stations','residential',
-                             'workplace','parks','retail_recreation','grocery_pharmacy']]
+raw_mobility = raw_mobility[['countrycode','country','date']+mobilities]
 raw_mobility = raw_mobility.sort_values(by=['countrycode','date']).reset_index(drop=True)
 ### Check no conflicting values for each country and date
 assert not raw_mobility[['countrycode','country','date']].duplicated().any()
@@ -80,7 +79,7 @@ Steps taken:
 7) Replace negative/invalid new_cases_per_day with previous valid value √
 '''
 
-##EPIDEMIOLOGY PROCESSING LOOP
+##EPIDEMIOLOGY PRE-PROCESSING LOOP
 countries = raw_epidemiology['countrycode'].unique()
 epidemiology = pd.DataFrame(columns=['countrycode','country','date','confirmed','new_per_day'])
 for country in countries:
@@ -96,10 +95,9 @@ for country in countries:
     epidemiology = pd.concat((epidemiology,data)).reset_index(drop=True)
     continue
 
-##MOBILITY PROCESSING LOOP
+##MOBILITY PRE-PROCESSING LOOP
 countries = raw_mobility['countrycode'].unique()
-mobility = pd.DataFrame(columns=['countrycode','country','date','transit_stations','residential',
-                                     'workplace','parks','retail_recreation','grocery_pharmacy'])
+mobility = pd.DataFrame(columns=['countrycode','country','date']+mobilities)
 
 for country in countries:
     data = raw_mobility[raw_mobility['countrycode']==country].set_index('date')
@@ -110,7 +108,7 @@ for country in countries:
     mobility = pd.concat((mobility,data)).reset_index(drop=True)
     continue
 
-##GOVERNMENT_RESPONSE LOOP
+##GOVERNMENT_RESPONSE PRE-PROCESSING LOOP
 countries = raw_government_response['countrycode'].unique()
 government_response = pd.DataFrame(columns=['countrycode','country','date']+flags)
 
@@ -195,5 +193,35 @@ EPIDEMIOLOGY PROCESSING
 
 countries = np.sort(epidemiology['countrycode'].unique())
 
-for country in tqdm(countries,desc='Processing Epidemiological Data'):
+for country in tqdm(countries, desc = 'Processing Epidemiological Data'):
     data = epidemiology[epidemiology['countrycode'] == country]
+    data['new_per_day_ma'] = data['new_per_day'].rolling(ROLLING_WINDOW).mean().fillna(value=0)
+
+    ###Fitting the spline
+    x = np.arange(len(data['date']))
+    y = data['new_per_day_ma'].values
+    ys = csaps(x, y, x, smooth = SMOOTH)
+
+    ###Finding peaks
+    peak_locations = find_peaks(ys,distance=DISTANCE)[0]
+    peak_mask = np.zeros(len(data['date']))
+    for i in range(len(peak_locations)):
+        peak_mask[peak_locations[i]] = i + 1
+    peak_heights = np.array([ys[i] if peak_mask[i] != 0 else 0 for i in range(len(data['date']))])
+    peak_dates =
+
+    continue
+
+'''
+MOBILITY PROCESSING
+'''
+
+for country in tqdm(countries, desc = 'Processing Mobility Data'):
+    continue
+
+'''
+GOVERNMENT_RESPONSE PROCESSING
+'''
+
+for country in tqdm(countries, desc = 'Processing Government Response Data'):
+    continue
