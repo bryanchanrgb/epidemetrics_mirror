@@ -12,6 +12,7 @@ from scipy.signal import peak_widths
 from scipy.signal import peak_prominences
 
 import statsmodels.api as sm
+from scipy.ndimage.interpolation import shift
 warnings.filterwarnings('ignore')
 
 '''
@@ -24,7 +25,8 @@ THRESHOLD = 25  # Threshold for duration calculation
 SMOOTH = 0.001  # Smoothing parameter for the spline fit
 MIN_PERIOD = 14  # Minimum number of days above threshold
 ROLLING_WINDOW = 3  # Window size for Moving Average for epidemiological data
-PATH = './charts/table_figures/' #Path to save master table and corresponding plots
+OPTIMAL_LAG_TIME = 14 # +/- this time for optimal lag calculation
+PATH = './charts/table_figures/' # Path to save master table and corresponding plots
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -60,7 +62,7 @@ assert not raw_mobility[['countrycode','country','date']].duplicated().any()
 # GET GOVERNMENT RESPONSE TABLE
 flags=['stringency_index','c1_school_closing','c2_workplace_closing','c3_cancel_public_events',
        'c4_restrictions_on_gatherings','c5_close_public_transport','c6_stay_at_home_requirements',
-       'c7_restrictions_on_internal_movement','c8_international_travel_controls']
+       'c7_restrictions_on_internal_movement']
 
 sql_command = """SELECT * FROM government_response"""
 raw_government_response = pd.read_sql(sql_command, conn)
@@ -213,15 +215,15 @@ government_response_columns={
     'high_restrictions_start_date':np.empty(0),
     'high_restrictions_end_date':np.empty(0),
     'high_restrictions_duration':np.empty(0),
-    'high_restrictions_current':np.empty(0)#,
-    #'stringency_index_opt_lag':np.empty(0)
+    'high_restrictions_current':np.empty(0),
+    'stringency_index_opt_lag':np.empty(0)
 }
 
 for percentile in percentiles:
     government_response_columns[str(percentile) + '_duration'] = np.empty(0)
 
-"""for flag in flags:
-    government_response_columns[flag + '_opt_lag'] = np.empty(0)"""
+for flag in flags:
+    government_response_columns[flag + '_opt_lag'] = np.empty(0)
 
 if SAVE_PLOTS:
     os.makedirs(PATH+'government_response/',exist_ok=True)
@@ -515,8 +517,37 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
     for percentile in percentiles:
         government_response_columns[str(percentile) + '_duration'] = np.concatenate((
             government_response_columns[str(percentile) + '_duration'],
-            np.array([len(data[data['stringency_index'] > percentile]['date'])])
-        ))
+            np.array([len(data[data['stringency_index'] > percentile]['date'])])))
+
+    flag_mobility = {"c1_school_closing": "residential",
+                     "c2_workplace_closing": "workplace",
+                     "c3_cancel_public_events": "residential",
+                     "c4_restrictions_on_gatherings": "retail_recreation",
+                     "c5_close_public_transport": "transit_stations",
+                     "c6_stay_at_home_requirements": "residential",
+                     "c7_restrictions_on_internal_movement": "residential",
+                     "stringency_index": "transit_stations"}
+
+    for key,values in flag_mobility.items():
+        x = data[key].values #Flag values
+        x_date = data['date'].values
+        y = mobility_columns[values + '_smooth'][np.where(mobility_columns['countrycode'] == country)] #Smooth Mobility
+        y_date = mobility_columns['date'][np.where(mobility_columns['countrycode'] == country)]
+
+        if len(x) > len(y):
+            x = x[np.isin(x_date,y_date)]
+        else:
+            y = y[np.isin(y_date,x_date)]
+
+        ## Bryan could you have a check here?
+        if values != 'residential':
+            government_response_columns[key + '_opt_lag'] = np.append(government_response_columns[key + '_opt_lag'],
+                np.argmin([sm.OLS(endog = y, exog = sm.add_constant(shift(x,lag,cval=np.nan)), missing="drop").fit().params[0]
+             for lag in range(-OPTIMAL_LAG_TIME,OPTIMAL_LAG_TIME + 1)]) - OPTIMAL_LAG_TIME)
+        else:
+            government_response_columns[key + '_opt_lag'] = np.append(government_response_columns[key + '_opt_lag'],
+                np.argmax([sm.OLS(endog = y, exog = sm.add_constant(shift(x,lag,cval=np.nan)), missing="drop").fit().params[0]
+             for lag in range(-OPTIMAL_LAG_TIME,OPTIMAL_LAG_TIME + 1)]) - OPTIMAL_LAG_TIME)
 
     if multiple_peaks:
         p_widths, p_heights, p_left, p_right = peak_widths(data['stringency_index'].values,
@@ -565,7 +596,8 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
         plt.xlabel('date')
 
         plt.plot(data['date'].values, data['stringency_index'].values, label = 'stringency_index')
-        plt.plot([data['date'].values[i] for i in peak_locations], [data['stringency_index'].values[i] for i in peak_locations], "X", ms=20)
+        plt.plot([data['date'].values[i] for i in peak_locations], [data['stringency_index'].values[i]
+                                                                    for i in peak_locations], "X", ms=20)
         for percentile in percentiles:
             plt.hlines(y = percentile, xmin = data['date'].values[0], xmax = data['date'].values[-1],
                        linestyles='dashed', label = str(percentile), colors = 'red')
@@ -577,6 +609,7 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
 CONSOLIDATING TABLES
 '''
 
-#epidemiology_results = pd.DataFrame.from_dict(epidemiology_columns)
-#mobility_results = pd.DataFrame.from_dict(mobility_columns)
-#government_response_results = pd.DataFrame.from_dict(government_response_columns)
+epidemiology_results = pd.DataFrame.from_dict(epidemiology_columns)
+mobility_results = pd.DataFrame.from_dict(mobility_columns)
+government_response_results = pd.DataFrame.from_dict(government_response_columns)
+

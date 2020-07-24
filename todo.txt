@@ -3,6 +3,6 @@ things to implement:
 generate_table.py:
 - Finish epidemiology columns V
 - Finish mobility columns V
-- Finish gov response columns
+- Finish gov response columns V
 - Convert epidemiology and gov response to country stats format 
 - Consolidate into one dataframe
