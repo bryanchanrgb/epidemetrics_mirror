@@ -10,6 +10,8 @@ from csaps import csaps
 from scipy.signal import find_peaks
 from scipy.signal import peak_widths
 from scipy.signal import peak_prominences
+
+import statsmodels.api as sm
 warnings.filterwarnings('ignore')
 
 '''
@@ -164,7 +166,8 @@ epidemiology_columns={
     'threshold_max_height':np.empty(0)
     }
 
-os.makedirs(PATH+'epidemiological/',exist_ok=True)
+if SAVE_PLOTS:
+    os.makedirs(PATH+'epidemiological/',exist_ok=True)
 
 ##MOBILITY TABLE
 mobility_columns={
@@ -173,7 +176,8 @@ mobility_columns={
     'date':np.empty(0)
     }
 
-os.makedirs(PATH+'mobility/',exist_ok=True)
+if SAVE_PLOTS:
+    os.makedirs(PATH+'mobility/',exist_ok=True)
 
 for mobility_type in mobilities:
     mobility_columns[mobility_type+'_smooth'] = np.empty(0)
@@ -190,11 +194,37 @@ for mobility_type in mobilities:
         os.makedirs(PATH+'mobility/'+mobility_type+'/',exist_ok=True)
 
 ##GOVERNMENT_RESPONSE
+
+percentiles = [25, 50, 75]
 government_response_columns={
     'countrycode': np.empty(0),
     'country': np.empty(0),
-    'date': np.empty(0)
+    'max_si':np.empty(0),
+    'max_si_start_date':np.empty(0),
+    'max_si_end_date':np.empty(0),
+    'max_si_duration':np.empty(0),
+    'max_si_currently':np.empty(0),
+    'multiple_peaks':np.empty(0),
+    'peak_heights':np.empty(0),
+    'peak_start_date':np.empty(0),
+    'peak_end_date':np.empty(0),
+    'peak_widths':np.empty(0),
+    'peak_prominences':np.empty(0),
+    'high_restrictions_start_date':np.empty(0),
+    'high_restrictions_end_date':np.empty(0),
+    'high_restrictions_duration':np.empty(0),
+    'high_restrictions_current':np.empty(0)#,
+    #'stringency_index_opt_lag':np.empty(0)
 }
+
+for percentile in percentiles:
+    government_response_columns[str(percentile) + '_duration'] = np.empty(0)
+
+"""for flag in flags:
+    government_response_columns[flag + '_opt_lag'] = np.empty(0)"""
+
+if SAVE_PLOTS:
+    os.makedirs(PATH+'government_response/',exist_ok=True)
 
 '''
 EPIDEMIOLOGY PROCESSING
@@ -218,7 +248,6 @@ for country in tqdm(countries, desc = 'Processing Epidemiological Data'):
         peak_mask[peak_locations[i]] = i + 1
     peak_heights = np.array([ys[i] if peak_mask[i] != 0 else 0 for i in range(len(data['date']))])
 
-    # noinspection PyTupleAssignmentBalance
     widths, width_heights, width_left, width_right = peak_widths(ys, peak_locations, rel_height=1)
     peak_width_values_mask = np.zeros(len(data['date']))
     peak_width_dates_mask = np.zeros(len(data['date']))
@@ -349,9 +378,7 @@ for country in tqdm(countries, desc = 'Processing Mobility Data'):
         p_prominences_mask = np.zeros(len(data['date']))
         t_prominences_mask = np.zeros(len(data['date']))
 
-        # noinspection PyTupleAssignmentBalance
         p_widths, p_width_heights, p_left, p_right = peak_widths(ys, peak_locations, rel_height = 1.0)
-        # noinspection PyTupleAssignmentBalance
         t_widths, t_width_heights, t_left, t_right = peak_widths(-ys, trough_locations, rel_height = 1.0)
         p_widths_mask = np.zeros(len(data['date']))
         t_widths_mask = np.zeros(len(data['date']))
@@ -417,12 +444,139 @@ GOVERNMENT_RESPONSE PROCESSING
 '''
 
 for country in tqdm(countries, desc = 'Processing Government Response Data'):
-    continue
+    data = government_response[government_response['countrycode'] == country]
+
+    government_response_columns['countrycode'] = np.concatenate((
+        government_response_columns['countrycode'], np.array([country])))
+    government_response_columns['country'] = np.concatenate((
+        government_response_columns['country'], np.array([data['country'].iloc[0]])))
+
+    max_si = data['stringency_index'].max()
+    max_si_start_date = data[data['stringency_index'] == data['stringency_index'].max()]['date'].iloc[0]
+    max_si_end_date = data[data['stringency_index'] == data['stringency_index'].max()]['date'].iloc[-1]
+    max_si_duration = (max_si_end_date - max_si_start_date).days
+    max_si_currently = data[data['stringency_index'] == data['stringency_index'].max()]['date'].iloc[-1] == \
+                       data['date'].iloc[-1]
+
+    government_response_columns['max_si'] = np.concatenate((
+        government_response_columns['max_si'], np.array([max_si])))
+    government_response_columns['max_si_start_date'] = np.concatenate((
+        government_response_columns['max_si_start_date'],
+        np.array([max_si_start_date])))
+    government_response_columns['max_si_end_date'] = np.concatenate((
+        government_response_columns['max_si_end_date'],
+        np.array([max_si_end_date])))
+    government_response_columns['max_si_duration'] = np.concatenate((
+        government_response_columns['max_si_duration'],
+        np.array([max_si_duration])))
+    government_response_columns['max_si_currently'] = np.concatenate((
+        government_response_columns['max_si_currently'],
+        np.array([max_si_currently]))).astype(bool)
+
+    peak_locations = find_peaks(data['stringency_index'].values, distance = DISTANCE)[0]
+    multiple_peaks = len(peak_locations) > 1
+    government_response_columns['multiple_peaks'] = np.concatenate((
+        government_response_columns['multiple_peaks'],np.array([multiple_peaks]))).astype(bool)
+
+    high_restrictions = data[
+        (data['c1_school_closing']==3) |
+        (data['c2_workplace_closing']==3) |
+        (data['c3_cancel_public_events'] == 2) |
+        (data['c4_restrictions_on_gatherings'] == 4) |
+        (data['c5_close_public_transport'] == 2) |
+        (data['c6_stay_at_home_requirements'] == 3) |
+        (data['c7_restrictions_on_internal_movement'] == 2) |
+        (data['c8_international_travel_controls'] == 4)]
+
+    if len(high_restrictions)>0:
+        high_restrictions_start_date = high_restrictions['date'].iloc[0]
+        high_restrictions_end_date = high_restrictions['date'].iloc[-1]
+        high_restrictions_duration = (high_restrictions_end_date - high_restrictions_start_date).days
+        high_restrictions_current = high_restrictions['date'].iloc[-1] == data['date'].iloc[-1]
+
+        government_response_columns['high_restrictions_start_date'] = np.concatenate((
+            government_response_columns['high_restrictions_start_date'], np.array([high_restrictions_start_date])))
+        government_response_columns['high_restrictions_end_date'] = np.concatenate((
+            government_response_columns['high_restrictions_end_date'], np.array([high_restrictions_end_date])))
+        government_response_columns['high_restrictions_duration'] = np.concatenate((
+            government_response_columns['high_restrictions_duration'], np.array([high_restrictions_duration])))
+        government_response_columns['high_restrictions_current'] = np.concatenate((
+            government_response_columns['high_restrictions_current'], np.array([high_restrictions_current])))
+    else:
+        government_response_columns['high_restrictions_start_date'] = np.concatenate((
+            government_response_columns['high_restrictions_start_date'], np.array([0])))
+        government_response_columns['high_restrictions_end_date'] = np.concatenate((
+            government_response_columns['high_restrictions_end_date'], np.array([0])))
+        government_response_columns['high_restrictions_duration'] = np.concatenate((
+            government_response_columns['high_restrictions_duration'], np.array([0])))
+        government_response_columns['high_restrictions_current'] = np.concatenate((
+            government_response_columns['high_restrictions_current'], np.array([0])))
+
+    for percentile in percentiles:
+        government_response_columns[str(percentile) + '_duration'] = np.concatenate((
+            government_response_columns[str(percentile) + '_duration'],
+            np.array([len(data[data['stringency_index'] > percentile]['date'])])
+        ))
+
+    if multiple_peaks:
+        p_widths, p_heights, p_left, p_right = peak_widths(data['stringency_index'].values,
+                                                           peak_locations,rel_height=1.0)
+        p_prominences = peak_prominences(data['stringency_index'].values, peak_locations)[0]
+        peak_midpoint_date = [data['date'].values[i] for i in peak_locations]
+        peak_heights = [data['stringency_index'].values[i] for i in peak_locations]
+        peak_start_date = [tuple(data['date'].values[i-1]
+                               for i in range(peak_locations[j],0,-1)
+                               if (data['stringency_index'].values[i]!=data['stringency_index'].values[i-1]))[0]
+                         for j in range(len(peak_locations))]
+        peak_end_date = [tuple(data['date'].values[i-1]
+                               for i in range(peak_locations[j],len(data['date']),1)
+                               if (data['stringency_index'].values[i]!=data['stringency_index'].values[i-1]))[0]
+                         for j in range(len(peak_locations))]
+
+        government_response_columns['peak_heights'] = np.append(
+            government_response_columns['peak_heights'], set(peak_heights))
+        government_response_columns['peak_start_date'] = np.append(
+            government_response_columns['peak_start_date'], set(peak_start_date))
+        government_response_columns['peak_end_date'] = np.append(
+            government_response_columns['peak_end_date'], set(peak_end_date))
+        government_response_columns['peak_widths'] = np.append(
+            government_response_columns['peak_widths'], set(p_widths))
+        government_response_columns['peak_prominences'] = np.append(
+            government_response_columns['peak_prominences'], set(p_prominences))
+
+    else:
+        government_response_columns['peak_heights'] = np.concatenate((
+            government_response_columns['peak_heights'], np.array([0])))
+        government_response_columns['peak_start_date'] = np.concatenate((
+            government_response_columns['peak_start_date'], np.array([0])))
+        government_response_columns['peak_end_date'] = np.concatenate((
+            government_response_columns['peak_end_date'], np.array([0])))
+        government_response_columns['peak_widths'] = np.concatenate((
+            government_response_columns['peak_widths'], np.array([0])))
+        government_response_columns['peak_prominences'] = np.concatenate((
+            government_response_columns['peak_prominences'], np.array([0])))
+
+
+
+    if SAVE_PLOTS:
+        plt.figure(figsize = (20,7))
+        plt.title('Stringency Index against Time for '+country)
+        plt.ylabel('stringency_index')
+        plt.xlabel('date')
+
+        plt.plot(data['date'].values, data['stringency_index'].values, label = 'stringency_index')
+        plt.plot([data['date'].values[i] for i in peak_locations], [data['stringency_index'].values[i] for i in peak_locations], "X", ms=20)
+        for percentile in percentiles:
+            plt.hlines(y = percentile, xmin = data['date'].values[0], xmax = data['date'].values[-1],
+                       linestyles='dashed', label = str(percentile), colors = 'red')
+        plt.legend()
+        plt.savefig(PATH+'government_response/'+country+'.png')
+        plt.close()
 
 '''
 CONSOLIDATING TABLES
 '''
 
-epidemiology_results = pd.DataFrame.from_dict(epidemiology_columns)
-mobility_results = pd.DataFrame.from_dict(mobility_columns)
-government_response_results = pd.DataFrame.from_dict(government_response_columns)
+#epidemiology_results = pd.DataFrame.from_dict(epidemiology_columns)
+#mobility_results = pd.DataFrame.from_dict(mobility_columns)
+#government_response_results = pd.DataFrame.from_dict(government_response_columns)

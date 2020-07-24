@@ -66,6 +66,7 @@ country_data = pd.DataFrame()
 
 country_data["country"] = government_response["country"].unique()
 
+## TARUN: Thought countrycodes are unique? Are there instances of multiple countries with one countrycode?
 country_data["countrycode"] = [statistics.mode(government_response.loc[government_response["country"]==c,"countrycode"]) for c in country_data["country"]]
 
 #%% date at which SI reaches its peak level
@@ -140,6 +141,8 @@ for c in tqdm(country_data["country"]):
 
 # duration that a country was at its max SI level
 country_data["duration_max_si"] = [(a-b).days+1 for a,b in zip(country_data["last_date_max_si"],country_data["date_max_si"])]
+
+# TARUN: I think it's probably okay to put a duration for countries at max SI.
 # not sure if I should put N/A for countries that are still at their peak SI level, for these countries the duration isnt complete yet
 #country_data.loc[country_data["currently_max_si"]==True,"duration_max_si"] = np.nan
 

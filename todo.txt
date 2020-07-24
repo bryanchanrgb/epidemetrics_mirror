@@ -4,4 +4,5 @@ generate_table.py:
 - Finish epidemiology columns V
 - Finish mobility columns V
 - Finish gov response columns
+- Convert epidemiology and gov response to country stats format 
 - Consolidate into one dataframe
