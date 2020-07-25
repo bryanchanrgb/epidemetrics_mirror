@@ -5,6 +5,8 @@ import pandas as pd
 import os
 import warnings
 from tqdm import tqdm
+import datetime
+import re
 
 from csaps import csaps
 from scipy.signal import find_peaks
@@ -315,8 +317,8 @@ for country in tqdm(countries, desc = 'Processing Epidemiological Data'):
     threshold_max_height_mask = np.zeros(len(data['date']))
 
     for i in range(wave_number):
-        threshold_average_height_mask[i] = (ys[np.where(days_above == (i+1))]/np.max(ys)).mean()
-        threshold_max_height_mask[i] = np.max(ys[np.where(days_above == (i+1))])/np.max(ys)
+        threshold_average_height_mask[i] = (ys[np.where(days_above == (i+1))]).mean()
+        threshold_max_height_mask[i] = np.max(ys[np.where(days_above == (i+1))])
 
     ###Upserting data
     epidemiology_columns['threshold_dates'] = np.concatenate((epidemiology_columns['threshold_dates'],
@@ -487,8 +489,7 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
         (data['c4_restrictions_on_gatherings'] == 4) |
         (data['c5_close_public_transport'] == 2) |
         (data['c6_stay_at_home_requirements'] == 3) |
-        (data['c7_restrictions_on_internal_movement'] == 2) |
-        (data['c8_international_travel_controls'] == 4)]
+        (data['c7_restrictions_on_internal_movement'] == 2)]
 
     if len(high_restrictions)>0:
         high_restrictions_start_date = high_restrictions['date'].iloc[0]
@@ -565,15 +566,20 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
                          for j in range(len(peak_locations))]
 
         government_response_columns['peak_heights'] = np.append(
-            government_response_columns['peak_heights'], set(peak_heights))
+            government_response_columns['peak_heights'],
+            str(peak_heights)[1:-1])
         government_response_columns['peak_start_date'] = np.append(
-            government_response_columns['peak_start_date'], set(peak_start_date))
+            government_response_columns['peak_start_date'],
+            str(peak_start_date)[1:-1])
         government_response_columns['peak_end_date'] = np.append(
-            government_response_columns['peak_end_date'], set(peak_end_date))
+            government_response_columns['peak_end_date'],
+            str(peak_end_date)[1:-1])
         government_response_columns['peak_widths'] = np.append(
-            government_response_columns['peak_widths'], set(p_widths))
+            government_response_columns['peak_widths'],
+            str(p_widths)[1:-1])
         government_response_columns['peak_prominences'] = np.append(
-            government_response_columns['peak_prominences'], set(p_prominences))
+            government_response_columns['peak_prominences'],
+            str(p_prominences)[1:-1])
 
     else:
         government_response_columns['peak_heights'] = np.concatenate((
@@ -613,77 +619,186 @@ epidemiology_results = pd.DataFrame.from_dict(epidemiology_columns)
 mobility_results = pd.DataFrame.from_dict(mobility_columns)
 government_response_results = pd.DataFrame.from_dict(government_response_columns)
 
-EPI = pd.DataFrame(columns = ['COUNTRYCODE','COUNTRY','EPI_CONFIRMED','EPI_NUMBER_PEAKS',''])
+EPI = {
+    'COUNTRYCODE' : np.zeros(len(countries)).astype(str),
+    'COUNTRY' : np.zeros(len(countries)).astype(str),
+    'EPI_CONFIRMED' : np.zeros(len(countries)).astype(np.float32),
+    'EPI_NUMBER_PEAKS' : np.zeros(len(countries)).astype(np.float32),
+    'EPI_NUMBER_WAVES' : np.zeros(len(countries)).astype(np.float32)
+}
 
-"""
-##EPIDEMIOLOGY TABLE
-epidemiology_columns={
-    'countrycode':np.empty(0),
-    'country':np.empty(0),
-    'date':np.empty(0),
-    'confirmed':np.empty(0),
-    'new_per_day':np.empty(0),
-    'new_per_day_ma':np.empty(0),
-    'new_per_day_smooth':np.empty(0),
-    'peak_dates':np.empty(0),
-    'peak_heights':np.empty(0),
-    'peak_widths':np.empty(0),
-    'peak_prominence':np.empty(0),
-    'peak_width_boundaries':np.empty(0), #NOT INCLUDED IN FINAL TABLE
-    'peak_width_heights':np.empty(0), #NOT INCLUDED IN FINAL TABLE
-    'threshold_dates':np.empty(0),
-    'threshold_average_height':np.empty(0),
-    'threshold_max_height':np.empty(0)
-    }
+for peak in range(int(epidemiology_results['peak_dates'].max())):
+    EPI['EPI_PEAK_' + str(peak + 1) + '_DATE'] = np.zeros(len(countries)).astype(datetime.date)
+    EPI['EPI_PEAK_' + str(peak + 1) + '_VALUE'] = np.zeros(len(countries)).astype(np.float32)
+    EPI['EPI_PEAK_' + str(peak + 1) + '_PROMINENCE'] = np.zeros(len(countries)).astype(np.float32)
+    EPI['EPI_PEAK_' + str(peak + 1) + '_WIDTH'] = np.zeros(len(countries)).astype(np.float32)
 
-if SAVE_PLOTS:
-    os.makedirs(PATH+'epidemiological/',exist_ok=True)
+for wave in range(int(epidemiology_results['threshold_dates'].max())):
+    EPI['EPI_WAVE_' + str(wave + 1) + '_START_DATE'] = np.zeros(len(countries)).astype(datetime.date)
+    EPI['EPI_WAVE_' + str(wave + 1) + '_END_DATE'] = np.zeros(len(countries)).astype(datetime.date)
+    EPI['EPI_WAVE_' + str(wave + 1) + '_DURATION'] = np.zeros(len(countries)).astype(np.float32)
+    EPI['EPI_WAVE_' + str(wave + 1) + '_AVERAGE_HEIGHT'] = np.zeros(len(countries)).astype(np.float32)
+    EPI['EPI_WAVE_' + str(wave + 1) + '_MAXIMUM_HEIGHT'] = np.zeros(len(countries)).astype(np.float32)
 
-##MOBILITY TABLE
-mobility_columns={
-    'countrycode':np.empty(0),
-    'country':np.empty(0),
-    'date':np.empty(0)
-    }
+for i,country in enumerate(countries):
+    data = epidemiology_results[epidemiology_results['countrycode'] == country]
+    EPI['COUNTRYCODE'][i] = country
+    EPI['COUNTRY'][i] = data['country'].iloc[0]
+    EPI['EPI_CONFIRMED'][i] = data['confirmed'].iloc[-1]
+    EPI['EPI_NUMBER_PEAKS'][i] = data['peak_dates'].max()
+    EPI['EPI_NUMBER_WAVES'][i] = data['threshold_dates'].max()
 
-if SAVE_PLOTS:
-    os.makedirs(PATH+'mobility/',exist_ok=True)
+    for peak in range(int(epidemiology_results['peak_dates'].max())):
+        if len(data[data['peak_dates'] == peak + 1]) != 0:
+            EPI['EPI_PEAK_' + str(peak + 1) + '_DATE'][i] = \
+                data[data['peak_dates'] == peak + 1]['date'].values[0]
+            EPI['EPI_PEAK_' + str(peak + 1) + '_VALUE'][i] = \
+                data[data['peak_dates'] == peak + 1]['peak_heights'].values[0]
+            EPI['EPI_PEAK_' + str(peak + 1) + '_PROMINENCE'][i] = \
+                data[data['peak_dates'] == peak + 1]['peak_prominence'].values[0]
+            EPI['EPI_PEAK_' + str(peak + 1) + '_WIDTH'][i] = \
+                data[data['peak_dates'] == peak + 1]['peak_widths'].values[0]
+        else:
+            EPI['EPI_PEAK_' + str(peak + 1) + '_DATE'][i] = np.nan
+            EPI['EPI_PEAK_' + str(peak + 1) + '_VALUE'][i] = np.nan
+            EPI['EPI_PEAK_' + str(peak + 1) + '_PROMINENCE'][i] = np.nan
+            EPI['EPI_PEAK_' + str(peak + 1) + '_WIDTH'][i] = np.nan
+
+    for wave in range(int(epidemiology_results['threshold_dates'].max())):
+        if len(data[data['threshold_dates'] == wave + 1]) != 0:
+            EPI['EPI_WAVE_' + str(wave + 1) + '_START_DATE'][i] = data[data['threshold_dates'] == wave + 1]['date'].iloc[0]
+            EPI['EPI_WAVE_' + str(wave + 1) + '_END_DATE'][i] = data[data['threshold_dates'] == wave + 1]['date'].iloc[-1]
+            EPI['EPI_WAVE_' + str(wave + 1) + '_DURATION'][i] = \
+                (data[data['threshold_dates'] == wave + 1]['date'].iloc[-1] -
+                 data[data['threshold_dates'] == wave + 1]['date'].iloc[0]).days
+            EPI['EPI_WAVE_' + str(wave + 1) + '_AVERAGE_HEIGHT'][i] = \
+                data[data['threshold_dates'] == wave + 1]['threshold_average_height'].values[0]
+            EPI['EPI_WAVE_' + str(wave + 1) + '_MAXIMUM_HEIGHT'][i] = \
+                data[data['threshold_dates'] == wave + 1]['threshold_max_height'].values[0]
+        else:
+            EPI['EPI_WAVE_' + str(wave + 1) + '_START_DATE'][i] = np.nan
+            EPI['EPI_WAVE_' + str(wave + 1) + '_END_DATE'][i] = np.nan
+            EPI['EPI_WAVE_' + str(wave + 1) + '_DURATION'][i] = np.nan
+            EPI['EPI_WAVE_' + str(wave + 1) + '_AVERAGE_HEIGHT'][i] = np.nan
+            EPI['EPI_WAVE_' + str(wave + 1) + '_MAXIMUM_HEIGHT'][i] = np.nan
+
+EPI = pd.DataFrame.from_dict(EPI)
+
+MOB = {
+    'COUNTRYCODE': np.zeros(len(countries)).astype(str),
+    'COUNTRY': np.zeros(len(countries)).astype(str)
+}
 
 for mobility_type in mobilities:
-    mobility_columns[mobility_type+'_smooth'] = np.empty(0)
-    mobility_columns[mobility_type] = np.empty(0)
-    mobility_columns[mobility_type+'_peak_dates'] = np.empty(0)
-    mobility_columns[mobility_type+'_trough_dates'] = np.empty(0)
-    mobility_columns[mobility_type+'_peak_heights'] = np.empty(0)
-    mobility_columns[mobility_type+'_trough_heights'] = np.empty(0)
-    mobility_columns[mobility_type+'_peak_prominences'] = np.empty(0)
-    mobility_columns[mobility_type+'_trough_prominences'] = np.empty(0)
-    mobility_columns[mobility_type+'_peak_widths'] = np.empty(0)
-    mobility_columns[mobility_type+'_trough_widths'] = np.empty(0)
-    if SAVE_PLOTS:
-        os.makedirs(PATH+'mobility/'+mobility_type+'/',exist_ok=True)
+    for peak in range(int(mobility_results[mobility_type + '_peak_dates'].max())):
+        MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_DATE'] = \
+            np.zeros(len(countries)).astype(datetime.date)
+        MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_VALUE'] = \
+            np.zeros(len(countries)).astype(np.float32)
+        MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_PROMINENCE'] = \
+            np.zeros(len(countries)).astype(np.float32)
+        MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_WIDTH'] = \
+            np.zeros(len(countries)).astype(np.float32)
 
-##GOVERNMENT_RESPONSE
+    for trough in range(int(mobility_results[mobility_type + '_trough_dates'].max())):
+        MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_DATE'] = \
+            np.zeros(len(countries)).astype(datetime.date)
+        MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_VALUE'] = \
+            np.zeros(len(countries)).astype(np.float32)
+        MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_PROMINENCE'] = \
+            np.zeros(len(countries)).astype(np.float32)
+        MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_WIDTH'] = \
+            np.zeros(len(countries)).astype(np.float32)
 
-percentiles = [25, 50, 75]
-government_response_columns={
-    'countrycode': np.empty(0),
-    'country': np.empty(0),
-    'max_si':np.empty(0),
-    'max_si_start_date':np.empty(0),
-    'max_si_end_date':np.empty(0),
-    'max_si_duration':np.empty(0),
-    'max_si_currently':np.empty(0),
-    'multiple_peaks':np.empty(0),
-    'peak_heights':np.empty(0),
-    'peak_start_date':np.empty(0),
-    'peak_end_date':np.empty(0),
-    'peak_widths':np.empty(0),
-    'peak_prominences':np.empty(0),
-    'high_restrictions_start_date':np.empty(0),
-    'high_restrictions_end_date':np.empty(0),
-    'high_restrictions_duration':np.empty(0),
-    'high_restrictions_current':np.empty(0),
-    'stringency_index_opt_lag':np.empty(0)
+for i,country in enumerate(countries):
+    data = mobility_results[mobility_results['countrycode'] == country]
+    MOB['COUNTRYCODE'][i] = country
+    MOB['COUNTRY'][i] = data['country'].iloc[0]
+
+    for mobility_type in mobilities:
+        for peak in range(int(mobility_results[mobility_type + '_peak_dates'].max())):
+            if len(data[data[mobility_type + '_peak_dates'] == peak + 1]) != 0:
+                MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_DATE'][i] = \
+                    data[data[mobility_type + '_peak_dates'] == peak + 1]['date'].values[0]
+                MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_VALUE'][i] = \
+                    data[data[mobility_type + '_peak_dates'] == peak + 1][mobility_type + '_peak_heights'].values[0]
+                MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_PROMINENCE'][i] = \
+                    data[data[mobility_type + '_peak_dates'] == peak + 1][mobility_type + '_peak_prominences'].values[0]
+                MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_WIDTH'][i] = \
+                    data[data[mobility_type + '_peak_dates'] == peak + 1][mobility_type + '_peak_widths'].values[0]
+                continue
+            else:
+                MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_DATE'][i] = np.nan
+                MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_VALUE'][i] = np.nan
+                MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_PROMINENCE'][i] = np.nan
+                MOB['MOB_' + mobility_type.upper() + '_PEAK_' + str(peak + 1) + '_WIDTH'][i] = np.nan
+
+        for trough in range(int(mobility_results[mobility_type + '_trough_dates'].max())):
+            if len(data[data[mobility_type + '_trough_dates'] == trough + 1]) != 0:
+                MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_DATE'][i] = \
+                    data[data[mobility_type + '_trough_dates'] == trough + 1]['date'].values[0]
+                MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_VALUE'][i] = \
+                    data[data[mobility_type + '_trough_dates'] == trough + 1][mobility_type + '_trough_heights'].values[0]
+                MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_PROMINENCE'][i] = \
+                    data[data[mobility_type + '_trough_dates'] == trough + 1][mobility_type + '_trough_prominences'].values[0]
+                MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_WIDTH'][i] = \
+                    data[data[mobility_type + '_trough_dates'] == trough + 1][mobility_type + '_trough_widths'].values[0]
+                continue
+            else:
+                MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_DATE'][i] = np.nan
+                MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_VALUE'][i] = np.nan
+                MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_PROMINENCE'][i] = np.nan
+                MOB['MOB_' + mobility_type.upper() + '_TROUGH_' + str(trough + 1) + '_WIDTH'][i] = np.nan
+
+MOB = pd.DataFrame.from_dict(MOB)
+
+GOV = {
+    'COUNTRYCODE' : government_response_results['countrycode'],
+    'COUNTRY' : government_response_results['country'],
+    'GOV_MAX_SI' : government_response_results['max_si'],
+    'GOV_MAX_SI_START_DATE' : government_response_results['max_si_start_date'],
+    'GOV_MAX_SI_END_DATE' : government_response_results['max_si_end_date'],
+    'GOV_MAX_SI_DURATION' : government_response_results['max_si_duration'],
+    'GOV_MAX_SI_CURRENTLY' : government_response_results['max_si_currently'],
+    'GOV_MULTIPLE_PEAKS' : government_response_results['multiple_peaks'],
+    'GOV_HIGH_RESTRICTIONS_START_DATE' : government_response_results['high_restrictions_start_date'],
+    'GOV_HIGH_RESTRICTIONS_END_DATE' : government_response_results['high_restrictions_end_date'],
+    'GOV_HIGH_RESTRICTIONS_DURATION' : government_response_results['high_restrictions_duration'],
+    'GOV_HIGH_RESTRICTIONS_CURRENT' : government_response_results['high_restrictions_current']
 }
-"""
+
+gov_max_peaks = max([len(v.split(', ')) for v in
+                     government_response_results[government_response_results['multiple_peaks']]['peak_heights']])
+
+for peak in range(gov_max_peaks):
+    GOV['GOV_PEAK_' + str(peak + 2) + '_HEIGHT'] = np.repeat(np.nan, len(countries)).astype(np.float)
+    GOV['GOV_PEAK_' + str(peak + 2) + '_START_DATE'] = np.repeat(np.nan, len(countries)).astype(datetime.date)
+    GOV['GOV_PEAK_' + str(peak + 2) + '_END_DATE'] = np.repeat(np.nan, len(countries)).astype(datetime.date)
+    GOV['GOV_PEAK_' + str(peak + 2) + '_WIDTH'] = np.repeat(np.nan, len(countries)).astype(np.float)
+    GOV['GOV_PEAK_' + str(peak + 2) + '_PROMINENCES'] = np.repeat(np.nan, len(countries)).astype(np.float)
+
+for i,country in enumerate(countries):
+    data = government_response_results[government_response_results['countrycode'] == country]
+
+    for peak in range(gov_max_peaks):
+        if data['multiple_peaks'].values[0]:
+            if len(data['peak_heights'].values[0].split(', ')) > peak:
+                GOV['GOV_PEAK_' + str(peak + 2) + '_HEIGHT'][i] = \
+                    float(data['peak_heights'].values[0].split(', ')[peak])
+                GOV['GOV_PEAK_' + str(peak + 2) + '_START_DATE'][i] = \
+                    datetime.datetime.strptime(re.findall('datetime.date\((.*?)\)',
+                                                 data['peak_start_date'].values[0])[peak],'%Y, %m, %d').date()
+                GOV['GOV_PEAK_' + str(peak + 2) + '_END_DATE'][i] = \
+                    datetime.datetime.strptime(re.findall('datetime.date\((.*?)\)',
+                                                 data['peak_end_date'].values[0])[peak],'%Y, %m, %d').date()
+                GOV['GOV_PEAK_' + str(peak + 2) + '_WIDTH'][i] = \
+                    float(data['peak_widths'].values[0].split()[peak])
+                GOV['GOV_PEAK_' + str(peak + 2) + '_PROMINENCES'][i] = \
+                    float(data['peak_prominences'].values[0].split()[peak])
+
+GOV = pd.DataFrame.from_dict(GOV)
+
+FINAL = EPI.merge(MOB, on = ['COUNTRYCODE','COUNTRY'], how = 'left')\
+    .merge(GOV, on = ['COUNTRYCODE','COUNTRY'], how = 'left')
+
+FINAL.to_csv(PATH + 'master.csv')
