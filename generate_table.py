@@ -613,3 +613,77 @@ epidemiology_results = pd.DataFrame.from_dict(epidemiology_columns)
 mobility_results = pd.DataFrame.from_dict(mobility_columns)
 government_response_results = pd.DataFrame.from_dict(government_response_columns)
 
+EPI = pd.DataFrame(columns = ['COUNTRYCODE','COUNTRY','EPI_CONFIRMED','EPI_NUMBER_PEAKS',''])
+
+"""
+##EPIDEMIOLOGY TABLE
+epidemiology_columns={
+    'countrycode':np.empty(0),
+    'country':np.empty(0),
+    'date':np.empty(0),
+    'confirmed':np.empty(0),
+    'new_per_day':np.empty(0),
+    'new_per_day_ma':np.empty(0),
+    'new_per_day_smooth':np.empty(0),
+    'peak_dates':np.empty(0),
+    'peak_heights':np.empty(0),
+    'peak_widths':np.empty(0),
+    'peak_prominence':np.empty(0),
+    'peak_width_boundaries':np.empty(0), #NOT INCLUDED IN FINAL TABLE
+    'peak_width_heights':np.empty(0), #NOT INCLUDED IN FINAL TABLE
+    'threshold_dates':np.empty(0),
+    'threshold_average_height':np.empty(0),
+    'threshold_max_height':np.empty(0)
+    }
+
+if SAVE_PLOTS:
+    os.makedirs(PATH+'epidemiological/',exist_ok=True)
+
+##MOBILITY TABLE
+mobility_columns={
+    'countrycode':np.empty(0),
+    'country':np.empty(0),
+    'date':np.empty(0)
+    }
+
+if SAVE_PLOTS:
+    os.makedirs(PATH+'mobility/',exist_ok=True)
+
+for mobility_type in mobilities:
+    mobility_columns[mobility_type+'_smooth'] = np.empty(0)
+    mobility_columns[mobility_type] = np.empty(0)
+    mobility_columns[mobility_type+'_peak_dates'] = np.empty(0)
+    mobility_columns[mobility_type+'_trough_dates'] = np.empty(0)
+    mobility_columns[mobility_type+'_peak_heights'] = np.empty(0)
+    mobility_columns[mobility_type+'_trough_heights'] = np.empty(0)
+    mobility_columns[mobility_type+'_peak_prominences'] = np.empty(0)
+    mobility_columns[mobility_type+'_trough_prominences'] = np.empty(0)
+    mobility_columns[mobility_type+'_peak_widths'] = np.empty(0)
+    mobility_columns[mobility_type+'_trough_widths'] = np.empty(0)
+    if SAVE_PLOTS:
+        os.makedirs(PATH+'mobility/'+mobility_type+'/',exist_ok=True)
+
+##GOVERNMENT_RESPONSE
+
+percentiles = [25, 50, 75]
+government_response_columns={
+    'countrycode': np.empty(0),
+    'country': np.empty(0),
+    'max_si':np.empty(0),
+    'max_si_start_date':np.empty(0),
+    'max_si_end_date':np.empty(0),
+    'max_si_duration':np.empty(0),
+    'max_si_currently':np.empty(0),
+    'multiple_peaks':np.empty(0),
+    'peak_heights':np.empty(0),
+    'peak_start_date':np.empty(0),
+    'peak_end_date':np.empty(0),
+    'peak_widths':np.empty(0),
+    'peak_prominences':np.empty(0),
+    'high_restrictions_start_date':np.empty(0),
+    'high_restrictions_end_date':np.empty(0),
+    'high_restrictions_duration':np.empty(0),
+    'high_restrictions_current':np.empty(0),
+    'stringency_index_opt_lag':np.empty(0)
+}
+"""
