@@ -6,3 +6,5 @@ generate_table.py:
 - Finish gov response columns V
 - Convert epidemiology and gov response to country stats format 
 - Consolidate into one dataframe
+- Change threshold from 25th percentile to... (maybe mean-2stdev?)
+- Fix peak/trough prominence on mobility table
