@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import psycopg2
 import pandas as pd
 import os
@@ -15,6 +16,7 @@ from scipy.signal import peak_prominences
 
 import statsmodels.api as sm
 from scipy.ndimage.interpolation import shift
+import statsmodels.api as sm
 warnings.filterwarnings('ignore')
 
 '''
@@ -208,6 +210,7 @@ government_response_columns={
     'max_si_end_date':np.empty(0),
     'max_si_duration':np.empty(0),
     'max_si_currently':np.empty(0),
+    'max_si_days_from_t0':np.empty(0),
     'multiple_peaks':np.empty(0),
     'peak_heights':np.empty(0),
     'peak_start_date':np.empty(0),
@@ -295,8 +298,8 @@ for country in tqdm(countries, desc = 'Processing Epidemiological Data'):
         (epidemiology_columns['peak_width_heights'], peak_width_heights_mask))
 
     ###Finding dates above threshold
-    thresh = np.percentile(ys, THRESHOLD)
-    days_above = pd.Series((ys>np.percentile(ys,THRESHOLD)).astype(int))
+    thresh = np.percentile(ys[ys>0], THRESHOLD)
+    days_above = pd.Series((ys>np.percentile(ys[ys>0],THRESHOLD)).astype(int))
     waves = [(cat[1], grp.shape[0]) for cat, grp in days_above.groupby([
         days_above.ne(days_above.shift()).cumsum(), days_above])]
 
@@ -390,13 +393,13 @@ for country in tqdm(countries, desc = 'Processing Mobility Data'):
         for i in range(len(peak_locations)):
             peak_mask[peak_locations[i]] = i + 1
             peak_heights_mask[peak_locations[i]] = ys[peak_locations[i]]
-            p_prominences_mask[peak_locations[i]] = p_prominences_mask[i]
+            p_prominences_mask[peak_locations[i]] = p_prominences[i]
             p_widths_mask[peak_locations[i]] = p_widths[i]
 
         for i in range(len(trough_locations)):
             trough_mask[trough_locations[i]] = i + 1
             trough_heights_mask[trough_locations[i]] = ys[trough_locations[i]]
-            t_prominences_mask[trough_locations[i]] = t_prominences_mask[i]
+            t_prominences_mask[trough_locations[i]] = t_prominences[i]
             t_widths_mask[trough_locations[i]] = t_widths[i]
 
         mobility_columns[mobility_type] = np.concatenate((
@@ -461,6 +464,7 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
     max_si_duration = (max_si_end_date - max_si_start_date).days
     max_si_currently = data[data['stringency_index'] == data['stringency_index'].max()]['date'].iloc[-1] == \
                        data['date'].iloc[-1]
+    max_si_days_from_t0 = (max_si_start_date - data[data["stringency_index"]>0]["date"].iloc[0]).days
 
     government_response_columns['max_si'] = np.concatenate((
         government_response_columns['max_si'], np.array([max_si])))
@@ -476,7 +480,10 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
     government_response_columns['max_si_currently'] = np.concatenate((
         government_response_columns['max_si_currently'],
         np.array([max_si_currently]))).astype(bool)
-
+    government_response_columns['max_si_days_from_t0'] = np.concatenate((
+        government_response_columns['max_si_days_from_t0'],
+        np.array([max_si_days_from_t0])))
+    
     peak_locations = find_peaks(data['stringency_index'].values, distance = DISTANCE)[0]
     multiple_peaks = len(peak_locations) > 1
     government_response_columns['multiple_peaks'] = np.concatenate((
@@ -593,8 +600,6 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
         government_response_columns['peak_prominences'] = np.concatenate((
             government_response_columns['peak_prominences'], np.array([0])))
 
-
-
     if SAVE_PLOTS:
         plt.figure(figsize = (20,7))
         plt.title('Stringency Index against Time for '+country)
@@ -604,6 +609,12 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
         plt.plot(data['date'].values, data['stringency_index'].values, label = 'stringency_index')
         plt.plot([data['date'].values[i] for i in peak_locations], [data['stringency_index'].values[i]
                                                                     for i in peak_locations], "X", ms=20)
+        t = government_response_results.loc[government_response_results["countrycode"]==country,"high_restrictions_start_date"].values[0]
+        if not pd.isna(t):
+            try:
+                plt.plot(t,data.loc[data["date"]==t,'stringency_index'].values[0], "X", ms=20, color='green')
+            except IndexError:
+                pass
         for percentile in percentiles:
             plt.hlines(y = percentile, xmin = data['date'].values[0], xmax = data['date'].values[-1],
                        linestyles='dashed', label = str(percentile), colors = 'red')
@@ -760,6 +771,7 @@ GOV = {
     'GOV_MAX_SI_END_DATE' : government_response_results['max_si_end_date'],
     'GOV_MAX_SI_DURATION' : government_response_results['max_si_duration'],
     'GOV_MAX_SI_CURRENTLY' : government_response_results['max_si_currently'],
+    'GOV_MAX_SI_DAYS_FROM_T0' : government_response_results['max_si_days_from_t0'],
     'GOV_MULTIPLE_PEAKS' : government_response_results['multiple_peaks'],
     'GOV_HIGH_RESTRICTIONS_START_DATE' : government_response_results['high_restrictions_start_date'],
     'GOV_HIGH_RESTRICTIONS_END_DATE' : government_response_results['high_restrictions_end_date'],
@@ -771,34 +783,78 @@ gov_max_peaks = max([len(v.split(', ')) for v in
                      government_response_results[government_response_results['multiple_peaks']]['peak_heights']])
 
 for peak in range(gov_max_peaks):
-    GOV['GOV_PEAK_' + str(peak + 2) + '_HEIGHT'] = np.repeat(np.nan, len(countries)).astype(np.float)
-    GOV['GOV_PEAK_' + str(peak + 2) + '_START_DATE'] = np.repeat(np.nan, len(countries)).astype(datetime.date)
-    GOV['GOV_PEAK_' + str(peak + 2) + '_END_DATE'] = np.repeat(np.nan, len(countries)).astype(datetime.date)
-    GOV['GOV_PEAK_' + str(peak + 2) + '_WIDTH'] = np.repeat(np.nan, len(countries)).astype(np.float)
-    GOV['GOV_PEAK_' + str(peak + 2) + '_PROMINENCES'] = np.repeat(np.nan, len(countries)).astype(np.float)
+    GOV['GOV_PEAK_' + str(peak + 1) + '_HEIGHT'] = np.repeat(np.nan, len(countries)).astype(np.float)
+    GOV['GOV_PEAK_' + str(peak + 1) + '_START_DATE'] = np.repeat(np.nan, len(countries)).astype(datetime.date)
+    GOV['GOV_PEAK_' + str(peak + 1) + '_END_DATE'] = np.repeat(np.nan, len(countries)).astype(datetime.date)
+    GOV['GOV_PEAK_' + str(peak + 1) + '_WIDTH'] = np.repeat(np.nan, len(countries)).astype(np.float)
+    GOV['GOV_PEAK_' + str(peak + 1) + '_PROMINENCES'] = np.repeat(np.nan, len(countries)).astype(np.float)
+
+
 
 for i,country in enumerate(countries):
     data = government_response_results[government_response_results['countrycode'] == country]
-
-    for peak in range(gov_max_peaks):
-        if data['multiple_peaks'].values[0]:
+    
+    if data['multiple_peaks'].values[0]:
+        for peak in range(gov_max_peaks):
             if len(data['peak_heights'].values[0].split(', ')) > peak:
-                GOV['GOV_PEAK_' + str(peak + 2) + '_HEIGHT'][i] = \
+                GOV['GOV_PEAK_' + str(peak + 1) + '_HEIGHT'][i] = \
                     float(data['peak_heights'].values[0].split(', ')[peak])
-                GOV['GOV_PEAK_' + str(peak + 2) + '_START_DATE'][i] = \
+                GOV['GOV_PEAK_' + str(peak + 1) + '_START_DATE'][i] = \
                     datetime.datetime.strptime(re.findall('datetime.date\((.*?)\)',
                                                  data['peak_start_date'].values[0])[peak],'%Y, %m, %d').date()
-                GOV['GOV_PEAK_' + str(peak + 2) + '_END_DATE'][i] = \
+                GOV['GOV_PEAK_' + str(peak + 1) + '_END_DATE'][i] = \
                     datetime.datetime.strptime(re.findall('datetime.date\((.*?)\)',
                                                  data['peak_end_date'].values[0])[peak],'%Y, %m, %d').date()
-                GOV['GOV_PEAK_' + str(peak + 2) + '_WIDTH'][i] = \
+                GOV['GOV_PEAK_' + str(peak + 1) + '_WIDTH'][i] = \
                     float(data['peak_widths'].values[0].split()[peak])
-                GOV['GOV_PEAK_' + str(peak + 2) + '_PROMINENCES'][i] = \
+                GOV['GOV_PEAK_' + str(peak + 1) + '_PROMINENCES'][i] = \
                     float(data['peak_prominences'].values[0].split()[peak])
+    else:
+        GOV['GOV_PEAK_1_HEIGHT'][i] = GOV['GOV_MAX_SI'][i]
+        GOV['GOV_PEAK_1_START_DATE'][i] = GOV['GOV_MAX_SI_START_DATE'][i]
+        GOV['GOV_PEAK_1_END_DATE'][i] = GOV['GOV_MAX_SI_END_DATE'][i]
+        GOV['GOV_PEAK_1_WIDTH'][i] = GOV['GOV_MAX_SI_DURATION'][i]
+        GOV['GOV_PEAK_1_PROMINENCES'][i] = GOV['GOV_MAX_SI'][i]
 
 GOV = pd.DataFrame.from_dict(GOV)
 
-FINAL = EPI.merge(MOB, on = ['COUNTRYCODE','COUNTRY'], how = 'left')\
-    .merge(GOV, on = ['COUNTRYCODE','COUNTRY'], how = 'left')
+
+'''
+MERGING INTO MASTER TABLE
+'''
+FINAL = EPI.merge(MOB, on = ['COUNTRYCODE'], how = 'left')\
+    .merge(GOV, on = ['COUNTRYCODE'], how = 'left')
 
 FINAL.to_csv(PATH + 'master.csv')
+
+'''
+INTERACTIONS BETWEEN EPI, GOV AND MOB
+'''
+## EPI_GOV: DISTANCE BETWEEN PEAK OF EPIDEMIOLOGY AND START/END DATES OF MAX STRINGECY INDEX
+for i in FINAL.index:
+    j = np.argmax([FINAL.loc[i,"EPI_PEAK_"+str(n)+"_VALUE"] for n in range(1,int(epidemiology_results['peak_dates'].max())+1)])
+    if j > 0:
+        date1 = FINAL.loc[i,"EPI_PEAK_" + str(j) + "_DATE"]
+        date2 = FINAL.loc[i,"GOV_MAX_SI_START_DATE"]
+        FINAL.loc[i,"EPI_GOV_PEAK_START_DATE_DIFF"] = (date1-date2).days
+        date2 = FINAL.loc[i,"GOV_MAX_SI_END_DATE"]
+        FINAL.loc[i,"EPI_GOV_PEAK_END_DATE_DIFF"] = (date1-date2).days
+
+## GOV_MOB: DIFFERENCE BETWEEN START DATE OF SI PEAK AND PEAK OF RESIDENTIAL MOBILITY
+for i in FINAL.index:
+    j = np.argmax([FINAL.loc[i,"MOB_RESIDENTIAL_PEAK_"+str(n)+"_VALUE"] for n in range(1,int(mobility_results['residential_peak_dates'].max())+1)])
+    if j > 0:
+        date1 = FINAL.loc[i,"GOV_MAX_SI_START_DATE"]
+        date2 = FINAL.loc[i,"MOB_RESIDENTIAL_PEAK_" + str(j) + "_DATE"]
+        FINAL.loc[i,"GOV_MOB_RESIDENTIAL_PEAK_START_DATE_DIFF"] = (date1-date2).days
+
+## EPI_MOB: DIFFERENCE BETWEEN PEAK DATE OF EPI AND PEAK DATE IN MOBILITY
+for i in FINAL.index:
+    j = np.argmax([FINAL.loc[i,"EPI_PEAK_"+str(n)+"_VALUE"] for n in range(1,int(epidemiology_results['peak_dates'].max())+1)])
+    k = np.argmax([FINAL.loc[i,"MOB_RESIDENTIAL_PEAK_"+str(n)+"_VALUE"] for n in range(1,int(mobility_results['residential_peak_dates'].max())+1)])
+    if (j > 0) & (k > 0):
+        date1 = FINAL.loc[i,"EPI_PEAK_"+str(j)+"_DATE"]
+        date2 = FINAL.loc[i,"MOB_RESIDENTIAL_PEAK_" + str(k) + "_DATE"]
+        FINAL.loc[i,"EPI_MOB_PEAK_DATE_DIFF"] = (date1-date2).days
+
+
