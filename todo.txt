@@ -8,3 +8,6 @@ generate_table.py:
 - Consolidate into one dataframe
 - Change threshold from 25th percentile to... (maybe mean-2stdev?)
 - Fix peak/trough prominence on mobility table
+
+ideas:
+- Jacque bera test to determine whether it's a normal distribution or bimodal?? i.e. if the distribution scores highly on this test, its in it's first wave, otherwise it has multiple waves.
