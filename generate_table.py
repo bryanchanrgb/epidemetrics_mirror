@@ -885,13 +885,10 @@ FINAL = FINAL.merge(LABELLED_COLUMNS, on = ['COUNTRYCODE'], how = 'left')
 
 map_data['COUNTRYCODE'] = map_data['countrycode']
 map_data = map_data.merge(LABELLED_COLUMNS[['COUNTRYCODE','CLASS']], on = ['COUNTRYCODE'], how = 'left')
-map_data = map_data.dropna(subset = ['CLASS'])
-map_data = map_data[['geometry','CLASS']]
 
 plt.figure()
-world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-base = world.boundary.plot(edgecolor = 'black', linewidth = 0.75)
-map_data.plot(ax=base, column = 'CLASS', figsize = (20,10), legend = True, legend_kwds = {'orientation':'horizontal'})
+map_data.plot(column = 'CLASS', figsize = (20,10), legend = True, legend_kwds = {'orientation':'horizontal'},
+              missing_kwds = {'color' : 'lightgrey'})
 plt.savefig(PATH + 'world_map.jpg')
 plt.close()
 
