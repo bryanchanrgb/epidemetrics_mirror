@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 import psycopg2
 import pandas as pd
+import geopandas as gpd
 import os
 import warnings
 from tqdm import tqdm
@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 INTITALISE SCRIPT PARAMETERS
 '''
 
-SAVE_PLOTS=True
+SAVE_PLOTS=False
 DISTANCE = 21  # Distance between peaks
 THRESHOLD = 25  # Threshold for duration calculation
 SMOOTH = 0.001  # Smoothing parameter for the spline fit
@@ -77,6 +77,9 @@ raw_government_response = raw_government_response.sort_values(by=['country','dat
 raw_government_response = raw_government_response.sort_values(by=['countrycode','date'])
 ### Check no conflicting values for each country and date
 assert not raw_government_response[['countrycode','date']].duplicated().any()
+
+sql_command = """SELECT * FROM administrative_division WHERE adm_level=0"""
+map_data = gpd.GeoDataFrame.from_postgis(sql_command, conn, geom_col='geometry')
 
 
 '''
@@ -830,8 +833,6 @@ MERGING INTO MASTER TABLE
 FINAL = EPI.merge(MOB, on = ['COUNTRYCODE'], how = 'left')\
     .merge(GOV, on = ['COUNTRYCODE'], how = 'left')
 
-FINAL.to_csv(PATH + 'master.csv')
-
 '''
 INTERACTIONS BETWEEN EPI, GOV AND MOB
 '''
@@ -866,4 +867,32 @@ for i in FINAL.index:
         date2 = FINAL.loc[i,"MOB_RESIDENTIAL_PEAK_" + str(k) + "_DATE"]
         FINAL.loc[i,"EPI_MOB_PEAK_DATE_DIFF"] = (date1-date2).days
 
+LABELLED_COLUMNS = pd.read_csv('peak_labels.csv')
 
+CLASS_DICTIONARY = {
+    'EPI_ENTERING_FIRST' : 1,
+    'EPI_PAST_FIRST' : 2,
+    'EPI_ENTERING_SECOND' : 3,
+    'EPI_PAST_SECOND' : 4
+}
+
+classes = np.zeros(len(LABELLED_COLUMNS))
+for k, v in CLASS_DICTIONARY.items():
+    classes[np.where(LABELLED_COLUMNS[k])] += v
+LABELLED_COLUMNS['CLASS'] = classes
+
+FINAL = FINAL.merge(LABELLED_COLUMNS, on = ['COUNTRYCODE'], how = 'left')
+
+map_data['COUNTRYCODE'] = map_data['countrycode']
+map_data = map_data.merge(LABELLED_COLUMNS[['COUNTRYCODE','CLASS']], on = ['COUNTRYCODE'], how = 'left')
+map_data = map_data.dropna(subset = ['CLASS'])
+map_data = map_data[['geometry','CLASS']]
+
+plt.figure()
+world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+base = world.boundary.plot(edgecolor = 'black', linewidth = 0.75)
+map_data.plot(ax=base, column = 'CLASS', figsize = (20,10), legend = True, legend_kwds = {'orientation':'horizontal'})
+plt.savefig(PATH + 'world_map.jpg')
+plt.close()
+
+FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
