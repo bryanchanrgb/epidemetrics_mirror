@@ -31,6 +31,7 @@ ROLLING_WINDOW = 3  # Window size for Moving Average for epidemiological data
 OPTIMAL_LAG_TIME = 14 # +/- this time for optimal lag calculation
 PATH = './charts/table_figures/' # Path to save master table and corresponding plots
 PROMINENCE_THRESHOLD = 5
+T0_THRESHOLD = 5 # T0 is defined as the first day where te smoothed number of new cases per day >= threshold
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -48,7 +49,7 @@ sql_command = """SELECT * FROM epidemiology WHERE source = %(source)s"""
 raw_epidemiology = pd.read_sql(sql_command, conn, params={'source': source})
 raw_epidemiology = raw_epidemiology[raw_epidemiology['adm_area_1'].isnull()].sort_values(by=['countrycode', 'date'])
 raw_epidemiology = raw_epidemiology[~raw_epidemiology['country'].isin(exclude)].reset_index(drop=True)
-raw_epidemiology = raw_epidemiology[['countrycode','country','date','confirmed']]
+raw_epidemiology = raw_epidemiology[['countrycode','country','date','confirmed','dead']]
 ### Check no conflicting values for each country and date
 assert not raw_epidemiology[['countrycode','date']].duplicated().any()
 
@@ -78,8 +79,18 @@ raw_government_response = raw_government_response.sort_values(by=['countrycode',
 ### Check no conflicting values for each country and date
 assert not raw_government_response[['countrycode','date']].duplicated().any()
 
+# GET ADMINISTRATIVE DIVISION TABLE
 sql_command = """SELECT * FROM administrative_division WHERE adm_level=0"""
 map_data = gpd.GeoDataFrame.from_postgis(sql_command, conn, geom_col='geometry')
+
+# GET POPULATION FROM WORLD BANK TABLE
+indicator_code = 'SP.POP.TOTL'
+sql_command = """SELECT countrycode, value, year FROM world_bank WHERE adm_area_1 IS NULL AND indicator_code = %(indicator_code)s"""
+WB_statistics = pd.read_sql(sql_command, conn, params={'indicator_code': indicator_code})
+# Check only 1 latest year value for population
+assert len(WB_statistics) == len(WB_statistics['countrycode'].unique())
+WB_statistics = WB_statistics.sort_values(by=['countrycode','year'], ascending=[True,False]).reset_index(drop=True)
+
 
 
 '''
@@ -95,7 +106,7 @@ Steps taken:
 
 ##EPIDEMIOLOGY PRE-PROCESSING LOOP
 countries = raw_epidemiology['countrycode'].unique()
-epidemiology = pd.DataFrame(columns=['countrycode','country','date','confirmed','new_per_day'])
+epidemiology = pd.DataFrame(columns=['countrycode','country','date','confirmed','new_per_day','dead'])
 for country in countries:
     data = raw_epidemiology[raw_epidemiology['countrycode']==country].set_index('date')
     data = data.reindex([x.date() for x in pd.date_range(data.index.values[0],data.index.values[-1])])
@@ -106,6 +117,7 @@ for country in countries:
     data['new_per_day'].iloc[np.array(data[data['new_per_day']<0].index)] = \
         data['new_per_day'].iloc[np.array(epidemiology[epidemiology['new_per_day']<0].index)-1]
     data['new_per_day'] = data['new_per_day'].fillna(method='bfill')
+    data['dead'] = data['dead'].interpolate(method='linear')
     epidemiology = pd.concat((epidemiology,data)).reset_index(drop=True)
     continue
 
@@ -167,6 +179,7 @@ epidemiology_columns={
     'new_per_day':np.empty(0),
     'new_per_day_ma':np.empty(0),
     'new_per_day_smooth':np.empty(0),
+    'dead':np.empty(0),
     'peak_dates':np.empty(0),
     'peak_heights':np.empty(0),
     'peak_widths':np.empty(0),
@@ -290,6 +303,8 @@ for country in tqdm(countries, desc = 'Processing Epidemiological Data'):
         (epidemiology_columns['new_per_day_ma'], data['new_per_day_ma'].values))
     epidemiology_columns['new_per_day_smooth'] = np.concatenate(
         (epidemiology_columns['new_per_day_smooth'], ys))
+    epidemiology_columns['dead'] = np.concatenate(
+        (epidemiology_columns['dead'], data['dead'].values))
     epidemiology_columns['peak_dates'] = np.concatenate(
         (epidemiology_columns['peak_dates'], peak_mask))
     epidemiology_columns['peak_heights'] = np.concatenate(
@@ -336,6 +351,9 @@ for country in tqdm(countries, desc = 'Processing Epidemiological Data'):
                                                               threshold_average_height_mask))
     epidemiology_columns['threshold_max_height'] = np.concatenate((epidemiology_columns['threshold_max_height'],
                                                               threshold_max_height_mask))
+
+
+    
     if SAVE_PLOTS:
         plt.figure(figsize = (20,7))
         plt.title('New Cases Per Day with Spline Fit for ' + country)
@@ -470,7 +488,12 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
     max_si_duration = (max_si_end_date - max_si_start_date).days
     max_si_currently = data[data['stringency_index'] == data['stringency_index'].max()]['date'].iloc[-1] == \
                        data['date'].iloc[-1]
-    max_si_days_from_t0 = (max_si_start_date - data[data["stringency_index"]>0]["date"].iloc[0]).days
+    
+    T0 = epidemiology_columns['date'][(epidemiology_columns['countrycode']==country)&(epidemiology_columns['new_per_day_smooth']>=T0_THRESHOLD)]
+    if len(T0) > 0:
+        T0 = T0[0]
+        max_si_days_from_t0 = (max_si_start_date - T0).days
+    else: max_si_days_from_t0 = np.nan
 
     government_response_columns['max_si'] = np.concatenate((
         government_response_columns['max_si'], np.array([max_si])))
@@ -553,7 +576,6 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
         else:
             y = y[np.isin(y_date,x_date)]
 
-        ## Bryan could you have a check here?
         if values != 'residential':
             government_response_columns[key + '_opt_lag'] = np.append(government_response_columns[key + '_opt_lag'],
                 np.argmin([sm.OLS(endog = y, exog = sm.add_constant(shift(x,lag,cval=np.nan)), missing="drop").fit().params[0]
@@ -641,6 +663,9 @@ government_response_results = pd.DataFrame.from_dict(government_response_columns
 EPI = {
     'COUNTRYCODE' : np.zeros(len(countries)).astype(str),
     'COUNTRY' : np.zeros(len(countries)).astype(str),
+    'POPULATION' : np.zeros(len(countries)).astype(np.float32),
+    'T0' : np.zeros(len(countries)).astype(datetime.date),
+    'CFR' : np.zeros(len(countries)).astype(np.float32),
     'EPI_CONFIRMED' : np.zeros(len(countries)).astype(np.float32),
     'EPI_NUMBER_PEAKS' : np.zeros(len(countries)).astype(np.float32),
     'EPI_NUMBER_WAVES' : np.zeros(len(countries)).astype(np.float32)
@@ -663,6 +688,15 @@ for i,country in enumerate(countries):
     data = epidemiology_results[epidemiology_results['countrycode'] == country]
     EPI['COUNTRYCODE'][i] = country
     EPI['COUNTRY'][i] = data['country'].iloc[0]
+    try:
+        EPI['POPULATION'][i] = WB_statistics[WB_statistics['countrycode']==country]['value'].iloc[0]
+    except IndexError:
+        EPI['POPULATION'][i] = np.nan
+    try:
+        EPI['T0'][i] = data.loc[data['new_per_day_smooth']>=T0_THRESHOLD,'date'].iloc[0]
+    except IndexError:
+        EPI['T0'][i] = np.nan
+    EPI['CFR'][i] = data['dead'].iloc[-1] / data['confirmed'].iloc[-1]
     EPI['EPI_CONFIRMED'][i] = data['confirmed'].iloc[-1]
     EPI['EPI_NUMBER_PEAKS'][i] = data['peak_dates'].max()
     EPI['EPI_NUMBER_WAVES'][i] = data['threshold_dates'].max()
@@ -867,7 +901,7 @@ for i in FINAL.index:
         date2 = FINAL.loc[i,"MOB_RESIDENTIAL_PEAK_" + str(k) + "_DATE"]
         FINAL.loc[i,"EPI_MOB_PEAK_DATE_DIFF"] = (date1-date2).days
 
-LABELLED_COLUMNS = pd.read_csv('peak_labels.csv')
+LABELLED_COLUMNS = pd.read_csv(PATH + 'peak_labels.csv')
 
 CLASS_DICTIONARY = {
     'EPI_ENTERING_FIRST' : 1,
@@ -883,13 +917,75 @@ LABELLED_COLUMNS['CLASS'] = classes
 
 FINAL = FINAL.merge(LABELLED_COLUMNS, on = ['COUNTRYCODE'], how = 'left')
 
-map_data['COUNTRYCODE'] = map_data['countrycode']
-map_data = map_data.merge(LABELLED_COLUMNS[['COUNTRYCODE','CLASS']], on = ['COUNTRYCODE'], how = 'left')
-
-plt.figure()
-map_data.plot(column = 'CLASS', figsize = (20,10), legend = True, legend_kwds = {'orientation':'horizontal'},
-              missing_kwds = {'color' : 'lightgrey'})
-plt.savefig(PATH + 'world_map.jpg')
-plt.close()
+if SAVE_PLOTS:
+    map_data['COUNTRYCODE'] = map_data['countrycode']
+    map_data = map_data.merge(LABELLED_COLUMNS[['COUNTRYCODE','CLASS']], on = ['COUNTRYCODE'], how = 'left')
+    plt.figure()
+    map_data.plot(column = 'CLASS', figsize = (20,10), legend = True, legend_kwds = {'orientation':'horizontal'},
+                  missing_kwds = {'color' : 'lightgrey'})
+    plt.savefig(PATH + 'world_map.jpg')
+    plt.close()
 
 FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
+
+
+## GENERATE TABLE_1 WITH SUMMARY STATISTICS
+TABLE_1 = pd.DataFrame(columns = ['EPI_ENTERING_FIRST','EPI_PAST_FIRST','EPI_ENTERING_SECOND','EPI_PAST_SECOND','OTHER'],
+                       index = ['NUMBER', # Number of countries
+                                'T0', # Average first date of X or more new cases per day (smoothed)
+                                'EPI_GENUINE_PEAK_1_DATE',
+                                'GOV_PEAK_1_START_DATE',
+                                'EPI_GENUINE_PEAK_1_WIDTH',
+                                'GOV_PEAK_1_WIDTH',
+                                'EPI_GENUINE_PEAK_1_VALUE',
+                                'CFR', # Case fatality rate
+                                'GOV_MAX_SI_DAYS_FROM_T0'])
+
+for c in TABLE_1.columns:
+    if c != 'OTHER':
+        data = FINAL.loc[FINAL[c]==True,:]
+    else:
+        data = FINAL.loc[(FINAL['EPI_ENTERING_FIRST']==False) & 
+                         (FINAL['EPI_PAST_FIRST']==False) & 
+                         (FINAL['EPI_ENTERING_SECOND']==False) & 
+                         (FINAL['EPI_PAST_SECOND']==False),:]
+    # Take the first EPI peak labelled as genuine
+    for i in data.index:
+        genuine_k = 0
+        for k in range(1, gov_max_peaks+1):
+            if data.loc[i,'EPI_PEAK_' + str(k) + '_GENUINE'] == True:
+                genuine_k = k
+                break
+        if genuine_k > 0:
+            data['EPI_GENUINE_PEAK_1_DATE'] = data['EPI_PEAK_' + str(genuine_k) + '_DATE']
+            data['EPI_GENUINE_PEAK_1_WIDTH'] = data['EPI_PEAK_' + str(genuine_k) + '_WIDTH']
+            data['EPI_GENUINE_PEAK_1_VALUE'] = data['EPI_PEAK_' + str(genuine_k) + '_VALUE']
+        else:
+            data['EPI_GENUINE_PEAK_1_DATE'] = np.nan
+            data['EPI_GENUINE_PEAK_1_WIDTH'] = np.nan
+            data['EPI_GENUINE_PEAK_1_VALUE'] = np.nan
+        
+    TABLE_1.loc['NUMBER',c] = len(data)
+    TABLE_1.loc['T0',c] = (np.mean(np.array(data['T0'].dropna(), dtype='datetime64[s]').view('i8')).astype('datetime64[s]')).astype(datetime.date)
+    
+    if c != 'EPI_ENTERING_FIRST':
+        TABLE_1.loc['EPI_GENUINE_PEAK_1_DATE',c] = \
+            (np.mean(np.array(data['EPI_GENUINE_PEAK_1_DATE'].dropna(), dtype='datetime64[s]').view('i8')).astype('datetime64[s]')).astype(datetime.date)
+        TABLE_1.loc['EPI_GENUINE_PEAK_1_WIDTH',c] = np.nanmean(data['EPI_GENUINE_PEAK_1_WIDTH'])
+        TABLE_1.loc['EPI_GENUINE_PEAK_1_VALUE',c] = np.nanmean(data['EPI_GENUINE_PEAK_1_VALUE'])
+    else: # If entering first wave, should not have any peak values.
+        TABLE_1.loc['EPI_GENUINE_PEAK_1_DATE',c] = np.nan
+        TABLE_1.loc['EPI_GENUINE_PEAK_1_WIDTH',c] = np.nan
+        TABLE_1.loc['EPI_GENUINE_PEAK_1_VALUE',c] = np.nan
+        
+    TABLE_1.loc['GOV_PEAK_1_START_DATE',c] = \
+            (np.mean(np.array(data['GOV_PEAK_1_START_DATE'].dropna(), dtype='datetime64[s]').view('i8')).astype('datetime64[s]')).astype(datetime.date)
+    TABLE_1.loc['GOV_PEAK_1_WIDTH',c] = np.nanmean(data['GOV_PEAK_1_WIDTH'])
+    TABLE_1.loc['GOV_MAX_SI_DAYS_FROM_T0',c] = np.nanmean(data['GOV_MAX_SI_DAYS_FROM_T0'])
+    
+    TABLE_1.loc['CFR',c] = np.mean(data['CFR'])
+    
+
+TABLE_1.to_csv(PATH + 'TABLE_1.csv')
+
+
