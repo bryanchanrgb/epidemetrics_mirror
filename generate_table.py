@@ -926,6 +926,22 @@ if SAVE_PLOTS:
     plt.savefig(PATH + 'world_map.jpg')
     plt.close()
 
+# Take the first EPI peak labelled as genuine
+for i in FINAL.index:
+        genuine_k = 0
+        for k in range(1, gov_max_peaks+1):
+            if FINAL.loc[i,'EPI_PEAK_' + str(k) + '_GENUINE'] == True:
+                genuine_k = k
+                break
+        if genuine_k > 0:
+            FINAL.loc[i,'EPI_GENUINE_PEAK_1_DATE'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_DATE']
+            FINAL.loc[i,'EPI_GENUINE_PEAK_1_WIDTH'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_WIDTH']
+            FINAL.loc[i,'EPI_GENUINE_PEAK_1_VALUE'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_VALUE']
+        else:
+            FINAL.loc[i,'EPI_GENUINE_PEAK_1_DATE'] = np.nan
+            FINAL.loc[i,'EPI_GENUINE_PEAK_1_WIDTH'] = np.nan
+            FINAL.loc[i,'EPI_GENUINE_PEAK_1_VALUE'] = np.nan
+
 FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
 
 
@@ -949,21 +965,6 @@ for c in TABLE_1.columns:
                          (FINAL['EPI_PAST_FIRST']==False) & 
                          (FINAL['EPI_ENTERING_SECOND']==False) & 
                          (FINAL['EPI_PAST_SECOND']==False),:]
-    # Take the first EPI peak labelled as genuine
-    for i in data.index:
-        genuine_k = 0
-        for k in range(1, gov_max_peaks+1):
-            if data.loc[i,'EPI_PEAK_' + str(k) + '_GENUINE'] == True:
-                genuine_k = k
-                break
-        if genuine_k > 0:
-            data['EPI_GENUINE_PEAK_1_DATE'] = data['EPI_PEAK_' + str(genuine_k) + '_DATE']
-            data['EPI_GENUINE_PEAK_1_WIDTH'] = data['EPI_PEAK_' + str(genuine_k) + '_WIDTH']
-            data['EPI_GENUINE_PEAK_1_VALUE'] = data['EPI_PEAK_' + str(genuine_k) + '_VALUE']
-        else:
-            data['EPI_GENUINE_PEAK_1_DATE'] = np.nan
-            data['EPI_GENUINE_PEAK_1_WIDTH'] = np.nan
-            data['EPI_GENUINE_PEAK_1_VALUE'] = np.nan
         
     TABLE_1.loc['NUMBER',c] = len(data)
     TABLE_1.loc['T0',c] = (np.mean(np.array(data['T0'].dropna(), dtype='datetime64[s]').view('i8')).astype('datetime64[s]')).astype(datetime.date)
@@ -987,5 +988,7 @@ for c in TABLE_1.columns:
     
 
 TABLE_1.to_csv(PATH + 'TABLE_1.csv')
+
+
 
 
