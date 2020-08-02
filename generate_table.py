@@ -917,6 +917,17 @@ LABELLED_COLUMNS['CLASS'] = classes
 
 FINAL = FINAL.merge(LABELLED_COLUMNS, on = ['COUNTRYCODE'], how = 'left')
 
+CLASS_LABELS_DICTIONARY = {
+    'Other' : 0,
+    'Entering_First_Wave' : 1,
+    'Past_First_Wave' : 2,
+    'Entering_Second_Wave' : 3,
+    'Past_Second_Wave' : 4
+}
+
+for c in CLASS_LABELS_DICTIONARY:
+    FINAL.loc[FINAL['CLASS']==CLASS_LABELS_DICTIONARY[c],'CLASS_LABEL'] = c
+
 if SAVE_PLOTS:
     map_data['COUNTRYCODE'] = map_data['countrycode']
     map_data = map_data.merge(LABELLED_COLUMNS[['COUNTRYCODE','CLASS']], on = ['COUNTRYCODE'], how = 'left')
