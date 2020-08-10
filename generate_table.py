@@ -29,9 +29,9 @@ SMOOTH = 0.001  # Smoothing parameter for the spline fit
 MIN_PERIOD = 14  # Minimum number of days above threshold
 ROLLING_WINDOW = 3  # Window size for Moving Average for epidemiological data
 OPTIMAL_LAG_TIME = 14 # +/- this time for optimal lag calculation
-PATH = './charts/table_figures/' # Path to save master table and corresponding plots
+PATH = '' # Path to save master table and corresponding plots
 PROMINENCE_THRESHOLD = 5
-T0_THRESHOLD = 5 # T0 is defined as the first day where te smoothed number of new cases per day >= threshold
+T0_THRESHOLD = 50 # T0 is defined as the first day where the cumulative number of new cases per day >= threshold
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -489,7 +489,7 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
     max_si_currently = data[data['stringency_index'] == data['stringency_index'].max()]['date'].iloc[-1] == \
                        data['date'].iloc[-1]
     
-    T0 = epidemiology_columns['date'][(epidemiology_columns['countrycode']==country)&(epidemiology_columns['new_per_day_smooth']>=T0_THRESHOLD)]
+    T0 = epidemiology_columns['date'][(epidemiology_columns['countrycode']==country)&(epidemiology_columns['confirmed']>=T0_THRESHOLD)]
     if len(T0) > 0:
         T0 = T0[0]
         max_si_days_from_t0 = (max_si_start_date - T0).days
@@ -693,7 +693,7 @@ for i,country in enumerate(countries):
     except IndexError:
         EPI['POPULATION'][i] = np.nan
     try:
-        EPI['T0'][i] = data.loc[data['new_per_day_smooth']>=T0_THRESHOLD,'date'].iloc[0]
+        EPI['T0'][i] = data.loc[data['confirmed']>=T0_THRESHOLD,'date'].iloc[0]
     except IndexError:
         EPI['T0'][i] = np.nan
     EPI['CFR'][i] = data['dead'].iloc[-1] / data['confirmed'].iloc[-1]
@@ -937,21 +937,16 @@ if SAVE_PLOTS:
     plt.savefig(PATH + 'world_map.jpg')
     plt.close()
 
-# Take the first EPI peak labelled as genuine
+# Take the EPI peaks labelled as genuine
 for i in FINAL.index:
-        genuine_k = 0
-        for k in range(1, gov_max_peaks+1):
-            if FINAL.loc[i,'EPI_PEAK_' + str(k) + '_GENUINE'] == True:
-                genuine_k = k
-                break
-        if genuine_k > 0:
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_DATE'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_DATE']
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_WIDTH'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_WIDTH']
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_VALUE'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_VALUE']
-        else:
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_DATE'] = np.nan
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_WIDTH'] = np.nan
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_VALUE'] = np.nan
+    j = 1
+    for k in range(1, gov_max_peaks+1):
+        if FINAL.loc[i,'EPI_PEAK_' + str(k) + '_GENUINE'] == True:
+            FINAL.loc[i,'EPI_GENUINE_PEAK_'+str(j)+'_DATE'] = FINAL.loc[i,'EPI_PEAK_' + str(k) + '_DATE']
+            FINAL.loc[i,'EPI_GENUINE_PEAK_'+str(j)+'_WIDTH'] = FINAL.loc[i,'EPI_PEAK_' + str(k) + '_WIDTH']
+            FINAL.loc[i,'EPI_GENUINE_PEAK_'+str(j)+'_VALUE'] = FINAL.loc[i,'EPI_PEAK_' + str(k) + '_VALUE']
+            j = j + 1
+
 
 FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
 
