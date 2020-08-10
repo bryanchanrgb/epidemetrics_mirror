@@ -901,7 +901,7 @@ for i in FINAL.index:
         date2 = FINAL.loc[i,"MOB_RESIDENTIAL_PEAK_" + str(k) + "_DATE"]
         FINAL.loc[i,"EPI_MOB_PEAK_DATE_DIFF"] = (date1-date2).days
 
-LABELLED_COLUMNS = pd.read_csv(PATH + 'peak_labels.csv')
+LABELLED_COLUMNS = pd.read_csv('./peak_labels.csv')
 
 CLASS_DICTIONARY = {
     'EPI_ENTERING_FIRST' : 1,
