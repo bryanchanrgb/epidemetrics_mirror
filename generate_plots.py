@@ -290,10 +290,20 @@ GOV = GOV.merge(EPI.drop_duplicates(subset=['countrycode','class'])
                 [['countrycode','class']], on = ['countrycode'], how = 'left')
 GOV['class'] = GOV['class'].astype(int)
 
+chosen_flag = 'c1_school_closing'
 f, ax = plt.subplots(figsize=(20, 7))
-plt.ylim(0,0.002)
-sns.distplot(GOV['c6_stay_at_home_requirements_date_raised_cases_day'], bins = 500, hist=False)
-plt.savefig(PATH + 'flag_c6_raised_new_cases_per_day.png')
+#plt.ylim(0,0.002)
+#plt.xlim(0,10000)
+sns.distplot(GOV[chosen_flag + '_date_raised_cases_day'],
+             bins = 1000, hist=False, label = 'Flag raised')
+sns.distplot(GOV[chosen_flag + '_date_lowered_cases_day'],
+             bins = 1000, hist=False, label = 'Flag lowered')
+sns.distplot(GOV[chosen_flag + '_date_raised_again_cases_day'],
+             bins = 1000, hist=False, label = 'Flag raised again')
+plt.savefig(PATH + 'flag_c6_new_cases_per_day.png')
+
+
+
 
 chosen_flag = 'c6_stay_at_home_requirements'
 
@@ -315,6 +325,7 @@ for cls in GOV['class'].unique():
     avg_raised_again = np.mean(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised_again'])
     std_raised_again = np.std(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised_again'])
     n3 = len(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised_again'].dropna())
+
 
     countries = pd.Series({country:EPI[EPI['countrycode']==country]['confirmed'].iloc[-1]
                            for country in countries}).nlargest(n = 10).index.to_numpy()
