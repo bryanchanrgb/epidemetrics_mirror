@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import os
-import warnings
 from tqdm import tqdm
 import datetime
 from datetime import date
@@ -11,9 +10,9 @@ from datetime import date
 #%%
 SAVE_PLOTS = True
 READ_CSV = True
-PATH = 'C:/Users/bryan/OneDrive/Desktop/Epidemetrics/'
+PATH = ''
 
-# Read CSVs
+#%% Read CSVs
 if READ_CSV:
     FINAL = pd.read_csv(PATH +'master.csv',index_col = 0, parse_dates=['EPI_GENUINE_PEAK_1_DATE','GOV_PEAK_1_START_DATE','GOV_PEAK_1_END_DATE','T0'])
     epidemiology_results = pd.read_csv(PATH +'epidemiology_results.csv',index_col = 0, parse_dates=['date'])
@@ -21,7 +20,7 @@ if READ_CSV:
     government_response_results = pd.read_csv(PATH +'government_response_results.csv',index_col = 0, parse_dates=['high_restrictions_start_date','high_restrictions_end_date'])
     government_response = pd.read_csv(PATH +'government_response.csv',index_col = 0, parse_dates=['date'])
 
-#%% labelling classes
+#%% Labelling country classes
 
 CLASS_LABELS_DICTIONARY = {
     'Other' : 0,
@@ -42,7 +41,7 @@ if SAVE_PLOTS:
         os.makedirs(PATH+'dist_plots/',exist_ok=True)
 
 
-#%% scatterplot of duration of first wave vs. duration of stringency
+#%% Scatterplot of duration of first wave vs. duration of stringency
 data=FINAL.loc[FINAL['CLASS']!=1,['GOV_PEAK_1_WIDTH','EPI_GENUINE_PEAK_1_WIDTH','CLASS_LABEL']].dropna(how='any')
 
 plt.clf()
@@ -57,10 +56,11 @@ g = sns.scatterplot(x='GOV_PEAK_1_WIDTH',y='EPI_GENUINE_PEAK_1_WIDTH',data=data,
 plt.title('Duration of First Wave Against Duration of Stringency')
 plt.xlabel('Duration of First Wave of Government Restrictions (Days)')
 plt.ylabel('Duration of First Wave of Covid-19 Cases (Days)')
-g.figure.savefig(PATH + 'duration_scatter.png')
+if SAVE_PLOTS:
+    g.figure.savefig(PATH + 'duration_scatter.png')
 
 
-#%% time series EPI - GOV
+#%% Time series EPI - GOV (number of new cases and government lockdown flags for each country)
 
 countries = np.sort(FINAL['COUNTRYCODE'].unique())
 
@@ -113,7 +113,7 @@ if SAVE_PLOTS:
         ax1.figure.legend()
         plt.savefig(PATH+'time_series_plots/'+class_label+'/'+country+'.png')
 
-#%% plot of average stringency index for each class
+#%% Consolidate data for SI and mobility plots
 
 # Merge tables together for plotting
 data = government_response[['date','stringency_index','countrycode']]
@@ -124,6 +124,7 @@ data = data.merge(epidemiology_results[['countrycode','date','new_per_day']], on
 data.loc[data['CLASS_LABEL'].isin(['Entering_First_Wave','Past_First_Wave']),'CLASS_COARSE'] = 'First_Wave'
 data.loc[data['CLASS_LABEL'].isin(['Entering_Second_Wave','Past_Second_Wave']),'CLASS_COARSE'] = 'Second_Wave'
 
+# Define t as days since T0
 for c in data['countrycode'].unique():
     try:
         T0 = FINAL.loc[FINAL['COUNTRYCODE']==c,'T0'].values[0]
@@ -136,6 +137,7 @@ for c in data['countrycode'].unique():
     except IndexError:
         data.loc[data['countrycode']==c,'t'] = np.nan
 
+#%% Plot of average stringency index over time for each class
 # SI plots: by date
 data_plot = data.loc[data['CLASS_LABEL'].isin(['Entering_First_Wave','Past_First_Wave','Entering_Second_Wave']),['CLASS_LABEL','date','stringency_index']]
 data_plot.dropna(how='any', inplace=True)
@@ -147,7 +149,8 @@ g = sns.lineplot(x = 'date', y ='stringency_index', data=data_plot, hue = 'CLASS
 plt.title('Government Stringency Over Time for Each Country Cluster')
 plt.xlabel('Date')
 plt.ylabel('Stringency Index')
-g.figure.savefig(PATH + 'SI_per_class.png')
+if SAVE_PLOTS:
+    g.figure.savefig(PATH + 'SI_per_class.png')
 
 # SI plots: by days since T0
 data_plot = data.loc[data['CLASS_LABEL'].isin(['Entering_First_Wave','Past_First_Wave','Entering_Second_Wave']),['CLASS_LABEL','t','stringency_index']]
@@ -161,7 +164,8 @@ g.set(xlim=(-75, 145))
 plt.title('Government Stringency Over Time for Each Country Cluster')
 plt.xlabel('Days Since T0 (First Day of 50 Cumulative Cases)')
 plt.ylabel('Stringency Index')
-g.figure.savefig(PATH + 'SI_per_class_t.png')
+if SAVE_PLOTS:
+    g.figure.savefig(PATH + 'SI_per_class_t.png')
 
 # SI plots: by days since T0, first vs. second wave countries
 data_plot = data.loc[data['CLASS_COARSE'].isin(['First_Wave','Second_Wave']),['CLASS_COARSE','t','stringency_index']]
@@ -175,82 +179,28 @@ g.set(xlim=(-75, 145))
 plt.title('Government Stringency Over Time for First and Second Wave Countries')
 plt.xlabel('Days Since T0 (First Day of 50 Cumulative Cases)')
 plt.ylabel('Stringency Index')
-g.figure.savefig(PATH + 'SI_per_class_coarse_t.png')
+if SAVE_PLOTS:
+    g.figure.savefig(PATH + 'SI_per_class_coarse_t.png')
 
-
+#%% Plot of average mobility over time for each class 
 # Mobility plots: by days since T0
-for m in ['residential','transit_stations','workplace']:
-    data_plot = data.loc[data['CLASS_LABEL'].isin(['Entering_First_Wave','Past_First_Wave','Entering_Second_Wave']),['CLASS_LABEL','t',m]]
-    data_plot.dropna(how='any', inplace=True)
-    plt.close('all')
-    plt.clf()
-    plt.figure(figsize = (15,7))
-    sns.set_style("darkgrid")
-    g = sns.lineplot(x = 't', y =m, data=data_plot, hue = 'CLASS_LABEL',
-                 hue_order = ['Entering_First_Wave','Past_First_Wave','Entering_Second_Wave'])
-    g.set(xlim=(-30, 145))
-    plt.title(m + ' Mobility Over Time for Each Country Cluster')
-    plt.xlabel('Days Since T0 (First Day of 50 Cumulative Cases)')
-    plt.ylabel(m)
-    g.figure.savefig(PATH + 'MOB_' + m + '_per_class_t.png')
+if SAVE_PLOTS:
+    for m in ['residential','transit_stations','workplace']:
+        data_plot = data.loc[data['CLASS_LABEL'].isin(['Entering_First_Wave','Past_First_Wave','Entering_Second_Wave']),['CLASS_LABEL','t',m]]
+        data_plot.dropna(how='any', inplace=True)
+        plt.close('all')
+        plt.clf()
+        plt.figure(figsize = (15,7))
+        sns.set_style("darkgrid")
+        g = sns.lineplot(x = 't', y =m, data=data_plot, hue = 'CLASS_LABEL',
+                     hue_order = ['Entering_First_Wave','Past_First_Wave','Entering_Second_Wave'])
+        g.set(xlim=(-30, 145))
+        plt.title(m + ' Mobility Over Time for Each Country Cluster')
+        plt.xlabel('Days Since T0 (First Day of 50 Cumulative Cases)')
+        plt.ylabel(m)
+        g.figure.savefig(PATH + 'MOB_' + m + '_per_class_t.png')
 
-data_plot = data.loc[data['CLASS_COARSE'].isin(['First_Wave','Second_Wave']),['CLASS_COARSE','t','new_per_day','stringency_index']]
-data_plot.dropna(how='any', inplace=True)
-data_plot_mean = data.groupby(['CLASS_COARSE','t'],as_index=False).agg({'new_per_day':'mean','stringency_index':'mean'})
-data_plot_median = data.groupby(['CLASS_COARSE','t'],as_index=False).agg({'new_per_day':'median','stringency_index':'median'})
-
-
-plt.close('all')
-plt.clf()
-plt.style.use('seaborn')
-g, ax1 =plt.subplots(figsize=(20,7))
-# EPI: New Cases per Day
-ax1.plot(data_plot_median.loc[data_plot_median['CLASS_COARSE']=='First_Wave','t'].values, data_plot_median.loc[data_plot_median['CLASS_COARSE']=='First_Wave','new_per_day'].values,
-         label='New Cases per Day: First Wave Countries', color='b')
-ax1.plot(data_plot_median.loc[data_plot_median['CLASS_COARSE']=='Second_Wave','t'].values, data_plot_median.loc[data_plot_median['CLASS_COARSE']=='Second_Wave','new_per_day'].values,
-         label='New Cases per Day: Second Wave Countries', color='r')
-# GOV: Stringency Index
-ax2 = ax1.twinx()
-ax2.plot(data_plot_median.loc[data_plot_median['CLASS_COARSE']=='First_Wave','t'].values, data_plot_median.loc[data_plot_median['CLASS_COARSE']=='First_Wave','stringency_index'].values,
-         label='Stringency Index: First Wave Countries', color='b')
-ax2.plot(data_plot_median.loc[data_plot_median['CLASS_COARSE']=='Second_Wave','t'].values, data_plot_median.loc[data_plot_median['CLASS_COARSE']=='Second_Wave','stringency_index'].values,
-         label='Stringency Index: Second Wave Countries', color='r')
-# Labels
-ax1.set_ylabel('New Cases per Day')
-ax1.set_xlabel('Date')
-ax2.set_ylabel('Stringency Index')
-ax2.grid(None)
-plt.title('New Cases Per Day Against Government Response')
-ax1.figure.legend()
-
-#%%
-
-test_dict = {t:0 for t in range(-150,200,1)}
-
-for t in range(-150,200,1):
-    test_dict[t] = len(data.loc[data['t']==t])
-
-t = 10
-
-#%% distribution plots
-
-plt.clf()
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_First_Wave','GOV_MAX_SI'], hist=False, label='Entering_First_Wave')
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Past_First_Wave','GOV_MAX_SI'], hist=False, label='Past_First_Wave')
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_Second_Wave','GOV_MAX_SI'], hist=False, label='Entering_Second_Wave')
-
-plt.clf()
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_First_Wave','GOV_MAX_SI_DAYS_FROM_T0'], hist=False, label='Entering_First_Wave')
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Past_First_Wave','GOV_MAX_SI_DAYS_FROM_T0'], hist=False, label='Past_First_Wave')
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_Second_Wave','GOV_MAX_SI_DAYS_FROM_T0'], hist=False, label='Entering_Second_Wave')
-
-plt.clf()
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_First_Wave','GOV_PEAK_1_WIDTH'], hist=False, label='Entering_First_Wave')
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Past_First_Wave','GOV_PEAK_1_WIDTH'], hist=False, label='Past_First_Wave')
-sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_Second_Wave','GOV_PEAK_1_WIDTH'], hist=False, label='Entering_Second_Wave')
-
-
-#%% scatterplot of response time vs. SI (response intensity)
+#%% Scatterplot of response time vs. number of cumulative cases
 data=FINAL.loc[FINAL['CLASS_LABEL'].isin(['Entering_First_Wave','Past_First_Wave','Entering_Second_Wave','Past_Second_Wave']) \
                ,['GOV_MAX_SI_DAYS_FROM_T0','GOV_MAX_SI','CLASS_LABEL','T0','POPULATION','EPI_CONFIRMED','CFR',]].dropna(how='any')
 
@@ -269,25 +219,69 @@ g = sns.scatterplot(x='GOV_MAX_SI_DAYS_FROM_T0',y='EPI_CONFIRMED_PER_10K',data=d
                     hue='CLASS_COARSE',palette=sns.color_palette("muted", data.CLASS_COARSE.nunique()),
                     hue_order = ['First_Wave','Second_Wave'],
                     style='CLASS_COARSE', s=50)
-#g.set(xlim=(date(2020,1,1), date(2020,8,1)))
-#g.set(ylim=(date(2020,1,1), date(2020,8,1)))
 plt.title('Government Response Time Against Number of Confirmed Cases')
 plt.xlabel('Response Time: Days from T0 to Peak Date of Stringency Index')
 plt.ylabel('Cumulative Number of Confirmed Cases per 10,000')
-g.figure.savefig(PATH + 'response_scatter_2.png')
+if SAVE_PLOTS:
+    g.figure.savefig(PATH + 'response_scatter_2.png')
 
 
+#%% Median SI and new cases over time
+data_plot = data.loc[data['CLASS_COARSE'].isin(['First_Wave','Second_Wave']),['CLASS_COARSE','t','new_per_day','stringency_index']]
+data_plot.dropna(how='any', inplace=True)
+data_plot_mean = data.groupby(['CLASS_COARSE','t'],as_index=False).agg({'new_per_day':'mean','stringency_index':'mean'})
+data_plot_median = data.groupby(['CLASS_COARSE','t'],as_index=False).agg({'new_per_day':'median','stringency_index':'median'})
 
 
-#%%
+plt.close('all')
+plt.clf()
+plt.style.use('seaborn')
+g, ax1 =plt.subplots(figsize=(20,7))
+# EPI: New Cases per Day
+#ax1.plot(data_plot_median.loc[data_plot_median['CLASS_COARSE']=='First_Wave','t'].values, data_plot_median.loc[data_plot_median['CLASS_COARSE']=='First_Wave','new_per_day'].values,
+#         label='New Cases per Day: First Wave Countries', color='b')
+ax1.plot(data_plot_median.loc[data_plot_median['CLASS_COARSE']=='Second_Wave','t'].values, data_plot_median.loc[data_plot_median['CLASS_COARSE']=='Second_Wave','new_per_day'].values,
+         label='New Cases per Day: Second Wave Countries', color='g')
+# GOV: Stringency Index
+ax2 = ax1.twinx()
+#ax2.plot(data_plot_median.loc[data_plot_median['CLASS_COARSE']=='First_Wave','t'].values, data_plot_median.loc[data_plot_median['CLASS_COARSE']=='First_Wave','stringency_index'].values,
+#         label='Stringency Index: First Wave Countries', color='b')
+ax2.plot(data_plot_median.loc[data_plot_median['CLASS_COARSE']=='Second_Wave','t'].values, data_plot_median.loc[data_plot_median['CLASS_COARSE']=='Second_Wave','stringency_index'].values,
+         label='Stringency Index: Second Wave Countries', color='r')
+# Labels
+ax1.set_ylabel('New Cases per Day')
+ax1.set_xlabel('Date')
+ax2.set_ylabel('Stringency Index')
+ax2.grid(None)
+plt.title('New Cases Per Day Against Government Response')
+ax1.figure.legend()
+#%% Correlation matrix
+
 final_corr = FINAL.corr()
 corr_list = final_corr.dropna(how='all').index
 final_corr = FINAL[corr_list].corr()
+if SAVE_PLOTS:
+    final_corr.to_csv(PATH + 'final_corr.csv')
 
-final_corr.to_csv(PATH + 'final_corr.csv')
 
+#%% Testing: Distribution plots
 
-#%% distribution plots of each variable
+plt.clf()
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_First_Wave','GOV_MAX_SI'], hist=False, label='Entering_First_Wave')
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Past_First_Wave','GOV_MAX_SI'], hist=False, label='Past_First_Wave')
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_Second_Wave','GOV_MAX_SI'], hist=False, label='Entering_Second_Wave')
+
+plt.clf()
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_First_Wave','GOV_MAX_SI_DAYS_FROM_T0'], hist=False, label='Entering_First_Wave')
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Past_First_Wave','GOV_MAX_SI_DAYS_FROM_T0'], hist=False, label='Past_First_Wave')
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_Second_Wave','GOV_MAX_SI_DAYS_FROM_T0'], hist=False, label='Entering_Second_Wave')
+
+plt.clf()
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_First_Wave','GOV_PEAK_1_WIDTH'], hist=False, label='Entering_First_Wave')
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Past_First_Wave','GOV_PEAK_1_WIDTH'], hist=False, label='Past_First_Wave')
+sns.distplot(FINAL.loc[FINAL['CLASS_LABEL']=='Entering_Second_Wave','GOV_PEAK_1_WIDTH'], hist=False, label='Entering_Second_Wave')
+
+#%% Testing: distribution plots of each variable
 FINAL_working = FINAL
 for c in FINAL_working.columns:
     if 'DATE' in c:
