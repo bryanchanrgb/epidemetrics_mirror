@@ -29,9 +29,9 @@ SMOOTH = 0.001  # Smoothing parameter for the spline fit
 MIN_PERIOD = 14  # Minimum number of days above threshold
 ROLLING_WINDOW = 3  # Window size for Moving Average for epidemiological data
 OPTIMAL_LAG_TIME = 14 # +/- this time for optimal lag calculation
-PATH = './charts/table_figures/' # Path to save master table and corresponding plots
+PATH = '' # Path to save master table and corresponding plots
 PROMINENCE_THRESHOLD = 5
-T0_THRESHOLD = 5 # T0 is defined as the first day where te smoothed number of new cases per day >= threshold
+T0_THRESHOLD = 50 # T0 is defined as the first day where the cumulative number of new cases per day >= threshold
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -240,6 +240,10 @@ government_response_columns={
     'high_restrictions_end_date':np.empty(0),
     'high_restrictions_duration':np.empty(0),
     'high_restrictions_current':np.empty(0),
+    'lockdown_start_date':np.empty(0),
+    'lockdown_end_date':np.empty(0),
+    'lockdown_duration':np.empty(0),
+    'lockdown_current':np.empty(0),
     'stringency_index_opt_lag':np.empty(0)
 }
 
@@ -489,7 +493,7 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
     max_si_currently = data[data['stringency_index'] == data['stringency_index'].max()]['date'].iloc[-1] == \
                        data['date'].iloc[-1]
     
-    T0 = epidemiology_columns['date'][(epidemiology_columns['countrycode']==country)&(epidemiology_columns['new_per_day_smooth']>=T0_THRESHOLD)]
+    T0 = epidemiology_columns['date'][(epidemiology_columns['countrycode']==country)&(epidemiology_columns['confirmed']>=T0_THRESHOLD)]
     if len(T0) > 0:
         T0 = T0[0]
         max_si_days_from_t0 = (max_si_start_date - T0).days
@@ -529,7 +533,17 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
 
     if len(high_restrictions)>0:
         high_restrictions_start_date = high_restrictions['date'].iloc[0]
-        high_restrictions_end_date = high_restrictions['date'].iloc[-1]
+        try:
+            high_restrictions_end_date = min(data.loc[(data['date']>high_restrictions_start_date) &
+                                                        (data['c1_school_closing'] < 3) &
+                                                        (data['c2_workplace_closing'] < 3) &
+                                                        (data['c3_cancel_public_events'] < 2) &
+                                                        (data['c4_restrictions_on_gatherings'] < 4) &
+                                                        (data['c5_close_public_transport'] < 2) &
+                                                        (data['c6_stay_at_home_requirements'] < 3) &
+                                                        (data['c7_restrictions_on_internal_movement'] == 2),'date'])
+        except:
+            high_restrictions_end_date = high_restrictions['date'].iloc[-1]
         high_restrictions_duration = (high_restrictions_end_date - high_restrictions_start_date).days
         high_restrictions_current = high_restrictions['date'].iloc[-1] == data['date'].iloc[-1]
 
@@ -550,7 +564,39 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
             government_response_columns['high_restrictions_duration'], np.array([0])))
         government_response_columns['high_restrictions_current'] = np.concatenate((
             government_response_columns['high_restrictions_current'], np.array([0])))
+        
+    lockdown = data[data['c6_stay_at_home_requirements']>=2]
+    
+    if len(lockdown)>0:
+        lockdown_start_date = lockdown['date'].iloc[0]
+        
+        try:
+            lockdown_end_date = min(data.loc[(data['date'] > lockdown_start_date) &
+                                             (data['c6_stay_at_home_requirements'] < 2),'date'])
+        except:
+            lockdown_end_date = lockdown['date'].iloc[-1]
+        lockdown_duration = (lockdown_end_date - lockdown_start_date).days
+        lockdown_current = lockdown['date'].iloc[-1] == data['date'].iloc[-1]
 
+        government_response_columns['lockdown_start_date'] = np.concatenate((
+            government_response_columns['lockdown_start_date'], np.array([lockdown_start_date])))
+        government_response_columns['lockdown_end_date'] = np.concatenate((
+            government_response_columns['lockdown_end_date'], np.array([lockdown_end_date])))
+        government_response_columns['lockdown_duration'] = np.concatenate((
+            government_response_columns['lockdown_duration'], np.array([lockdown_duration])))
+        government_response_columns['lockdown_current'] = np.concatenate((
+            government_response_columns['lockdown_current'], np.array([lockdown_current])))
+    else:
+        government_response_columns['lockdown_start_date'] = np.concatenate((
+            government_response_columns['lockdown_start_date'], np.array([0])))
+        government_response_columns['lockdown_end_date'] = np.concatenate((
+            government_response_columns['lockdown_end_date'], np.array([0])))
+        government_response_columns['lockdown_duration'] = np.concatenate((
+            government_response_columns['lockdown_duration'], np.array([0])))
+        government_response_columns['lockdown_current'] = np.concatenate((
+            government_response_columns['lockdown_current'], np.array([0])))
+    
+    
     for percentile in percentiles:
         government_response_columns[str(percentile) + '_duration'] = np.concatenate((
             government_response_columns[str(percentile) + '_duration'],
@@ -693,7 +739,7 @@ for i,country in enumerate(countries):
     except IndexError:
         EPI['POPULATION'][i] = np.nan
     try:
-        EPI['T0'][i] = data.loc[data['new_per_day_smooth']>=T0_THRESHOLD,'date'].iloc[0]
+        EPI['T0'][i] = data.loc[data['confirmed']>=T0_THRESHOLD,'date'].iloc[0]
     except IndexError:
         EPI['T0'][i] = np.nan
     EPI['CFR'][i] = data['dead'].iloc[-1] / data['confirmed'].iloc[-1]
@@ -937,21 +983,21 @@ if SAVE_PLOTS:
     plt.savefig(PATH + 'world_map.jpg')
     plt.close()
 
-# Take the first EPI peak labelled as genuine
+# Take the EPI peaks labelled as genuine
+error_text = ""
 for i in FINAL.index:
-        genuine_k = 0
-        for k in range(1, gov_max_peaks+1):
+    j = 1
+    for k in range(1, gov_max_peaks+1):
+        try:
             if FINAL.loc[i,'EPI_PEAK_' + str(k) + '_GENUINE'] == True:
-                genuine_k = k
-                break
-        if genuine_k > 0:
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_DATE'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_DATE']
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_WIDTH'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_WIDTH']
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_VALUE'] = FINAL.loc[i,'EPI_PEAK_' + str(genuine_k) + '_VALUE']
-        else:
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_DATE'] = np.nan
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_WIDTH'] = np.nan
-            FINAL.loc[i,'EPI_GENUINE_PEAK_1_VALUE'] = np.nan
+                FINAL.loc[i,'EPI_GENUINE_PEAK_'+str(j)+'_DATE'] = FINAL.loc[i,'EPI_PEAK_' + str(k) + '_DATE']
+                FINAL.loc[i,'EPI_GENUINE_PEAK_'+str(j)+'_WIDTH'] = FINAL.loc[i,'EPI_PEAK_' + str(k) + '_WIDTH']
+                FINAL.loc[i,'EPI_GENUINE_PEAK_'+str(j)+'_VALUE'] = FINAL.loc[i,'EPI_PEAK_' + str(k) + '_VALUE']
+                j = j + 1
+        except KeyError:
+            if error_text.find('EPI_PEAK_' + str(k) + '_GENUINE not in columns') == -1:
+                error_text = error_text + 'EPI_PEAK_' + str(k) + '_GENUINE not in columns'
+print(error_text)
 
 FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
 
