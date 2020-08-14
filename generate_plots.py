@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 
 '''Initialise script parameters'''
 
-MIN_PERIOD = 14
+MIN_PERIOD = 1
 PATH = './charts/table_figures/'
 
 conn = psycopg2.connect(
@@ -155,7 +155,7 @@ EPI = {
     'new_per_day':np.empty(0),
     'new_per_day_per_10k':np.empty(0),
     'days_since_first':np.empty(0),
-    'days_since_30_per_day':np.empty(0)
+    'days_since_50_cases':np.empty(0)
 }
 
 for country in countries:
@@ -177,10 +177,10 @@ for country in countries:
 
     #np.max(data['new_per_day'].values)
 
-    date_of_30 = data[data['new_per_day']>30]['date'].iloc[0]
-    EPI['days_since_30_per_day'] = np.concatenate((EPI['days_since_30_per_day'],
-                                                   np.concatenate((np.arange(-len(data[data['date']<date_of_30]),0),
-                                                                   np.arange(len(data[data['date']>=date_of_30]))))))
+    date_of_50 = data[data['confirmed']>50]['date'].iloc[0]
+    EPI['days_since_50_cases'] = np.concatenate((EPI['days_since_50_cases'],
+                                                   np.concatenate((np.arange(-len(data[data['date']<date_of_50]),0),
+                                                                   np.arange(len(data[data['date']>=date_of_50]))))))
 
 EPI = pd.DataFrame.from_dict(EPI)
 
@@ -197,9 +197,9 @@ for flag in flag_conversion.keys():
     GOV[flag + '_date_lowered'] = np.empty(0)
     GOV[flag + '_date_raised_again'] = np.empty(0)
     GOV[flag + '_more?'] = np.empty(0)
-    GOV[flag + '_days_since_30_raised'] = np.empty(0)
-    GOV[flag + '_days_since_30_lowered'] = np.empty(0)
-    GOV[flag + '_days_since_30_raised_again'] = np.empty(0)
+    GOV[flag + '_days_since_50_raised'] = np.empty(0)
+    GOV[flag + '_days_since_50_lowered'] = np.empty(0)
+    GOV[flag + '_days_since_50_raised_again'] = np.empty(0)
     GOV[flag + '_date_raised_cases_day'] = np.empty(0)
     GOV[flag + '_date_lowered_cases_day'] = np.empty(0)
     GOV[flag + '_date_raised_again_cases_day'] = np.empty(0)
@@ -230,9 +230,9 @@ for country in countries:
             GOV[flag + '_date_lowered'] = np.concatenate((GOV[flag + '_date_lowered'], [np.nan]))
             GOV[flag + '_date_raised_again'] = np.concatenate((GOV[flag + '_date_raised_again'], [np.nan]))
             GOV[flag + '_more?'] = np.concatenate((GOV[flag + '_more?'], [np.nan]))
-            GOV[flag + '_days_since_30_raised'] = np.concatenate((GOV[flag + '_days_since_30_raised'], [np.nan]))
-            GOV[flag + '_days_since_30_lowered'] = np.concatenate((GOV[flag + '_days_since_30_lowered'], [np.nan]))
-            GOV[flag + '_days_since_30_raised_again'] = np.concatenate((GOV[flag + '_days_since_30_raised_again'], [np.nan]))
+            GOV[flag + '_days_since_50_raised'] = np.concatenate((GOV[flag + '_days_since_50_raised'], [np.nan]))
+            GOV[flag + '_days_since_50_lowered'] = np.concatenate((GOV[flag + '_days_since_50_lowered'], [np.nan]))
+            GOV[flag + '_days_since_50_raised_again'] = np.concatenate((GOV[flag + '_days_since_50_raised_again'], [np.nan]))
             GOV[flag + '_date_raised_cases_day'] = np.concatenate((GOV[flag + '_date_raised_cases_day'], [np.nan]))
             GOV[flag + '_date_lowered_cases_day'] = np.concatenate((GOV[flag + '_date_lowered_cases_day'], [np.nan]))
             GOV[flag + '_date_raised_again_cases_day'] = np.concatenate((GOV[flag + '_date_raised_again_cases_day'], [np.nan]))
@@ -246,18 +246,18 @@ for country in countries:
             if len(waves) >= 4 else np.nan
         more = True if len(waves) >= 5 else False
 
-        days_since_30_raised = \
-            EPI[(EPI['countrycode'] == country) & (EPI['date'] == date_raised)]['days_since_30_per_day'].values
-        days_since_30_raised = [np.nan] if len(days_since_30_raised) == 0 else days_since_30_raised
+        days_since_50_raised = \
+            EPI[(EPI['countrycode'] == country) & (EPI['date'] == date_raised)]['days_since_50_cases'].values
+        days_since_50_raised = [np.nan] if len(days_since_50_raised) == 0 else days_since_50_raised
 
-        days_since_30_lowered = \
-            EPI[(EPI['countrycode'] == country) & (EPI['date'] == date_lowered)]['days_since_30_per_day'].values
-        days_since_30_lowered = [np.nan] if len(days_since_30_lowered) == 0 else days_since_30_lowered
+        days_since_50_lowered = \
+            EPI[(EPI['countrycode'] == country) & (EPI['date'] == date_lowered)]['days_since_50_cases'].values
+        days_since_50_lowered = [np.nan] if len(days_since_50_lowered) == 0 else days_since_50_lowered
 
-        days_since_30_raised_again = \
-            EPI[(EPI['countrycode'] == country) & (EPI['date'] == date_raised_again)]['days_since_30_per_day'].values \
+        days_since_50_raised_again = \
+            EPI[(EPI['countrycode'] == country) & (EPI['date'] == date_raised_again)]['days_since_50_cases'].values \
                 if len(waves) >= 4 else [np.nan]
-        days_since_30_raised_again = [np.nan] if len(days_since_30_raised_again) == 0 else days_since_30_raised_again
+        days_since_50_raised_again = [np.nan] if len(days_since_50_raised_again) == 0 else days_since_50_raised_again
 
         date_raised_cases_day = \
             EPI[(EPI['countrycode'] == country) & (EPI['date'] == date_raised)]['new_per_day'].values
@@ -276,10 +276,10 @@ for country in countries:
         GOV[flag + '_date_lowered'] = np.concatenate((GOV[flag + '_date_lowered'], [date_lowered]))
         GOV[flag + '_date_raised_again'] = np.concatenate((GOV[flag + '_date_raised_again'], [date_raised_again]))
         GOV[flag + '_more?'] = np.concatenate((GOV[flag + '_more?'], [more]))
-        GOV[flag + '_days_since_30_raised'] = np.concatenate((GOV[flag + '_days_since_30_raised'], days_since_30_raised))
-        GOV[flag + '_days_since_30_lowered'] = np.concatenate((GOV[flag + '_days_since_30_lowered'], days_since_30_lowered))
-        GOV[flag + '_days_since_30_raised_again'] = np.concatenate(
-            (GOV[flag + '_days_since_30_raised_again'], days_since_30_raised_again))
+        GOV[flag + '_days_since_50_raised'] = np.concatenate((GOV[flag + '_days_since_50_raised'], days_since_50_raised))
+        GOV[flag + '_days_since_50_lowered'] = np.concatenate((GOV[flag + '_days_since_50_lowered'], days_since_50_lowered))
+        GOV[flag + '_days_since_50_raised_again'] = np.concatenate(
+            (GOV[flag + '_days_since_50_raised_again'], days_since_50_raised_again))
         GOV[flag + '_date_raised_cases_day'] = np.concatenate((GOV[flag + '_date_raised_cases_day'], date_raised_cases_day))
         GOV[flag + '_date_lowered_cases_day'] = np.concatenate((GOV[flag + '_date_lowered_cases_day'], date_lowered_cases_day))
         GOV[flag + '_date_raised_again_cases_day'] = np.concatenate(
@@ -290,10 +290,10 @@ GOV = GOV.merge(EPI.drop_duplicates(subset=['countrycode','class'])
                 [['countrycode','class']], on = ['countrycode'], how = 'left')
 GOV['class'] = GOV['class'].astype(int)
 
-chosen_flag = 'c1_school_closing'
+chosen_flag = 'c6_stay_at_home_requirements'
 f, ax = plt.subplots(figsize=(20, 7))
-#plt.ylim(0,0.002)
-#plt.xlim(0,10000)
+plt.ylim(0,0.002)
+plt.xlim(0,10000)
 sns.distplot(GOV[chosen_flag + '_date_raised_cases_day'],
              bins = 1000, hist=False, label = 'Flag raised')
 sns.distplot(GOV[chosen_flag + '_date_lowered_cases_day'],
@@ -314,27 +314,27 @@ for cls in GOV['class'].unique():
     plt.figure(figsize=(20,7))
     countries = EPI[EPI['class'] == cls]['countrycode'].unique()
 
-    avg_raised = np.mean(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised'])
-    std_raised = np.std(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised'])
-    n1 = len(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised'].dropna())
+    avg_raised = np.mean(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_raised'])
+    std_raised = np.std(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_raised'])
+    n1 = len(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_raised'].dropna())
 
-    avg_lowered = np.mean(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_lowered'])
-    std_lowered = np.std(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_lowered'])
-    n2 = len(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_lowered'].dropna())
+    avg_lowered = np.mean(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_lowered'])
+    std_lowered = np.std(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_lowered'])
+    n2 = len(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_lowered'].dropna())
 
-    avg_raised_again = np.mean(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised_again'])
-    std_raised_again = np.std(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised_again'])
-    n3 = len(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_30_raised_again'].dropna())
+    avg_raised_again = np.mean(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_raised_again'])
+    std_raised_again = np.std(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_raised_again'])
+    n3 = len(GOV[GOV['countrycode'].isin(countries)][chosen_flag+'_days_since_50_raised_again'].dropna())
 
 
     countries = pd.Series({country:EPI[EPI['countrycode']==country]['confirmed'].iloc[-1]
                            for country in countries}).nlargest(n = 10).index.to_numpy()
     aggregate = []
     for country in countries:
-        data = EPI[(EPI['countrycode'] == country) & (EPI['days_since_30_per_day'] >= 0)]
+        data = EPI[(EPI['countrycode'] == country) & (EPI['days_since_50_cases'] >= 0)]
         data['new_per_day_7d_ma'] = data['new_per_day_per_10k'].rolling(7).mean() / data['new_per_day_per_10k'].max()
         aggregate.append(data['new_per_day_7d_ma'].values)
-        sns.lineplot(x='days_since_30_per_day',y='new_per_day_7d_ma',data=data, label=country)
+        sns.lineplot(x='days_since_50_cases',y='new_per_day_7d_ma',data=data, label=country)
         continue
 
     aggregate = np.array([y[0:np.min([len(x) for x in aggregate])] for y in aggregate])
