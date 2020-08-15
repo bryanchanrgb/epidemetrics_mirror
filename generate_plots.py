@@ -59,7 +59,7 @@ raw_country_stats = raw_country_stats[raw_country_stats['indicator_name'].isin(r
 
 # GET ADMINISTRATIVE DIVISIONS
 sql_command = """SELECT * FROM administrative_division WHERE adm_level=0"""
-map_data = gpd.GeoDataFrame.from_postgis(sql_command, conn, geom_col='geometry')
+map_data = gpd.GeoDataFrame.from_postgis(sql_command, conn, geom_col='geometry')[['countrycode','geometry']]
 
 ##EPIDEMIOLOGY PRE-PROCESSING LOOP
 countries = raw_epidemiology['countrycode'].unique()
@@ -155,12 +155,14 @@ EPI = {
     'new_per_day':np.empty(0),
     'new_per_day_per_10k':np.empty(0),
     'days_since_first':np.empty(0),
-    'days_since_50_cases':np.empty(0)
+    'days_since_50_cases':np.empty(0),
+    'days_since_T0':np.empty(0)
 }
 
-for country in countries:
+day_first_case = epidemiology[epidemiology['countrycode']=='CHN']['date'].iloc[0]
+for country in epidemiology['countrycode'].unique():
     data = epidemiology[epidemiology['countrycode']==country]
-    if len(country_stats[country_stats['countrycode']==country]) == 0 or len(data[data['new_per_day']>30]['date']) == 0:
+    if len(country_stats[country_stats['countrycode']==country]) == 0 or len(data[data['confirmed']>=50]['date']) == 0:
         continue
     EPI['countrycode'] = np.concatenate((EPI['countrycode'], data['countrycode'].values))
     EPI['country'] = np.concatenate((EPI['country'], data['country'].values))
@@ -177,10 +179,13 @@ for country in countries:
 
     #np.max(data['new_per_day'].values)
 
-    date_of_50 = data[data['confirmed']>50]['date'].iloc[0]
+    date_of_50 = data[data['confirmed']>=50]['date'].iloc[0]
     EPI['days_since_50_cases'] = np.concatenate((EPI['days_since_50_cases'],
                                                    np.concatenate((np.arange(-len(data[data['date']<date_of_50]),0),
                                                                    np.arange(len(data[data['date']>=date_of_50]))))))
+    EPI['days_since_T0'] = np.concatenate((EPI['days_since_T0'],
+                                           np.repeat((date_of_50 - day_first_case).days, len(data))))
+
 
 EPI = pd.DataFrame.from_dict(EPI)
 
@@ -290,6 +295,8 @@ GOV = GOV.merge(EPI.drop_duplicates(subset=['countrycode','class'])
                 [['countrycode','class']], on = ['countrycode'], how = 'left')
 GOV['class'] = GOV['class'].astype(int)
 
+
+"""
 chosen_flag = 'c6_stay_at_home_requirements'
 f, ax = plt.subplots(figsize=(20, 7))
 plt.ylim(0,0.002)
@@ -301,10 +308,20 @@ sns.distplot(GOV[chosen_flag + '_date_lowered_cases_day'],
 sns.distplot(GOV[chosen_flag + '_date_raised_again_cases_day'],
              bins = 1000, hist=False, label = 'Flag raised again')
 plt.savefig(PATH + 'flag_c6_new_cases_per_day.png')
+"""
+
+### FIGURE 1
+
+figure_1 = map_data.merge(EPI.drop_duplicates(
+    subset = ['countrycode'])[['countrycode', 'days_since_T0']], how = 'left').dropna()
+
+plt.figure(figsize = (20,10))
+figure_1.plot(column = 'days_since_T0', cmap='inferno', edgecolor = 'black',
+              linewidth = 0.2, legend_kwds={'label': 'Days to T0','orientation':'horizontal'}, legend = True)
+plt.savefig(PATH + 'days_to_T0.png')
 
 
-
-
+### FIGURE 4
 chosen_flag = 'c6_stay_at_home_requirements'
 
 for cls in GOV['class'].unique():
