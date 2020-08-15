@@ -1046,6 +1046,11 @@ for c in TABLE_1.columns:
 
 TABLE_1.to_csv(PATH + 'TABLE_1.csv')
 
+TIME_SERIES = pd.DataFrame.from_dict({'countrycode':epidemiology_columns['countrycode'],
+                                      'country':epidemiology_columns['country'],
+                                      'date':epidemiology_columns['date'],
+                                      'new_per_day_smooth':epidemiology_columns['new_per_day_smooth']})
+TIME_SERIES.to_csv(PATH + 'SPLINE_FITS.csv')
 
 
 

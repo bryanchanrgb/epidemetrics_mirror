@@ -10,12 +10,15 @@ from tqdm import tqdm
 import datetime
 import re
 
+from scipy.signal import find_peaks
+
 warnings.filterwarnings('ignore')
 
 '''Initialise script parameters'''
 
 MIN_PERIOD = 1
 PATH = './charts/table_figures/'
+#PATH = './'
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -320,7 +323,6 @@ figure_1.plot(column = 'days_since_T0', cmap='inferno', edgecolor = 'black',
               linewidth = 0.2, legend_kwds={'label': 'Days to T0','orientation':'horizontal'}, legend = True)
 plt.savefig(PATH + 'days_to_T0.png')
 
-
 ### FIGURE 4
 chosen_flag = 'c6_stay_at_home_requirements'
 
@@ -411,3 +413,21 @@ for cls in GOV['class'].unique():
 
     plt.legend()
     plt.savefig(PATH + 'stage_' + str(cls) + '_timeline.png')
+
+### APPENDIX
+
+LABELLED_COLUMNS = pd.read_csv(PATH + 'peak_labels.csv')
+SPLINE_FITS = pd.read_csv(PATH + 'SPLINE_FITS.csv')
+
+countries_in_second = LABELLED_COLUMNS[LABELLED_COLUMNS['EPI_ENTERING_SECOND']]['COUNTRYCODE'].values
+
+os.makedirs('./charts/table_figures/countries_in_second_wave/', exist_ok=True)
+for country in countries_in_second:
+    data = SPLINE_FITS[SPLINE_FITS['countrycode'] == country]
+    if len(data) == 0 or len(find_peaks(-data['new_per_day_smooth'].values, prominence = 5, distance = 35)[0]) == 0:
+        continue
+    day_of_second_wave = find_peaks(-data['new_per_day_smooth'].values, prominence = 5, distance = 35)[0][-1]
+    data.plot(x='date',y='new_per_day_smooth')
+    plt.vlines(day_of_second_wave, 0, data['new_per_day_smooth'].max(), linestyles='dashed', colors='black')
+    plt.title(country)
+    plt.savefig(PATH + 'countries_in_second_wave/' + country + '.png')
