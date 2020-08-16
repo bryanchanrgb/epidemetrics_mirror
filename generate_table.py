@@ -23,6 +23,7 @@ INTITALISE SCRIPT PARAMETERS
 '''
 
 SAVE_PLOTS=False
+SAVE_CSV=False
 DISTANCE = 21  # Distance between peaks
 THRESHOLD = 25  # Threshold for duration calculation
 SMOOTH = 0.001  # Smoothing parameter for the spline fit
@@ -240,10 +241,9 @@ government_response_columns={
     'high_restrictions_end_date':np.empty(0),
     'high_restrictions_duration':np.empty(0),
     'high_restrictions_current':np.empty(0),
-    'lockdown_start_date':np.empty(0),
-    'lockdown_end_date':np.empty(0),
-    'lockdown_duration':np.empty(0),
-    'lockdown_current':np.empty(0),
+    'c6_raised_date':np.empty(0),
+    'c6_lowered_date':np.empty(0),
+    'c6_raised_again_date':np.empty(0),
     'stringency_index_opt_lag':np.empty(0)
 }
 
@@ -565,38 +565,34 @@ for country in tqdm(countries, desc = 'Processing Government Response Data'):
         government_response_columns['high_restrictions_current'] = np.concatenate((
             government_response_columns['high_restrictions_current'], np.array([0])))
         
-    lockdown = data[data['c6_stay_at_home_requirements']>=2]
-    
-    if len(lockdown)>0:
-        lockdown_start_date = lockdown['date'].iloc[0]
-        
-        try:
-            lockdown_end_date = min(data.loc[(data['date'] > lockdown_start_date) &
-                                             (data['c6_stay_at_home_requirements'] < 2),'date'])
-        except:
-            lockdown_end_date = lockdown['date'].iloc[-1]
-        lockdown_duration = (lockdown_end_date - lockdown_start_date).days
-        lockdown_current = lockdown['date'].iloc[-1] == data['date'].iloc[-1]
-
-        government_response_columns['lockdown_start_date'] = np.concatenate((
-            government_response_columns['lockdown_start_date'], np.array([lockdown_start_date])))
-        government_response_columns['lockdown_end_date'] = np.concatenate((
-            government_response_columns['lockdown_end_date'], np.array([lockdown_end_date])))
-        government_response_columns['lockdown_duration'] = np.concatenate((
-            government_response_columns['lockdown_duration'], np.array([lockdown_duration])))
-        government_response_columns['lockdown_current'] = np.concatenate((
-            government_response_columns['lockdown_current'], np.array([lockdown_current])))
+    c6_data = data.loc[data['c6_stay_at_home_requirements']>=2,'date']
+    if len(c6_data)>0:
+        c6_raised_date = c6_data.iloc[0]
+        c6_data = data.loc[(data['date'] > c6_raised_date) &
+                           (data['c6_stay_at_home_requirements'] < 2),'date']
+        if len(c6_data)>0:
+            c6_lowered_date = min(c6_data)
+            c6_data = data.loc[(data['date'] > c6_lowered_date) &
+                               (data['c6_stay_at_home_requirements'] >= 2),'date']
+            if len(c6_data)>0:
+                c6_raised_again_date = min(c6_data)
+            else:
+                c6_raised_again_date = np.nan
+        else:
+            c6_lowered_date = np.nan
+            c6_raised_again_date = np.nan
     else:
-        government_response_columns['lockdown_start_date'] = np.concatenate((
-            government_response_columns['lockdown_start_date'], np.array([0])))
-        government_response_columns['lockdown_end_date'] = np.concatenate((
-            government_response_columns['lockdown_end_date'], np.array([0])))
-        government_response_columns['lockdown_duration'] = np.concatenate((
-            government_response_columns['lockdown_duration'], np.array([0])))
-        government_response_columns['lockdown_current'] = np.concatenate((
-            government_response_columns['lockdown_current'], np.array([0])))
+        c6_raised_date = np.nan
+        c6_lowered_date = np.nan
+        c6_raised_again_date = np.nan
     
-    
+    government_response_columns['c6_raised_date'] = np.concatenate((
+        government_response_columns['c6_raised_date'], np.array([c6_raised_date])))
+    government_response_columns['c6_lowered_date'] = np.concatenate((
+        government_response_columns['c6_lowered_date'], np.array([c6_lowered_date])))
+    government_response_columns['c6_raised_again_date'] = np.concatenate((
+        government_response_columns['c6_raised_again_date'], np.array([c6_raised_again_date])))
+
     for percentile in percentiles:
         government_response_columns[str(percentile) + '_duration'] = np.concatenate((
             government_response_columns[str(percentile) + '_duration'],
@@ -864,7 +860,10 @@ GOV = {
     'GOV_HIGH_RESTRICTIONS_START_DATE' : government_response_results['high_restrictions_start_date'],
     'GOV_HIGH_RESTRICTIONS_END_DATE' : government_response_results['high_restrictions_end_date'],
     'GOV_HIGH_RESTRICTIONS_DURATION' : government_response_results['high_restrictions_duration'],
-    'GOV_HIGH_RESTRICTIONS_CURRENT' : government_response_results['high_restrictions_current']
+    'GOV_HIGH_RESTRICTIONS_CURRENT' : government_response_results['high_restrictions_current'],
+    'GOV_C6_RAISED_DATE' : government_response_results['c6_raised_date'],
+    'GOV_C6_LOWERED_DATE' : government_response_results['c6_lowered_date'],
+    'GOV_C6_RAISED_AGAIN_DATE' : government_response_results['c6_raised_again_date']
 }
 
 gov_max_peaks = max([len(v.split(', ')) for v in
@@ -999,7 +998,11 @@ for i in FINAL.index:
                 error_text = error_text + 'EPI_PEAK_' + str(k) + '_GENUINE not in columns'
 print(error_text)
 
-FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
+if SAVE_CSV:
+    FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
+    epidemiology_results.to_csv(PATH + 'epidemiology_results.csv')
+    mobility_results.to_csv(PATH + 'mobility_results.csv')
+    government_response.to_csv(PATH + 'government_response.csv')
 
 
 ## GENERATE TABLE_1 WITH SUMMARY STATISTICS
@@ -1043,8 +1046,8 @@ for c in TABLE_1.columns:
     
     TABLE_1.loc['CFR',c] = np.mean(data['CFR'])
     
-
-TABLE_1.to_csv(PATH + 'TABLE_1.csv')
+if SAVE_CSV:
+    TABLE_1.to_csv(PATH + 'TABLE_1.csv')
 
 
 
