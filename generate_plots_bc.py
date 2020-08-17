@@ -44,7 +44,7 @@ if SAVE_PLOTS:
 
 # Merge tables together for plotting
 data = government_response[['date','stringency_index','countrycode']]
-data = data.merge(FINAL[['CLASS','CLASS_LABEL','COUNTRYCODE','T0','POPULATION','GOV_C6_RAISED_DATE','GOV_C6_LOWERED_DATE','GOV_C6_RAISED_AGAIN_DATE']],left_on='countrycode', right_on='COUNTRYCODE', how='left')
+data = data.merge(FINAL[['CLASS','CLASS_LABEL','COUNTRYCODE','T0','POPULATION','GOV_C6_RAISED_DATE','GOV_C6_LOWERED_DATE','GOV_C6_RAISED_AGAIN_DATE','EPI_GENUINE_PEAK_1_DATE','EPI_GENUINE_PEAK_2_DATE']],left_on='countrycode', right_on='COUNTRYCODE', how='left')
 data = data.merge(mobility_results[['countrycode','date','residential','residential_smooth','transit_stations','workplace']], on=['countrycode','date'], how='left')
 data = data.merge(epidemiology_results[['countrycode','date','confirmed','new_per_day','new_per_day_ma','new_per_day_smooth']], on=['countrycode','date'], how='left')
 
@@ -56,7 +56,7 @@ data['new_per_day_ma_per10k'] = 10000*data['new_per_day_ma']/data['POPULATION']
 data['new_per_day_smooth_per10k'] = 10000*data['new_per_day_smooth']/data['POPULATION']
 
 # Define t as days since T0
-for c in data['countrycode'].unique():
+for c in tqdm(data['countrycode'].unique(), desc='Defining T0'):
     try:
         T0 = FINAL.loc[FINAL['COUNTRYCODE']==c,'T0'].values[0]
         if isinstance(T0, str):
@@ -68,6 +68,29 @@ for c in data['countrycode'].unique():
     except IndexError:
         data.loc[data['countrycode']==c,'t'] = np.nan
         
+# For countries in second wave: Define s as days since S0 (start of second wave)
+# Define S0 as the first day of 50 cases from the local minimum in the region between the first and second peaks
+for c in tqdm(data['countrycode'].unique(), desc='Defining S0'):
+    if FINAL.loc[FINAL['COUNTRYCODE']==c,'CLASS'].values[0] >=3:
+        try:
+            peak_1_date = FINAL.loc[FINAL['COUNTRYCODE']==c,'EPI_GENUINE_PEAK_1_DATE'].values[0]
+            peak_2_date = FINAL.loc[FINAL['COUNTRYCODE']==c,'EPI_GENUINE_PEAK_2_DATE'].values[0]
+            if np.isnan(peak_2_date):
+                S_ = np.argmin(data.loc[(data['countrycode']==c)&(data['date']>peak_1_date),'new_per_day_smooth'])
+            else:
+                S_ = np.argmin(data.loc[(data['countrycode']==c)&(data['date']>peak_1_date)&(data['date']<peak_2_date),'new_per_day_smooth'])
+            S_date = data.iloc[S_]['date']
+            S_confirmed = data.iloc[S_]['confirmed']
+            S0 = min(data.loc[(data['countrycode']==c)&(data['date']>S_date)&(data['confirmed']>=S_confirmed+50),'date'])
+            data.loc[data['countrycode']==c,'S0'] = S0
+            data.loc[data['countrycode']==c,'s'] = [a.days for a in (data.loc[data['countrycode']==c,'date'] - S0)]
+        except:
+            print('Error: ' +  c)
+            data.loc[data['countrycode']==c,'s'] = np.nan
+    else:
+        data.loc[data['countrycode']==c,'S0'] = np.nan
+        data.loc[data['countrycode']==c,'s'] = np.nan
+
 
 #%% Scatterplot of duration of first wave vs. duration of stringency
 data_plot=FINAL.loc[FINAL['CLASS']!=1,['GOV_PEAK_1_WIDTH','EPI_GENUINE_PEAK_1_WIDTH','CLASS_LABEL']].dropna(how='any')
@@ -324,6 +347,57 @@ for c in data['CLASS'].unique():
 
     if SAVE_PLOTS:
         plt.savefig(PATH + 'fig_4_stage_' + str(int(c)) + '_timeline.png')
+
+
+#%% Testing: plot of epi, gov, mob comparing the first and second wave
+
+plt.close('all')    
+plt.clf()
+f, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=False)
+f.tight_layout(rect=[0, 0, 1, 0.98], pad=3)
+sns.set_palette("husl")
+
+countries = FINAL[FINAL['CLASS'] >= 3]['COUNTRYCODE'].unique()
+
+data_T = data.loc[(data['COUNTRYCODE'].isin(countries))&(data['date']<=data['S0']),
+                  ['COUNTRYCODE','t','S0','new_per_day','new_per_day_smooth','new_per_day_ma', \
+                   'new_per_day_per10k','new_per_day_smooth_per10k','new_per_day_ma_per10k', \
+                   'residential','residential_smooth','stringency_index']]
+data_S = data.loc[(data['COUNTRYCODE'].isin(countries))&(data['date']>=data['S0']),
+                  ['COUNTRYCODE','s','S0','new_per_day','new_per_day_smooth','new_per_day_ma', \
+                   'new_per_day_per10k','new_per_day_smooth_per10k','new_per_day_ma_per10k', \
+                   'residential','residential_smooth','stringency_index']]
+    
+# restrict the date range: keep only t values with at least 80% of the countries present
+ns = {t:len(data_all.loc[data_all['t']==t,'new_per_day'].dropna()) for t in data_all['t'].unique()}
+ns = [t for t in ns.keys() if ns[t] >= 0.95*len(data_all['COUNTRYCODE'].unique())]
+t_lower_lim = min(ns)
+t_upper_lim = max(ns)-1
+#data_all = data_all[(data_all['t']>=t_lower_lim) & (data_all['t']<=t_upper_lim)]
+
+# plot aggregate curve for all countries in class
+sns.lineplot(x = 't',y = 'new_per_day_smooth_per10k', data=data_T, color = 'red', ci = None, label = 'Aggregate - First Wave', ax=axes[0])
+sns.lineplot(x = 't',y = 'stringency_index', data=data_T, color = 'red', ci = None, label = 'Aggregate - First Wave', ax=axes[1], legend=False)
+sns.lineplot(x = 't',y = 'residential_smooth', data=data_T, color = 'red', ci = None, label = 'Aggregate - First Wave', ax=axes[2], legend=False)
+
+sns.lineplot(x = 's',y = 'new_per_day_smooth_per10k', data=data_S, color = 'blue', ci = None, label = 'Aggregate - Second Wave', ax=axes[0])
+sns.lineplot(x = 's',y = 'stringency_index', data=data_S, color = 'blue', ci = None, label = 'Aggregate - Second Wave', ax=axes[1, legend=False])
+sns.lineplot(x = 's',y = 'residential_smooth', data=data_S, color = 'blue', ci = None, label = 'Aggregate - Second Wave', ax=axes[2], legend=False)
+
+#axes[0].set_xlim([t_lower_lim,t_upper_lim])
+axes[0].set_title('New Cases per Day Over Time')
+axes[0].set_xlabel('Days Since T0 (start of first wave) or S0 (start of second wave)')
+axes[0].set_ylabel('New Cases per Day per 10,000 (Aggregate)')
+ax2.set_ylabel('New Cases per Day per 10,000 (Individual Countries)')
+#axes[1].set_xlim([t_lower_lim,t_upper_lim])
+axes[1].set_title('Government Response Over Time')
+axes[1].set_xlabel('Days Since T0 (start of first wave) or S0 (start of second wave)')
+axes[1].set_ylabel('Stringency Index')
+#axes[2].set_xlim([t_lower_lim,t_upper_lim])
+axes[2].set_title('Residential Mobility Over Time')
+axes[2].set_xlabel('Days Since T0 (start of first wave) or S0 (start of second wave)')
+axes[2].set_ylabel('Residential Mobility (% change from baseline)')
+f.suptitle('New Cases, Government Response and Residential Mobility Over Time for Countries In Second Wave, Comparing First vs. Second Wave')
 
 
 #%% Figure 3: Scatterplot of response time vs. number of cumulative cases
