@@ -381,7 +381,7 @@ sns.lineplot(x = 't',y = 'stringency_index', data=data_T, color = 'red', ci = No
 sns.lineplot(x = 't',y = 'residential_smooth', data=data_T, color = 'red', ci = None, label = 'Aggregate - First Wave', ax=axes[2], legend=False)
 
 sns.lineplot(x = 's',y = 'new_per_day_smooth_per10k', data=data_S, color = 'blue', ci = None, label = 'Aggregate - Second Wave', ax=axes[0])
-sns.lineplot(x = 's',y = 'stringency_index', data=data_S, color = 'blue', ci = None, label = 'Aggregate - Second Wave', ax=axes[1, legend=False])
+sns.lineplot(x = 's',y = 'stringency_index', data=data_S, color = 'blue', ci = None, label = 'Aggregate - Second Wave', ax=axes[1], legend=False)
 sns.lineplot(x = 's',y = 'residential_smooth', data=data_S, color = 'blue', ci = None, label = 'Aggregate - Second Wave', ax=axes[2], legend=False)
 
 #axes[0].set_xlim([t_lower_lim,t_upper_lim])
