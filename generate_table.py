@@ -265,6 +265,9 @@ countries = np.sort(epidemiology['countrycode'].unique())
 for country in tqdm(countries, desc = 'Processing Epidemiological Data'):
     data = epidemiology[epidemiology['countrycode'] == country]
     data['new_per_day_ma'] = data['new_per_day'].rolling(ROLLING_WINDOW).mean().fillna(value=0)
+    if len(data) == 0:
+        print(country)
+        continue
 
     ###Fitting the spline
     x = np.arange(len(data['date']))
@@ -963,13 +966,7 @@ LABELLED_COLUMNS['CLASS'] = classes
 
 FINAL = FINAL.merge(LABELLED_COLUMNS, on = ['COUNTRYCODE'], how = 'left')
 
-CLASS_LABELS_DICTIONARY = {
-    'Other' : 0,
-    'Entering_First_Wave' : 1,
-    'Past_First_Wave' : 2,
-    'Entering_Second_Wave' : 3,
-    'Past_Second_Wave' : 4
-}
+
 
 for c in CLASS_LABELS_DICTIONARY:
     FINAL.loc[FINAL['CLASS']==CLASS_LABELS_DICTIONARY[c],'CLASS_LABEL'] = c

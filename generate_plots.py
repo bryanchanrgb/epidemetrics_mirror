@@ -16,6 +16,8 @@ warnings.filterwarnings('ignore')
 
 '''Initialise script parameters'''
 
+DISTANCE = 21
+PROMINENCE_THRESHOLD = 5
 MIN_PERIOD = 1
 PATH = './charts/table_figures/'
 #PATH = './'
@@ -39,6 +41,17 @@ raw_epidemiology = raw_epidemiology[~raw_epidemiology['country'].isin(exclude)].
 raw_epidemiology = raw_epidemiology[['countrycode','country','date','confirmed']]
 ### Check no conflicting values for each country and date
 assert not raw_epidemiology[['countrycode','date']].duplicated().any()
+
+# GET MOBILITY TABLE
+source='GOOGLE_MOBILITY'
+mobilities=['residential']
+
+sql_command = """SELECT * FROM mobility WHERE source = %(source)s AND adm_area_1 is NULL"""
+raw_mobility = pd.read_sql(sql_command, conn, params={'source': source})
+raw_mobility = raw_mobility[['countrycode','country','date']+mobilities]
+raw_mobility = raw_mobility.sort_values(by=['countrycode','date']).reset_index(drop=True)
+### Check no conflicting values for each country and date
+assert not raw_mobility[['countrycode','date']].duplicated().any()
 
 # GET GOVERNMENT RESPONSE TABLE
 flags=['stringency_index','c1_school_closing','c2_workplace_closing','c6_stay_at_home_requirements']
@@ -100,6 +113,19 @@ LABELLED_COLUMNS['CLASS'] = classes
 
 epidemiology = epidemiology.merge(LABELLED_COLUMNS[['COUNTRYCODE','CLASS']], left_on = ['countrycode'],
                    right_on = ['COUNTRYCODE'], how = 'left')
+
+##MOBILITY PRE-PROCESSING LOOP
+countries = raw_mobility['countrycode'].unique()
+mobility = pd.DataFrame(columns=['countrycode','country','date']+mobilities)
+
+for country in countries:
+    data = raw_mobility[raw_mobility['countrycode']==country].set_index('date')
+    data = data.reindex([x.date() for x in pd.date_range(data.index.values[0],data.index.values[-1])])
+    data[['countrycode','country']] = data[['countrycode','country']].fillna(method='backfill')
+    data[mobilities] = data[mobilities].interpolate(method='linear')
+    data.reset_index(inplace=True)
+    mobility = pd.concat((mobility,data)).reset_index(drop=True)
+    continue
 
 ##GOVERNMENT_RESPONSE PRE-PROCESSING LOOP
 countries = raw_government_response['countrycode'].unique()
@@ -416,8 +442,8 @@ for cls in GOV['class'].unique():
 
 ### APPENDIX
 
-LABELLED_COLUMNS = pd.read_csv(PATH + 'peak_labels.csv')
-SPLINE_FITS = pd.read_csv(PATH + 'SPLINE_FITS.csv')
+LABELLED_COLUMNS = pd.read_csv('./' + 'peak_labels.csv')
+SPLINE_FITS = pd.read_csv('./' + 'SPLINE_FITS.csv')
 
 countries_in_second = LABELLED_COLUMNS[LABELLED_COLUMNS['EPI_ENTERING_SECOND']]['COUNTRYCODE'].values
 
@@ -431,3 +457,123 @@ for country in countries_in_second:
     plt.vlines(day_of_second_wave, 0, data['new_per_day_smooth'].max(), linestyles='dashed', colors='black')
     plt.title(country)
     plt.savefig(PATH + 'countries_in_second_wave/' + country + '.png')
+
+ep = dict()
+si = dict()
+mob = dict()
+exclude = list()
+
+for country in countries_in_second:
+    new_per_day_series = SPLINE_FITS[SPLINE_FITS['countrycode'] == country]['new_per_day_smooth'].values
+    ep_date_series = SPLINE_FITS[SPLINE_FITS['countrycode'] == country]['date'].values
+    ep_date_series = np.array([datetime.datetime.strptime(date,'%Y-%m-%d').date() for date in ep_date_series])
+
+    si_series = government_response[government_response['countrycode']==country]['stringency_index'].values
+    si_date_series = government_response[government_response['countrycode']==country]['date'].values
+
+    mobility_series = mobility[mobility['countrycode']==country]['residential'].values
+    mob_date_series = mobility[mobility['countrycode']==country]['date'].values
+
+    if len(new_per_day_series) == 0:
+        exclude.append(country)
+        continue
+
+    ##Getting bases of genuine peak to determine 'wave'
+    peak_characteristics = find_peaks(new_per_day_series, prominence=PROMINENCE_THRESHOLD, distance=DISTANCE)
+    genuine_peaks = LABELLED_COLUMNS[LABELLED_COLUMNS['COUNTRYCODE'] ==
+                                     country].values[0][1:4].astype(int)[0:len(peak_characteristics[0])]
+
+    ##Get dates of first and second wave
+    first_wave = (peak_characteristics[1]['left_bases'][np.where(genuine_peaks!=0)],
+                  peak_characteristics[1]['right_bases'][np.where(genuine_peaks!=0)])
+    second_wave = peak_characteristics[0][np.where(genuine_peaks!=0)][0] + \
+                  np.argmin(new_per_day_series[peak_characteristics[0][np.where(genuine_peaks!=0)][0]::])
+    first_wave = (ep_date_series[first_wave[0]][0],
+                  ep_date_series[first_wave[1]][0])
+    second_wave = ep_date_series[second_wave]
+
+    ##Slice first wave, second wave data
+    ep_first_wave = new_per_day_series[np.where((ep_date_series >= first_wave[0]) & (ep_date_series <= first_wave[1]))]
+    ep_second_wave = new_per_day_series[np.where(ep_date_series >= second_wave)]
+    si_first_wave = si_series[np.where((si_date_series >= first_wave[0]) & (si_date_series <= first_wave[1]))]
+    si_second_wave = si_series[np.where(si_date_series >= second_wave)]
+    mob_first_wave = mobility_series[np.where((mob_date_series >= first_wave[0]) & (mob_date_series <= first_wave[1]))]
+    mob_second_wave = mobility_series[np.where(mob_date_series >= second_wave)]
+
+    ep[country + '_first_wave'] = pd.Series(ep_first_wave)
+    ep[country + '_second_wave'] = pd.Series(ep_second_wave)
+    mob[country + '_first_wave'] = pd.Series(mob_first_wave)
+    mob[country + '_second_wave'] = pd.Series(mob_second_wave)
+    si[country + '_first_wave'] = pd.Series(si_first_wave)
+    si[country + '_second_wave'] = pd.Series(si_second_wave)
+
+disp_limit = 75
+plot_countries = ['AUS','BEL','ESP','JPN','USA']
+countries = [country for country in countries_in_second if not(country in exclude)]
+
+ep = pd.DataFrame.from_dict(ep)
+mob = pd.DataFrame.from_dict(mob)
+si = pd.DataFrame.from_dict(si)
+
+norm_ep = ep/ep.max()
+ep_aggr_first_wave = norm_ep[[
+    country + '_first_wave' for country in countries]].mean(axis= 1, skipna= True).iloc[0:disp_limit]
+ep_aggr_second_wave = norm_ep[[
+    country + '_second_wave' for country in countries]].mean(axis= 1, skipna= True).iloc[0:disp_limit]
+
+mob_aggr_first_wave = mob[[
+    country + '_first_wave' for country in countries]].mean(axis= 1, skipna= True).iloc[0:disp_limit]
+mob_aggr_second_wave = mob[[
+    country + '_second_wave' for country in countries]].mean(axis= 1, skipna= True).iloc[0:disp_limit]
+
+si_aggr_first_wave = si[[
+    country + '_first_wave' for country in countries]].mean(axis= 1, skipna= True).iloc[0:disp_limit]
+si_aggr_second_wave = si[[
+    country + '_second_wave' for country in countries]].mean(axis= 1, skipna= True).iloc[0:disp_limit]
+
+color_dict = {
+    'AUS':'orange',
+    'BEL':'red',
+    'ESP':'purple',
+    'JPN':'blue',
+    'USA':'salmon'
+}
+
+plt.figure(figsize=(20,7))
+for country in plot_countries:
+    plt.plot(norm_ep[country + '_first_wave'].iloc[0:disp_limit],
+             linestyle = 'solid',color = color_dict[country],linewidth = 0.75, label = country)
+    plt.plot(norm_ep[country + '_second_wave'].iloc[0:disp_limit],
+             linestyle = 'dashed',color = color_dict[country],linewidth = 0.75)
+plt.plot(ep_aggr_first_wave, linestyle = 'solid', color = 'black', linewidth = 2)
+plt.plot(ep_aggr_second_wave, linestyle = 'dashed', color = 'black', linewidth = 2)
+plt.title('Comparison of new cases per day the first ' + str(disp_limit)
+          + ' days for the first and second wave (second wave dashed)')
+plt.legend()
+plt.savefig(PATH + 'new_cases_per_day_first_vs_second.png')
+
+plt.figure(figsize=(20,7))
+for country in plot_countries:
+    plt.plot(mob[country + '_first_wave'].iloc[0:disp_limit],
+             linestyle = 'solid',color = color_dict[country],linewidth = 0.75, label = country)
+    plt.plot(mob[country + '_second_wave'].iloc[0:disp_limit],
+             linestyle = 'dashed',color = color_dict[country],linewidth = 0.75)
+plt.plot(mob_aggr_first_wave, linestyle = 'solid', color = 'black', linewidth = 2)
+plt.plot(mob_aggr_second_wave, linestyle = 'dashed', color = 'black', linewidth = 2)
+plt.title('Comparison of mobility for the first ' + str(disp_limit)
+          + ' days for the first and second wave (second wave dashed)')
+plt.legend()
+plt.savefig(PATH + 'mobility_first_vs_second.png')
+
+plt.figure(figsize=(20,7))
+for country in plot_countries:
+    plt.plot(si[country + '_first_wave'].iloc[0:disp_limit],
+             linestyle = 'solid',color = color_dict[country],linewidth = 0.75, label = country)
+    plt.plot(si[country + '_second_wave'].iloc[0:disp_limit],
+             linestyle = 'dashed',color = color_dict[country],linewidth = 0.75)
+plt.plot(si_aggr_first_wave, linestyle = 'solid', color = 'black', linewidth = 2)
+plt.plot(si_aggr_second_wave, linestyle = 'dashed', color = 'black', linewidth = 2)
+plt.title('Comparison of SI for the first ' + str(disp_limit)
+          + ' days for the first and second wave (second wave dashed)')
+plt.legend()
+plt.savefig(PATH + 'si_first_vs_second.png')
