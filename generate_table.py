@@ -965,19 +965,20 @@ LABELLED_COLUMNS['CLASS'] = classes
 
 FINAL = FINAL.merge(LABELLED_COLUMNS, on = ['COUNTRYCODE'], how = 'left')
 
-
-
-for c in CLASS_LABELS_DICTIONARY:
-    FINAL.loc[FINAL['CLASS']==CLASS_LABELS_DICTIONARY[c],'CLASS_LABEL'] = c
+for c in CLASS_DICTIONARY:
+    FINAL.loc[FINAL['CLASS']==CLASS_DICTIONARY[c],'CLASS_LABEL'] = c
 
 if SAVE_PLOTS:
     map_data['COUNTRYCODE'] = map_data['countrycode']
     map_data = map_data.merge(LABELLED_COLUMNS[['COUNTRYCODE','CLASS']], on = ['COUNTRYCODE'], how = 'left')
     plt.figure()
-    map_data.plot(column = 'CLASS', figsize = (20,10), legend = True, legend_kwds = {'orientation':'horizontal'},
-                  missing_kwds = {'color' : 'lightgrey'})
+    cmap = plt.get_cmap('viridis', int(map_data['CLASS'].max() - map_data['CLASS'].min() + 1))
+    mat = map_data.plot(column = 'CLASS', figsize = (20,7), legend = True,
+                        legend_kwds = {'orientation':'horizontal','shrink':0.7}, categorical = False,
+                        missing_kwds = {'color' : 'lightgrey'}, linewidth = 0.5, edgecolor = 'black', cmap=cmap)
+    plt.title('Countries and their current stage in the epidemic')
     plt.savefig(PATH + 'world_map.jpg')
-    plt.close()
+    #plt.close()
 
 # Take the EPI peaks labelled as genuine
 error_text = ""
