@@ -10,6 +10,10 @@ only take a couple of minutes.
 $ python generate_table.py
 ```
 
+This generates the files 
+
+- `foo.csv` which contains x, y and z
+
 ## Environment
 
 To set up a virtual environment for the python packages specified in
