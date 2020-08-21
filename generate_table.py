@@ -23,7 +23,7 @@ INTITALISE SCRIPT PARAMETERS
 '''
 
 SAVE_PLOTS=False
-SAVE_CSV=False
+SAVE_CSV=True
 DISTANCE = 21  # Distance between peaks
 THRESHOLD = 25  # Threshold for duration calculation
 SMOOTH = 0.001  # Smoothing parameter for the spline fit
@@ -32,7 +32,7 @@ ROLLING_WINDOW = 3  # Window size for Moving Average for epidemiological data
 OPTIMAL_LAG_TIME = 14 # +/- this time for optimal lag calculation
 PATH = '' # Path to save master table and corresponding plots
 PROMINENCE_THRESHOLD = 5
-T0_THRESHOLD = 50 # T0 is defined as the first day where the cumulative number of new cases per day >= threshold
+T0_THRESHOLD = 1000 # T0 is defined as the first day where the cumulative number of new cases per day >= threshold
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -949,24 +949,36 @@ for i in FINAL.index:
         date2 = FINAL.loc[i,"MOB_RESIDENTIAL_PEAK_" + str(k) + "_DATE"]
         FINAL.loc[i,"EPI_MOB_PEAK_DATE_DIFF"] = (date1-date2).days
 
+# Add peak labels and country classifications
 LABELLED_COLUMNS = pd.read_csv('./peak_labels.csv')
 
 CLASS_DICTIONARY = {
-    'EPI_ENTERING_FIRST' : 1,
-    'EPI_PAST_FIRST' : 2,
-    'EPI_ENTERING_SECOND' : 3,
-    'EPI_PAST_SECOND' : 4
+    1: 'EPI_ENTERING_FIRST',
+    2: 'EPI_PAST_FIRST',
+    3: 'EPI_ENTERING_SECOND',
+    4: 'EPI_PAST_SECOND'
+}
+
+CLASS_COARSE = {
+    0: 'EPI_OTHER',
+    1: 'EPI_FIRST_WAVE',
+    2: 'EPI_FIRST_WAVE',
+    3: 'EPI_SECOND_WAVE',
+    4: 'EPI_SECOND_WAVE'
 }
 
 classes = np.zeros(len(LABELLED_COLUMNS))
 for k, v in CLASS_DICTIONARY.items():
-    classes[np.where(LABELLED_COLUMNS[k])] += v
+    classes[np.where(LABELLED_COLUMNS[v])] += k
 LABELLED_COLUMNS['CLASS'] = classes
 
 FINAL = FINAL.merge(LABELLED_COLUMNS, on = ['COUNTRYCODE'], how = 'left')
 
 for c in CLASS_DICTIONARY:
-    FINAL.loc[FINAL['CLASS']==CLASS_DICTIONARY[c],'CLASS_LABEL'] = c
+    FINAL.loc[FINAL['CLASS']==c,'CLASS_LABEL'] = CLASS_DICTIONARY[c]
+    FINAL.loc[FINAL['CLASS']==0,'CLASS_LABEL'] = 'EPI_OTHER'
+for c in CLASS_COARSE:
+    FINAL.loc[FINAL['CLASS']==c,'CLASS_COARSE'] = CLASS_COARSE[c]
 
 if SAVE_PLOTS:
     map_data['COUNTRYCODE'] = map_data['countrycode']
@@ -978,7 +990,7 @@ if SAVE_PLOTS:
                         missing_kwds = {'color' : 'lightgrey'}, linewidth = 0.5, edgecolor = 'black', cmap=cmap)
     plt.title('Countries and their current stage in the epidemic')
     plt.savefig(PATH + 'world_map.jpg')
-    #plt.close()
+    plt.close()
 
 # Take the EPI peaks labelled as genuine
 error_text = ""
@@ -995,13 +1007,6 @@ for i in FINAL.index:
             if error_text.find('EPI_PEAK_' + str(k) + '_GENUINE not in columns') == -1:
                 error_text = error_text + 'EPI_PEAK_' + str(k) + '_GENUINE not in columns'
 print(error_text)
-
-if SAVE_CSV:
-    FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
-    epidemiology_results.to_csv(PATH + 'epidemiology_results.csv')
-    mobility_results.to_csv(PATH + 'mobility_results.csv')
-    government_response.to_csv(PATH + 'government_response.csv')
-
 
 ## GENERATE TABLE_1 WITH SUMMARY STATISTICS
 TABLE_1 = pd.DataFrame(columns = ['EPI_ENTERING_FIRST','EPI_PAST_FIRST','EPI_ENTERING_SECOND','EPI_PAST_SECOND','OTHER'],
@@ -1044,8 +1049,6 @@ for c in TABLE_1.columns:
     
     TABLE_1.loc['CFR',c] = np.mean(data['CFR'])
     
-if SAVE_CSV:
-    TABLE_1.to_csv(PATH + 'TABLE_1.csv')
 
 TIME_SERIES = pd.DataFrame.from_dict({'countrycode':epidemiology_columns['countrycode'],
                                       'country':epidemiology_columns['country'],
@@ -1054,4 +1057,64 @@ TIME_SERIES = pd.DataFrame.from_dict({'countrycode':epidemiology_columns['countr
 TIME_SERIES.to_csv(PATH + 'SPLINE_FITS.csv')
 
 
+# Add features to epidemiology_results to be used for plotting
+epidemiology_results['new_per_day_per10k']=np.nan
+epidemiology_results['new_per_day_smooth_per10k']=np.nan
+epidemiology_results['t']=np.nan
+for c in epidemiology_results['countrycode'].unique():
+    # Compute new cases per day per 10,000 population
+    population = FINAL.loc[FINAL['COUNTRYCODE']==c,'POPULATION']
+    if len(population) > 0:
+        population = population.values[0]
+        if not np.isnan(population):
+            epidemiology_results.loc[epidemiology_results['countrycode']==c,'new_per_day_per10k']= \
+                10000*epidemiology_results.loc[epidemiology_results['countrycode']==c,'new_per_day']/population
+            epidemiology_results.loc[epidemiology_results['countrycode']==c,'new_per_day_smooth_per10k']= \
+                10000*epidemiology_results.loc[epidemiology_results['countrycode']==c,'new_per_day_smooth']/population
+
+    # Compute t: days since T0
+    T0 = FINAL.loc[FINAL['COUNTRYCODE']==c,'T0']
+    if len(T0) > 0:
+        T0 = T0.values[0]
+        if isinstance(T0, datetime.date):
+            epidemiology_results.loc[epidemiology_results['countrycode']==c,'t'] = \
+                [a.days for a in (epidemiology_results.loc[epidemiology_results['countrycode']==c,'date'] - T0)]
+
+# Figure 2 data: merge tables together for plotting
+fig_2_data = government_response[['date','stringency_index','countrycode']]
+fig_2_data = fig_2_data.merge(FINAL[['CLASS_LABEL','COUNTRYCODE','COUNTRY']],
+                              left_on='countrycode', right_on='COUNTRYCODE', how='left')
+fig_2_data = fig_2_data.merge(epidemiology_results[['countrycode','date','t']],
+                              on=['countrycode','date'], how='left')
+fig_2_data = fig_2_data.loc[fig_2_data['CLASS_LABEL'] != 'EPI_OTHER',['CLASS_LABEL','t','stringency_index','COUNTRYCODE','COUNTRY']]
+fig_2_data.dropna(how='any', inplace=True)
+
+# Figure 3 data
+fig_3_data=FINAL.loc[FINAL['CLASS'] > 0, \
+                     ['COUNTRYCODE','COUNTRY','GOV_MAX_SI_DAYS_FROM_T0','CLASS_COARSE','POPULATION','EPI_CONFIRMED']].dropna(how='any')
+fig_3_data['EPI_CONFIRMED_PER_10K'] = 10000*fig_3_data['EPI_CONFIRMED']/fig_3_data['POPULATION']
+fig_3_data.dropna(how='any', inplace=True)
+
+# Figure 4 data: merge tables together for plotting
+fig_4_data = government_response[['date','stringency_index','countrycode']]
+fig_4_data = fig_4_data.merge(FINAL[['CLASS','CLASS_COARSE','COUNTRYCODE','COUNTRY','T0','GOV_C6_RAISED_DATE','GOV_C6_LOWERED_DATE',
+                                     'GOV_C6_RAISED_AGAIN_DATE']],
+                              left_on='countrycode', right_on='COUNTRYCODE', how='left')
+fig_4_data = fig_4_data.merge(mobility_results[['countrycode','date','residential_smooth']], 
+                              on=['countrycode','date'], how='left')
+fig_4_data = fig_4_data.merge(epidemiology_results[['countrycode','date','t','confirmed','new_per_day_smooth_per10k']],
+                              on=['countrycode','date'], how='left')
+fig_4_data.drop(columns=['countrycode'], inplace=True)
+
+
+# Save csv files containing processed data
+if SAVE_CSV:
+    FINAL.drop(columns = ['COUNTRY_x', 'COUNTRY_y']).to_csv(PATH + 'master.csv')
+    epidemiology_results.to_csv(PATH + 'epidemiology_results.csv')
+    mobility_results.to_csv(PATH + 'mobility_results.csv')
+    government_response.to_csv(PATH + 'government_response.csv')
+    TABLE_1.to_csv(PATH + 'TABLE_1.csv')
+    fig_2_data.to_csv(PATH + 'fig_2_data.csv')
+    fig_3_data.to_csv(PATH + 'fig_3_data.csv')
+    fig_4_data.to_csv(PATH + 'fig_4_data.csv')
 

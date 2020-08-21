@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import os
-from tqdm import tqdm
 import datetime
 from datetime import date
 
@@ -233,6 +232,8 @@ if SAVE_PLOTS:
     
 
 #%% Figure 4: time series of EPI, GOV and MOB
+# need to add class 4 as well
+        
 
 for c in data['CLASS'].unique():
     if c == 0 or c == 4:
@@ -243,6 +244,7 @@ for c in data['CLASS'].unique():
     f, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=False)
     f.tight_layout(rect=[0, 0, 1, 0.98], pad=3)
     sns.set_palette("husl")
+    sns.set_style('darkgrid')
 
     countries = FINAL[FINAL['CLASS'] == c]['COUNTRYCODE'].unique()
 
@@ -261,34 +263,22 @@ for c in data['CLASS'].unique():
     ten_countries = list(pd.Series({country:max(data[data['COUNTRYCODE']==country]['confirmed'].dropna()) \
                            for country in countries}).nlargest(n = 10).index)
 
-    data_all = data.loc[data['COUNTRYCODE'].isin(countries),['COUNTRYCODE','t','new_per_day','new_per_day_smooth','new_per_day_ma', \
-                                                             'new_per_day_per10k','new_per_day_smooth_per10k','new_per_day_ma_per10k', \
-                                                             'residential','residential_smooth','stringency_index']]
-    data_ten = data.loc[data['COUNTRYCODE'].isin(ten_countries),['COUNTRYCODE','t','new_per_day','new_per_day_smooth','new_per_day_ma', \
-                                                                 'new_per_day_per10k','new_per_day_smooth_per10k','new_per_day_ma_per10k', \
-                                                                 'residential','residential_smooth','stringency_index']]
+    data_all = data.loc[data['COUNTRYCODE'].isin(countries),['COUNTRYCODE','t','new_per_day_ma', \
+                                                             'new_per_day_smooth_per10k', \
+                                                             'residential_smooth','stringency_index']]
+    data_ten = data.loc[data['COUNTRYCODE'].isin(ten_countries),['COUNTRYCODE','t','new_per_day_ma', \
+                                                                 'new_per_day_smooth_per10k', \
+                                                                 'residential_smooth','stringency_index']]
 
     # restrict the date range: keep only t values with at least 80% of the countries present
-    ns = {t:len(data_all.loc[data_all['t']==t,'new_per_day'].dropna()) for t in data_all['t'].unique()}
-    ns = [t for t in ns.keys() if ns[t] >= 0.95*len(data_all['COUNTRYCODE'].unique())]
+    ns = {t:len(data_all.loc[data_all['t']==t,'new_per_day_smooth_per10k'].dropna()) for t in data_all['t'].unique()}
+    ns = [t for t in ns.keys() if ns[t] >= 0.8*len(data_all['COUNTRYCODE'].unique())]
     t_lower_lim = min(ns)
     t_upper_lim = max(ns)-1
     data_all = data_all[(data_all['t']>=t_lower_lim) & (data_all['t']<=t_upper_lim)]
     data_ten = data_ten[(data_ten['t']>=t_lower_lim) & (data_ten['t']<=t_upper_lim)]
-    
-    # scale each country's new cases curve by the max value of the aggregate curve
-    data_epi = data_all[['t','new_per_day_smooth_per10k']].dropna()
-    data_epi = data_epi.groupby(by=['t']).mean()
-    max_epi = max(data_epi['new_per_day_smooth_per10k'])
-    for country in ten_countries:
-        temp_max_epi = max(data_ten.loc[data_ten['COUNTRYCODE']==country,'new_per_day'])
-        data_ten.loc[data_ten['COUNTRYCODE']==country,'new_per_day_scaled'] = data_ten.loc[data_ten['COUNTRYCODE']==country,'new_per_day']*(max_epi/temp_max_epi)
-        temp_max_epi = max(data_ten.loc[data_ten['COUNTRYCODE']==country,'new_per_day_smooth'])
-        data_ten.loc[data_ten['COUNTRYCODE']==country,'new_per_day_smooth_scaled'] = data_ten.loc[data_ten['COUNTRYCODE']==country,'new_per_day_smooth']*max_epi/temp_max_epi
-    
+
     # plot aggregate curve for all countries in class
-    #sns.lineplot(x = 't',y = 'new_per_day_per10k', data=data_all, color = 'black', ci = None, label = 'aggregate', ax=axes[0])
-    #sns.lineplot(x = 't',y = 'new_per_day_ma_per10k', data=data_all, color = 'black', ci = None, label = 'aggregate', ax=axes[0])
     sns.lineplot(x = 't',y = 'new_per_day_smooth_per10k', data=data_all, color = 'black', ci = None, label = 'Aggregate', ax=axes[0], legend=False)
     sns.lineplot(x = 't',y = 'stringency_index', data=data_all, color = 'black', ci = None, label = 'Aggregate', ax=axes[1])
     sns.lineplot(x = 't',y = 'residential_smooth', data=data_all, color = 'black', ci = None, label = 'Aggregate', ax=axes[2], legend=False)
@@ -302,17 +292,17 @@ for c in data['CLASS'].unique():
     # vertical lines of stay at home flag raised/lowered/raised again
     maxes={0:axes[0].get_ylim()[1], 1:axes[1].get_ylim()[1], 2:axes[2].get_ylim()[1]}
     for i in [0,1,2]:
-        axes[i].axvline(avg_raised, linestyle='dashed', color='red')
+        axes[i].axvline(avg_raised, linestyle='dashed', color='black')
         axes[i].text(avg_raised+1, 0.95*maxes[i], 'Flag Raised')
         axes[i].text(avg_raised+1, 0.9*maxes[i], 'n = ' + str(n1))
     if c >= 2:
         for i in [0,1,2]:
-            axes[i].axvline(avg_lowered, linestyle='dashed', color='red')
+            axes[i].axvline(avg_lowered, linestyle='dashed', color='black')
             axes[i].text(avg_lowered+1, 0.95*maxes[i], 'Flag Lowered')
             axes[i].text(avg_lowered+1, 0.9*maxes[i], 'n = ' + str(n2))
     if c >= 3:
         for i in [0,1,2]:
-            axes[i].axvline(avg_raised_again, linestyle='dashed', color='red')
+            axes[i].axvline(avg_raised_again, linestyle='dashed', color='black')
             axes[i].text(avg_raised_again+1, 0.95*maxes[i], 'Flag Raised Again')
             axes[i].text(avg_raised_again+1, 0.9*maxes[i], 'n = ' + str(n3))
 
@@ -346,8 +336,7 @@ for c in data['CLASS'].unique():
     plt.gcf().text(0.13, 0.008, "Note: data for new cases per day and residential mobility have been smoothed using a spline fit approximation to reduce measurement noise.")
 
     if SAVE_PLOTS:
-        plt.savefig(PATH + 'fig_4_stage_' + str(int(c)) + '_timeline.png')
-
+        plt.savefig(PATH + 'fig_4_stage_' + str(int(c)) + '_timeline_T0_1000.png')
 
 #%% Testing: plot of epi, gov, mob comparing the first and second wave
 
