@@ -1,6 +1,6 @@
 # Epidemetrics
 
-## Downloading and compute summary table
+## Downloading and computing summary table
 
 Downloading the data and computing the summary statistics is done by running the
 `generate_table.py` script. Depending on your internet connection this should
@@ -22,7 +22,7 @@ This downloads and processes source data taken from the Oxford Covid database ..
 - `TABLE_1.csv` which contains selected summary statistics aggregated at the class level describing key characteristics of countries entering first wave, past first wave, entering second wave and past second wave, and countries classified as other.
 
 
-## Generate figures from processed data
+## Generating figures from processed data
 
 The following scripts can be run to generate each of the plots. The plots are generated from the csv files saved by the `generate_table.py` script above.
 
