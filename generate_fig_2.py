@@ -14,14 +14,14 @@ READ_CSV = True
 
 # Create directory to save plot
 if SAVE_PLOTS:
-    os.makedirs(PATH+'figures/',exist_ok=True)
+    os.makedirs(PATH+'charts/',exist_ok=True)
 
 # Read csv for data to plot
 if READ_CSV:
     fig_2_data = pd.read_csv(PATH + 'fig_2_data.csv', index_col = 0)
 
 # Set plot parameters
-xlim_thresold = 0.9     # Plot will crop the x axis to only show t values with >=threshold proportion of countries present.
+xlim_thresold = 0.6     # Plot will crop the x axis to only show t values with >=threshold proportion of countries present.
 T0_threshold = 1000     # Number of total cases used to define T0. Must be set to the same value as used in generate_table.
 include_class = ['EPI_ENTERING_FIRST','EPI_PAST_FIRST','EPI_ENTERING_SECOND'] # Classes to include in the plot. Past second is currently excluded due to the low sample size.
 
@@ -61,4 +61,4 @@ g.legend(handles=handles[1:], labels=labels)
 
 
 if SAVE_PLOTS:
-    g.figure.savefig(PATH + 'figures/' + 'fig_2.png')
+    g.figure.savefig(PATH + 'charts/' + 'fig_2.png')

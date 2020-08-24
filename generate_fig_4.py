@@ -14,7 +14,7 @@ READ_CSV = True
 
 # Create directory to save plot
 if SAVE_PLOTS:
-    os.makedirs(PATH+'figures/',exist_ok=True)
+    os.makedirs(PATH+'charts/',exist_ok=True)
 
 # Read csv for data to plot
 if READ_CSV:
@@ -130,4 +130,4 @@ plt.gcf().text(0.13, 0.008, "Note: data for new cases per day and residential mo
 
 # Save Figure
 if SAVE_PLOTS:
-    plt.savefig(PATH + 'figures/' + 'fig_4.png')
+    plt.savefig(PATH + 'charts/' + 'fig_4.png')

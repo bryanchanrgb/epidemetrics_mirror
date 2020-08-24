@@ -14,7 +14,7 @@ READ_CSV = True
 
 # Create directory to save plot
 if SAVE_PLOTS:
-    os.makedirs(PATH+'figures/',exist_ok=True)
+    os.makedirs(PATH+'charts/',exist_ok=True)
 
 # Read csv for data to plot
 if READ_CSV:
@@ -38,4 +38,4 @@ labels[2]='Second Wave Countries'
 g.legend(handles=handles[1:], labels=labels[1:])
 
 if SAVE_PLOTS:
-    g.figure.savefig(PATH + 'figures/' + 'fig_3.png')
+    g.figure.savefig(PATH + 'charts/' + 'fig_3.png')
