@@ -1,5 +1,19 @@
 # Epidemetrics
 
+## UPDATE - New Instructions
+
+The code has been redesigned and older versions of the scripts can be found within the archive folder. Running the generate_table.py script will download the data from the OxCovid database and generate the csv files need to reproduce the figures in the paper. The CSVs should automatically be stored within the data folder along with a timestamp of when the database was accessed. The SAVE_PLOTS argument can be toggled to generate the plots needed for data labelling. 
+
+```
+$ python generate_table.py
+```
+
+The figures can be reproduced by running the following script.  
+
+```
+$ python generate_plots.py
+```
+
 ## Downloading and computing summary table
 
 Downloading the data and computing the summary statistics is done by running the
