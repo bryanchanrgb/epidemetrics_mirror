@@ -45,7 +45,7 @@ FIGURE 2 - Stringency Index by Class
 figure_2 = pd.read_csv(LOAD_DATA_PATH + 'figure_2.csv', index_col = 0)
 
 # Set plot parameters
-xlim_thresold = 0.9     # Plot will crop the x axis to only show t values with >=threshold proportion of countries present.
+xlim_thresold = 0.6     # Plot will crop the x axis to only show t values with >=threshold proportion of countries present.
 T0_threshold = 1000     # Number of total cases used to define T0. Must be set to the same value as used in generate_table.
 
 # Class labels to use in title
@@ -58,11 +58,10 @@ class_labels = {0: 'Other',
 for c in class_labels:
     figure_2.loc[figure_2['CLASS']==c,'CLASS']=class_labels[c]
     
-# Classes to include in the plot. Past second is currently excluded due to the low sample size.
+# Classes to include in the plot. Past second wave is currently excluded due to the low sample size.
 include_class = ['Entering First Wave',
                  'Past First Wave',
-                 'Entering Second Wave',
-                 'Past Second Wave']
+                 'Entering Second Wave']
 
 # Set plot dimensions and style
 plt.clf()
@@ -76,9 +75,9 @@ g = sns.lineplot(x = 't', y ='stringency_index', data=figure_2[figure_2['CLASS']
                  hue = 'CLASS', hue_order=include_class)
 
 # Restrict the date range: keep only t values with at least x% of the countries present
-ns = {t:len(figure_2.loc[figure_2['t']==t,'stringency_index'].dropna())
-      for t in figure_2['t'].unique()}
-ns = [t for t in ns.keys() if ns[t] >= xlim_thresold*len(figure_2['COUNTRYCODE'].unique())]
+ns = {t:len(figure_2.loc[(figure_2['CLASS'].isin(include_class))&(figure_2['t']==t),'stringency_index'].dropna())
+      for t in figure_2.loc[figure_2['CLASS'].isin(include_class),'t'].unique()}
+ns = [t for t in ns.keys() if ns[t] >= xlim_thresold*len(figure_2.loc[figure_2['CLASS'].isin(include_class),'COUNTRYCODE'].unique())]
 t_lower_lim = min(ns)
 t_upper_lim = max(ns)
 g.set(xlim=(t_lower_lim, t_upper_lim))
