@@ -1,0 +1,48 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "width": 1000,
+    "height": 700,
+    "projection": {
+        "type": "equirectangular"
+    },
+    "data": {
+        "url": "data/gadm36_0.json",
+        "format": {
+            "type": "topojson",
+            "feature": "gadm36_0"
+        },
+        "name": "map-data"
+    },
+    "transform": [
+        {
+            "calculate": "datum.properties.GID_0",
+            "as": "gid0"
+        },
+        {
+            "lookup": "gid0",
+            "from": {
+                "data": {
+                    "url": "data/fig1a-t0-days.csv",
+                    "name": "t0-data"
+                },
+                "key": "countrycode",
+                "fields": ["days_to_t0"]
+            }
+        }
+    ],
+    "mark": "geoshape",
+    "encoding": {
+        "color": {
+            "condition": {
+                "test": "!isString(datum.days_to_t0)",
+                "value": "#aaa"
+            },
+            "field": "days_to_t0",
+            "type": "quantitative",
+            "title": ["Days until cumulative", "threshold reached"]
+        }
+    },
+    "config": {
+        "mark": {"invalid": null}
+    }
+}

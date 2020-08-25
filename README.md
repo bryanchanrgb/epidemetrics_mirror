@@ -2,17 +2,27 @@
 
 ## UPDATE - New Instructions
 
-The code has been redesigned and older versions of the scripts can be found within the archive folder. Running the generate_table.py script will download the data from the OxCovid database and generate the csv files need to reproduce the figures in the paper. The CSVs should automatically be stored within the data folder along with a timestamp of when the database was accessed. The SAVE_PLOTS argument can be toggled to generate the plots needed for data labelling. 
+The code has been redesigned and older versions of the scripts can be found
+within the archive folder. Running the `generate_table.py` script will download
+the data from the OxCOVID19 database and generate the CSV files need to
+reproduce the figures in the paper. The CSVs should automatically be stored
+within the data folder along with a time stamp of when the database was
+accessed. The `SAVE_PLOTS` Boolean argument can be toggled to generate the plots
+needed for data labelling.
 
 ```
 $ python generate_table.py
 ```
 
-The figures can be reproduced by running the following script.  
+The figures can be reproduced by running the following script.
 
 ```
 $ python generate_plots.py
 ```
+
+Alternatively, running `sh run-server.sh` at the command line will start an HTTP
+server from which the `index.html` file will show the Vega-Lite visualisations.
+The specifications for these figures are in the `js` directory.
 
 ## Downloading and computing summary table
 

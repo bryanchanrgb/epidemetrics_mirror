@@ -450,17 +450,32 @@ figure_1a = pd.DataFrame(columns=['countrycode','country','days_to_t0'])
 figure_1a['countrycode'] = epidemiology_panel['countrycode'].values
 figure_1a['country'] = epidemiology_panel['country'].values
 figure_1a['days_to_t0'] = (epidemiology_panel['T0']-start_date).apply(lambda x: x.days)
-figure_1a = figure_1a.merge(map_data[['countrycode','geometry']],on='countrycode',how = 'left').dropna()
+# It looks like pandas cannot correctly serialise the geometry column so this
+# is being commented out. Possibly this merge could be done at plot time, or
+# the data could be pickled instead of written to a flat CSV. Since it is just
+# a left merge with the country code this should be feasible.
+figure_1a = figure_1a.merge(map_data[['countrycode']],on='countrycode',how = 'left').dropna()
+# figure_1a = figure_1a.merge(map_data[['countrycode','geometry']],on='countrycode',how = 'left').dropna()
 
 if SAVE_CSV:
+    # Asserts have been added because there was a wierd bug encountered in
+    # saving figure_1a to CSV and they were introduced to help track it down.
+    assert isinstance(figure_1a, pd.core.frame.DataFrame), "figure_1a is not a pandas dataframe..."
+    assert hasattr(figure_1a, "to_csv"), "figure_1a does not have a to_csv method..."
     figure_1a.to_csv(CSV_PATH + 'figure_1a.csv')
+
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 3 - SAVING FIGURE 1b
 '''
 
 figure_1b = epidemiology_panel[['countrycode','country','class']].dropna()
-figure_1b = figure_1b.merge(map_data[['countrycode','geometry']],on='countrycode',how = 'left').dropna()
+# It looks like pandas cannot correctly serialise the geometry column so this
+# is being commented out. Possibly this merge could be done at plot time, or
+# the data could be pickled instead of written to a flat CSV. Since it is just
+# a left merge with the country code this should be feasible.
+figure_1b = figure_1b.merge(map_data[['countrycode']],on='countrycode',how = 'left').dropna()
+# figure_1b = figure_1b.merge(map_data[['countrycode','geometry']],on='countrycode',how = 'left').dropna()
 
 if SAVE_CSV:
     figure_1b.to_csv(CSV_PATH + 'figure_1b.csv')

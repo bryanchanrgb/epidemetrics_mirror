@@ -1,0 +1,10 @@
+2020-08-25  Alex Zarebski  <aez@zoo-zarebski>
+
+	* README.md: Include a description of how to look a the vega-lite
+	version of the figures in the browser which is the planned
+	approach for the fine tuning of the figures.
+
+	* generate_table.py: Removed the geometry column from the CSV
+	exports for figure 1 data as pandas was thorwing errors while
+	trying to serialise this.
+
