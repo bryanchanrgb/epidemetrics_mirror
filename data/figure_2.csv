@@ -1,4 +1,4 @@
-,COUNTRYCODE,COUNTRY,CLASS_LABEL,t,stringency_index
+,COUNTRYCODE,COUNTRY,CLASS,t,stringency_index
 0,ABW,Aruba,1,-156.0,0.0
 1,ABW,Aruba,1,-155.0,0.0
 2,ABW,Aruba,1,-154.0,0.0

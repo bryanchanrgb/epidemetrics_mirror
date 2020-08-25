@@ -473,10 +473,10 @@ data = epidemiology_series[['countrycode','country','date','days_since_t0']].mer
     epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
     government_response_series[['countrycode','date','si']],on=['countrycode','date'],how='left').dropna()
 
-figure_2 = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS_LABEL','t','stringency_index'])
+figure_2 = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','stringency_index'])
 figure_2['COUNTRYCODE'] = data['countrycode']
 figure_2['COUNTRY'] = data['country']
-figure_2['CLASS_LABEL'] = data['class']
+figure_2['CLASS'] = data['class']
 figure_2['t'] = data['days_since_t0']
 figure_2['stringency_index'] = data['si']
 

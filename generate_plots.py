@@ -5,6 +5,7 @@ import pandas as pd
 import datetime
 import geopandas as gpd
 from shapely import wkt
+import descartes
 
 SAVE_PATH = './plots/'
 LOAD_DATA_PATH = './data/'
@@ -46,25 +47,33 @@ figure_2 = pd.read_csv(LOAD_DATA_PATH + 'figure_2.csv', index_col = 0)
 # Set plot parameters
 xlim_thresold = 0.9     # Plot will crop the x axis to only show t values with >=threshold proportion of countries present.
 T0_threshold = 1000     # Number of total cases used to define T0. Must be set to the same value as used in generate_table.
-include_class = ['EPI_ENTERING_FIRST','EPI_PAST_FIRST','EPI_ENTERING_SECOND'] # Classes to include in the plot. Past second is currently excluded due to the low sample size.
 
 # Class labels to use in title
-class_labels = {'EPI_OTHER': 'Other',
-                'EPI_ENTERING_FIRST': 'Entering First Wave',
-                'EPI_PAST_FIRST': 'Past First Wave',
-                'EPI_ENTERING_SECOND': 'Entering Second Wave',
-                'EPI_PAST_SECOND': 'Past Second Wave'}
+class_labels = {0: 'Other',
+                1: 'Entering First Wave',
+                2: 'Past First Wave',
+                3: 'Entering Second Wave',
+                4: 'Past Second Wave'}
+# Relabel classes
+for c in class_labels:
+    figure_2.loc[figure_2['CLASS']==c,'CLASS']=class_labels[c]
+    
+# Classes to include in the plot. Past second is currently excluded due to the low sample size.
+include_class = ['Entering First Wave',
+                 'Past First Wave',
+                 'Entering Second Wave',
+                 'Past Second Wave']
 
 # Set plot dimensions and style
-plt.close('all')
 plt.clf()
+plt.close('all')
 plt.figure(figsize = (15,7))
 sns.set_style("darkgrid")
 sns.set_palette('muted')
 
 # Line plot of SI over time
-g = sns.lineplot(x = 't', y ='stringency_index', data=figure_2[figure_2['CLASS_LABEL'].isin(include_class)],
-                 hue = 'CLASS_LABEL', hue_order=include_class)
+g = sns.lineplot(x = 't', y ='stringency_index', data=figure_2[figure_2['CLASS'].isin(include_class)],
+                 hue = 'CLASS', hue_order=include_class)
 
 # Restrict the date range: keep only t values with at least x% of the countries present
 ns = {t:len(figure_2.loc[figure_2['t']==t,'stringency_index'].dropna())
@@ -79,8 +88,7 @@ plt.title('Government Stringency Over Time for Each Country Cluster')
 plt.xlabel('Days Since T0 (First Day of '+str(T0_threshold)+' Cumulative Cases)')
 plt.ylabel('Stringency Index')
 handles, labels = g.get_legend_handles_labels()
-labels = [class_labels[labels[i]] for i in range(1,len(labels))]
-g.legend(handles=handles[1:], labels=labels)
+g.legend(handles=handles[1:], labels=labels[1:])
 
 g.figure.savefig(SAVE_PATH + 'figure_2.png')
 
@@ -91,8 +99,8 @@ FIGURE 3 - Gov Response against Cases
 
 figure_3 = pd.read_csv(LOAD_DATA_PATH + 'figure_3.csv', index_col = 0)
 
-plt.close('all')
 plt.clf()
+plt.close('all')
 plt.figure(figsize = (10,7))
 sns.set_style('darkgrid')
 sns.set_palette('muted')
@@ -125,8 +133,8 @@ n_countries = 10  # Number of countries to show as individual time series.
 T0_threshold = 1000  # Number of total cases used to define T0. Must be set to the same value as used in generate_table.
 
 # Clear figures
-plt.close('all')
 plt.clf()
+plt.close('all')
 # Set figure dimensions and style
 f, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=False)
 f.tight_layout(rect=[0, 0, 1, 0.98], pad=3)
