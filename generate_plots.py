@@ -243,4 +243,56 @@ plt.gcf().text(0.13, 0.008,
 plt.savefig(SAVE_PATH + 'figure_4.png')
 
 # -------------------------------------------------------------------------------------------------------------------- #
+'''
+FIGURE 5 - Cases against deaths and testing
+'''
+# Create directory
+os.makedirs(SAVE_PATH + 'figure_5/', exist_ok=True)
+    
+figure_5 = pd.read_csv(LOAD_DATA_PATH + 'figure_5.csv', index_col=0,
+                         parse_dates=['date'])
+
+country = 'USA'
+for country in figure_5.COUNTRYCODE.unique():
+    country_name = figure_5.loc[figure_5['countrycode']==country,'country'].values[0]
+    fig_5_data_indiv = figure_5[figure_5['countrycode']==country]
+    # Clear figures
+    plt.clf()
+    plt.close('all')
+    # Set figure dimensions and style
+    f, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=False)
+    f.tight_layout(rect=[0, 0, 1, 0.98], pad=3)
+    sns.set_palette("husl")
+    sns.set_style('darkgrid')
+    
+    # Plot new confirmed cases per day
+    sns.lineplot(x='date', y='new_per_day', data=fig_5_data_indiv,
+                 color='steelblue', label='New Cases per Day', ax=axes[0], linestyle='dashed')
+    sns.lineplot(x='date', y='new_per_day_smooth', data=fig_5_data_indiv,
+                 color='black', label='New Cases per Day (Smoothed)', ax=axes[0])
+    # Plot deaths per day
+    sns.lineplot(x='date', y='dead_per_day', data=fig_5_data_indiv,
+                 color='steelblue', label='Deaths per Day', ax=axes[1], linestyle='dashed')
+    sns.lineplot(x='date', y='dead_per_day_smooth', data=fig_5_data_indiv,
+                 color='black', label='Deaths per Day (Smoothed)', ax=axes[1])
+    # Plot number of tests
+    '''
+    PLACEHOLDER - ADD CODE HERE
+    '''
+    # Set titles and limits
+    axes[0].set_title('New Cases Over Time')
+    axes[0].set_xlabel('Date')
+    axes[0].set_ylabel('Number of New Cases per Day')
+    axes[1].set_title('Deaths Over Time')
+    axes[1].set_xlabel('Date')
+    axes[1].set_ylabel('Number of Deaths per Day')
+    axes[2].set_title('Testing Over Time')
+    axes[2].set_xlabel('Date')
+    axes[2].set_ylabel('Number of Tests per Day')
+    f.suptitle('Figure 5: New Cases, Deaths and Testing Over Time for ' + country_name)
+    
+    plt.savefig(SAVE_PATH + 'figure_5/' + country_name + '.png')
+
+
+# -------------------------------------------------------------------------------------------------------------------- #
 np.savetxt(SAVE_PATH + 'last_updated.txt', [datetime.datetime.today().date().strftime('%Y-%m-%d')], fmt='%s')

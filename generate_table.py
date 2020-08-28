@@ -21,7 +21,7 @@ INTITALISE SCRIPT PARAMETERS
 SAVE_PLOTS = False
 SAVE_CSV = True
 PLOT_PATH = './plots/'
-CSV_PATH = './data/'
+CSV_PATH = './data'
 SMOOTH = 0.001
 DISTANCE = 21
 PROMINENCE_THRESHOLD = 5
@@ -98,7 +98,7 @@ PART 0 - PRE-PROCESSING
 
 # EPIDEMIOLOGY PROCESSING
 countries = raw_epidemiology['countrycode'].unique()
-epidemiology = pd.DataFrame(columns=['countrycode', 'country', 'date', 'confirmed', 'new_per_day'])
+epidemiology = pd.DataFrame(columns=['countrycode', 'country', 'date', 'confirmed', 'new_per_day','dead_per_day'])
 for country in countries:
     data = raw_epidemiology[raw_epidemiology['countrycode'] == country].set_index('date')
     data = data.reindex([x.date() for x in pd.date_range(data.index.values[0], data.index.values[-1])])
@@ -110,6 +110,11 @@ for country in countries:
         data['new_per_day'].iloc[np.array(epidemiology[epidemiology['new_per_day'] < 0].index) - 1]
     data['new_per_day'] = data['new_per_day'].fillna(method='bfill')
     data['dead'] = data['dead'].interpolate(method='linear')
+    data['dead_per_day'] = data['dead'].diff()
+    data.reset_index(inplace=True)
+    data['dead_per_day'].iloc[np.array(data[data['dead_per_day'] < 0].index)] = \
+        data['dead_per_day'].iloc[np.array(epidemiology[epidemiology['dead_per_day'] < 0].index) - 1]
+    data['dead_per_day'] = data['dead_per_day'].fillna(method='bfill')
     epidemiology = pd.concat((epidemiology, data)).reset_index(drop=True)
     continue
 
@@ -153,7 +158,10 @@ epidemiology_series = {
     'new_per_day_smooth': np.empty(0),
     'dead': np.empty(0),
     'days_since_t0': np.empty(0),
-    'new_cases_per_10k': np.empty(0)
+    'new_cases_per_10k': np.empty(0),
+    'dead_per_day': np.empty(0),
+    'dead_per_day_smooth': np.empty(0),
+    'new_deaths_per_10k': np.empty(0),
 }
 
 if SAVE_PLOTS:
@@ -201,6 +209,8 @@ for country in tqdm(countries, desc='Processing Epidemiological Time Series Data
     x = np.arange(len(data['date']))
     y = data['new_per_day'].values
     ys = csaps(x, y, x, smooth=SMOOTH)
+    z = data['dead_per_day'].values
+    zs = csaps(x, z, x, smooth=SMOOTH)
 
     t0 = np.nan if len(data[data['confirmed']>T0_THRESHOLD]['date']) == 0 else \
         data[data['confirmed']>T0_THRESHOLD]['date'].iloc[0]
@@ -209,6 +219,7 @@ for country in tqdm(countries, desc='Processing Epidemiological Time Series Data
     days_since_t0 = np.repeat(np.nan,len(data)) if pd.isnull(t0) else \
         np.array([(date - t0).days for date in data['date'].values])
     new_cases_per_10k = 10000 * (ys / population)
+    new_deaths_per_10k = 10000 * (zs / population)
 
     epidemiology_series['countrycode'] = np.concatenate((
         epidemiology_series['countrycode'], data['countrycode'].values))
@@ -224,11 +235,16 @@ for country in tqdm(countries, desc='Processing Epidemiological Time Series Data
         (epidemiology_series['new_per_day_smooth'], ys))
     epidemiology_series['dead'] = np.concatenate(
         (epidemiology_series['dead'], data['dead'].values))
+    epidemiology_series['dead_per_day'] = np.concatenate(
+        (epidemiology_series['dead_per_day'], data['dead_per_day'].values))
+    epidemiology_series['dead_per_day_smooth'] = np.concatenate(
+        (epidemiology_series['dead_per_day_smooth'], zs))
     epidemiology_series['days_since_t0'] = np.concatenate(
         (epidemiology_series['days_since_t0'], days_since_t0))
     epidemiology_series['new_cases_per_10k'] = np.concatenate(
         (epidemiology_series['new_cases_per_10k'], new_cases_per_10k))
-
+    epidemiology_series['new_deaths_per_10k'] = np.concatenate(
+        (epidemiology_series['new_deaths_per_10k'], new_deaths_per_10k))
 
 '''
 MOBILITY TIME SERIES PROCESSING
@@ -569,6 +585,18 @@ figure_4['new_per_day_smooth_per10k'] = data['new_cases_per_10k']
 
 if SAVE_CSV:
     figure_4.to_csv(CSV_PATH + 'figure_4.csv')
+
+# -------------------------------------------------------------------------------------------------------------------- #
+
+'''
+PART 6 - SAVING FIGURE 5
+'''
+figure_5 = epidemiology_series[['country','countrycode','date',
+                                'new_per_day','new_per_day_smooth','dead_per_day','dead_per_day_smooth']]
+
+if SAVE_CSV:
+    figure_5.to_csv(CSV_PATH + 'figure_5.csv')
+    
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 SAVING TIMESTAMP
