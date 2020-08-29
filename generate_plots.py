@@ -33,7 +33,8 @@ figure_1b['geometry'] = figure_1b['geometry'].apply(wkt.loads)
 figure_1b = gpd.GeoDataFrame(figure_1b, crs='epsg:4326')
 plt.figure()
 cmap = plt.get_cmap('viridis', int(figure_1b['class'].max() - figure_1b['class'].min() + 1))
-figure_1b.plot(column='class',legend_kwds = {'orientation':'horizontal','shrink':0.7,'label':'Current Stage of Country'},
+figure_1b.plot(column='class',
+               legend_kwds = {'orientation':'horizontal','shrink':0.7,'label':'Current Stage of Country'},
                figsize = (20,7), legend = True, edgecolor = 'black',cmap=cmap)
 plt.savefig(SAVE_PATH + 'figure_1b.png')
 
@@ -77,7 +78,8 @@ g = sns.lineplot(x = 't', y ='stringency_index', data=figure_2[figure_2['CLASS']
 # Restrict the date range: keep only t values with at least x% of the countries present
 ns = {t:len(figure_2.loc[(figure_2['CLASS'].isin(include_class))&(figure_2['t']==t),'stringency_index'].dropna())
       for t in figure_2.loc[figure_2['CLASS'].isin(include_class),'t'].unique()}
-ns = [t for t in ns.keys() if ns[t] >= xlim_thresold*len(figure_2.loc[figure_2['CLASS'].isin(include_class),'COUNTRYCODE'].unique())]
+ns = [t for t in ns.keys()
+      if ns[t] >= xlim_thresold*len(figure_2.loc[figure_2['CLASS'].isin(include_class),'COUNTRYCODE'].unique())]
 t_lower_lim = min(ns)
 t_upper_lim = max(ns)
 g.set(xlim=(t_lower_lim, t_upper_lim))
@@ -127,7 +129,7 @@ figure_4 = pd.read_csv(LOAD_DATA_PATH + 'figure_4.csv', index_col=0,
 
 # Set plot parameters
 xlim_thresold = 0.8  # Plot will crop the x axis to only show t values with >=threshold proportion of countries present.
-c = 'EPI_SECOND_WAVE'  # Plot only for countries entering or past second wave. Can be set to 'EPI_FIRST_WAVE' to plot first wave countries.
+c = 'EPI_SECOND_WAVE'  # Plot only for second wave countries. Set to 'EPI_FIRST_WAVE' to plot first wave countries.
 n_countries = 10  # Number of countries to show as individual time series.
 T0_threshold = 1000  # Number of total cases used to define T0. Must be set to the same value as used in generate_table.
 
@@ -225,7 +227,8 @@ axes[2].set_title('Residential Mobility Over Time')
 axes[2].set_xlabel('Days Since T0 (First Day of ' + str(T0_threshold) + ' Total Cases)')
 axes[2].set_ylabel('Residential Mobility (% change from baseline)')
 f.suptitle(
-    'Figure 4: New Cases per Day, Government Response and Residential Mobility Over Time for Countries with a Second Wave')
+    '''Figure 4: New Cases per Day, Government Response and 
+    Residential Mobility Over Time for Countries with a Second Wave''')
 
 # Set legend labels and position
 for i in [axes[0], axes[1], axes[2]]:
@@ -237,8 +240,9 @@ labels[1] = 'Countries'
 for i in range(2, n_countries + 2):
     labels[i] = figure_4.loc[figure_4['COUNTRYCODE'] == labels[i], 'COUNTRY'].values[0]
 f.legend(lines, labels, loc=(0.88, 0.70))
-plt.gcf().text(0.13, 0.008,
-               "Note: data for new cases per day and residential mobility have been smoothed using a spline fit approximation to reduce measurement noise.")
+plt.gcf().text(
+    0.13, 0.008, '''Note: data for new cases per day and residential mobility have been 
+    smoothed using a spline fit approximation to reduce measurement noise.''')
 
 plt.savefig(SAVE_PATH + 'figure_4.png')
 
@@ -247,52 +251,57 @@ plt.savefig(SAVE_PATH + 'figure_4.png')
 FIGURE 5 - Cases against deaths and testing
 '''
 # Create directory
-os.makedirs(SAVE_PATH + 'figure_5/', exist_ok=True)
+# os.makedirs(SAVE_PATH + 'figure_5/', exist_ok=True)
     
 figure_5 = pd.read_csv(LOAD_DATA_PATH + 'figure_5.csv', index_col=0,
                          parse_dates=['date'])
+countries_chosen = ['USA', 'BEL', 'AUS']
 
-country = 'USA'
-for country in figure_5.COUNTRYCODE.unique():
+f, axes = plt.subplots(3, 3, figsize=(20, 10), sharex=False)
+f.tight_layout(rect=[0, 0, 1, 1], pad=8)
+f.suptitle('Figure 5: New Cases, Deaths and Testing Over Time for ' + str(countries_chosen))
+sns.set_palette("husl")
+sns.set_style('darkgrid')
+sns.set_context(font_scale=3)
+
+for i,country in enumerate(countries_chosen):
     country_name = figure_5.loc[figure_5['countrycode']==country,'country'].values[0]
     fig_5_data_indiv = figure_5[figure_5['countrycode']==country]
-    # Clear figures
-    plt.clf()
-    plt.close('all')
     # Set figure dimensions and style
-    f, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=False)
-    f.tight_layout(rect=[0, 0, 1, 0.98], pad=3)
-    sns.set_palette("husl")
-    sns.set_style('darkgrid')
-    
     # Plot new confirmed cases per day
     sns.lineplot(x='date', y='new_per_day', data=fig_5_data_indiv,
-                 color='steelblue', label='New Cases per Day', ax=axes[0], linestyle='dashed')
+                 color='steelblue', label='New Cases per Day ' + countries_chosen[i], ax=axes[0, i], linestyle='dashed')
     sns.lineplot(x='date', y='new_per_day_smooth', data=fig_5_data_indiv,
-                 color='black', label='New Cases per Day (Smoothed)', ax=axes[0])
+                 color='black', label='New Cases per Day (Smoothed)', ax=axes[0, i])
     # Plot deaths per day
     sns.lineplot(x='date', y='dead_per_day', data=fig_5_data_indiv,
-                 color='steelblue', label='Deaths per Day', ax=axes[1], linestyle='dashed')
+                 color='steelblue', label='Deaths per Day ' + countries_chosen[i], ax=axes[1, i], linestyle='dashed')
     sns.lineplot(x='date', y='dead_per_day_smooth', data=fig_5_data_indiv,
-                 color='black', label='Deaths per Day (Smoothed)', ax=axes[1])
+                 color='black', label='Deaths per Day (Smoothed)', ax=axes[1, i])
     # Plot number of tests
-    '''
-    PLACEHOLDER - ADD CODE HERE
-    '''
-    # Set titles and limits
-    axes[0].set_title('New Cases Over Time')
-    axes[0].set_xlabel('Date')
-    axes[0].set_ylabel('Number of New Cases per Day')
-    axes[1].set_title('Deaths Over Time')
-    axes[1].set_xlabel('Date')
-    axes[1].set_ylabel('Number of Deaths per Day')
-    axes[2].set_title('Testing Over Time')
-    axes[2].set_xlabel('Date')
-    axes[2].set_ylabel('Number of Tests per Day')
-    f.suptitle('Figure 5: New Cases, Deaths and Testing Over Time for ' + country_name)
-    
-    plt.savefig(SAVE_PATH + 'figure_5/' + country_name + '.png')
+    sns.lineplot(x='date', y='new_tests', data=fig_5_data_indiv,
+                 color='steelblue', label='Tests per Day ' + countries_chosen[i], ax=axes[2, i], linestyle='dashed')
+    sns.lineplot(x='date', y='new_tests_smoothed', data=fig_5_data_indiv,
+                 color='black', label='Tests per Day (Smoothed)', ax=axes[2, i])
+    ax2 = axes[2, i].twinx()
+    ax2.grid(False)
+    sns.lineplot(x='date', y='positive_rate', data=fig_5_data_indiv,
+                 color='#e74c3c', label='Positive Rate ' + countries_chosen[i], ax=ax2)
+    ax2.set_xlim(left=fig_5_data_indiv['date'].iloc[0], right=fig_5_data_indiv['date'].iloc[-1])
+    ax2.set_ylim(bottom=0, top=min(1,np.max(fig_5_data_indiv['positive_rate'].dropna().values)))
 
+    axes[0, i].set_title('New Cases Over Time ' + countries_chosen[i])
+    axes[0, i].set_xlabel('Date')
+    axes[0, i].set_ylabel('Number of New Cases per Day ' + countries_chosen[i])
+    axes[1, i].set_title('Deaths Over Time')
+    axes[1, i].set_xlabel('Date')
+    axes[1, i].set_ylabel('Number of Deaths per Day ' + countries_chosen[i])
+    axes[2, i].set_title('Testing Over Time')
+    axes[2, i].set_xlabel('Date')
+    axes[2, i].set_ylabel('Number of Tests per Day ' + countries_chosen[i])
+
+    
+plt.savefig(SAVE_PATH + 'figure_5.png')
 
 # -------------------------------------------------------------------------------------------------------------------- #
 np.savetxt(SAVE_PATH + 'last_updated.txt', [datetime.datetime.today().date().strftime('%Y-%m-%d')], fmt='%s')
