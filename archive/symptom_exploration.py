@@ -344,6 +344,7 @@ data = pd.merge(symptom_series, epidemiology_series, on=['countrycode','date'], 
 
 
 countries = data[(data['class'] == 3) |(data['class'] == 4)]['countrycode'].unique()
+"""
 for country in countries:
     date_series = data[data['countrycode'] == country]['date'].values
     new_per_day = data[data['countrycode'] == country]['new_per_day_smooth'].values
@@ -366,7 +367,7 @@ for country in countries:
     plt.legend()
     plt.savefig('./archive/symptom_plots/' + country + '.png')
     plt.close()
-
+"""
 # -------------------------------------------------------------------------------------------------------------------- #
 # GET PANEL DATA
 
@@ -508,3 +509,40 @@ plt.plot(pd.date_range(start_date,end_date), mob, label='residential')
 plt.plot(pd.date_range(start_date,end_date), mob_extrapolated, linestyle='dashed', color='black')
 plt.vlines(flag_date, 0, np.max(mob),linestyles='dashed',colors='red')
 plt.legend()
+
+# -------------------------------------------------------------------------------------------------------------------- #
+# AGE DISTRIBUTION IN SECOND WAVE
+
+bel_patients = pd.read_csv('./archive/COVID19BE_CASES_AGESEX.csv', parse_dates=['DATE']).dropna()
+age_groups = np.sort(bel_patients['AGEGROUP'].unique()[~pd.isna(bel_patients['AGEGROUP'].unique())])
+sex_groups = np.sort(bel_patients['SEX'].unique()[~pd.isna(bel_patients['SEX'].unique())])
+age_dist = bel_patients[['DATE','AGEGROUP','CASES']].groupby(['DATE','AGEGROUP'], as_index=False).sum()
+
+emptyframe = pd.DataFrame()
+emptyframe['DATE'] = bel_patients['DATE'].unique().repeat(len(age_groups))
+emptyframe['AGEGROUP'] = np.tile(age_groups,len(bel_patients['DATE'].unique()))
+emptyframe['CASES'] = np.zeros(len(np.repeat(age_groups,len(bel_patients['DATE'].unique()))))
+
+age_dist = emptyframe.merge(age_dist,
+                 on=['DATE','AGEGROUP'], how='left', suffixes=['_x','']).fillna(0)[['DATE', 'AGEGROUP', 'CASES']]
+
+plot_key = {k:v for k,v in zip(age_groups, range(len(age_groups)))}
+lower_band = list()
+median_age = list()
+upper_band = list()
+for date in age_dist['DATE'].unique():
+    data = age_dist[age_dist['DATE'] == date]
+    median = [data['AGEGROUP'].values[i] for i in
+              range(len(data['AGEGROUP'].values)) for j in range(int(data['CASES'].values[i]))]
+    median_age.append(median[len(median)//2])
+    lower_band.append(median[len(median)//4])
+    upper_band.append(median[3*len(median)//4])
+
+plt.plot(age_dist['DATE'].unique(), [plot_key[i] for i in median_age], color='steelblue', label = 'median')
+plt.fill_between(age_dist['DATE'].unique(),
+                 [plot_key[i] for i in lower_band],
+                 [plot_key[i] for i in upper_band], alpha=0.2)
+
+plt.yticks(range(len(age_groups)), age_groups)
+plt.legend()
+# -------------------------------------------------------------------------------------------------------------------- #

@@ -300,7 +300,6 @@ for i,country in enumerate(countries_chosen):
     axes[2, i].set_xlabel('Date')
     axes[2, i].set_ylabel('Number of Tests per Day ' + countries_chosen[i])
 
-    
 plt.savefig(SAVE_PATH + 'figure_5.png')
 
 # -------------------------------------------------------------------------------------------------------------------- #

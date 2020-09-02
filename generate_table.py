@@ -11,7 +11,6 @@ import datetime
 from csaps import csaps
 from scipy.signal import find_peaks
 
-
 warnings.filterwarnings('ignore')
 
 '''
