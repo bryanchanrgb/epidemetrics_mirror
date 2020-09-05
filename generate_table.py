@@ -24,7 +24,8 @@ CSV_PATH = './data/'
 SMOOTH = 0.001
 DISTANCE = 21
 PROMINENCE_THRESHOLD = 5
-T0_THRESHOLD = 1000
+ABSOLUTE_T0_THRESHOLD = 1000
+POP_RELATIVE_T0_THRESHOLD = 5 #per million people
 TEST_LAG = 0 #Lag between test date and test results
 
 conn = psycopg2.connect(
@@ -186,7 +187,8 @@ epidemiology_series = {
     'new_deaths_per_10k': np.empty(0),
     'new_tests': np.empty(0),
     'new_tests_smoothed': np.empty(0),
-    'positive_rate': np.empty(0)
+    'positive_rate': np.empty(0),
+    'days_since_t0_pop':np.empty(0)
 }
 
 if SAVE_PLOTS:
@@ -254,12 +256,18 @@ for country in tqdm(countries, desc='Processing Epidemiological Time Series Data
         positive_rate[np.where(~np.isnan(new_tests))] = ys[np.where(~np.isnan(new_tests))] / ys_testing
         positive_rate[positive_rate > 1] = np.nan
 
-    t0 = np.nan if len(data[data['confirmed']>T0_THRESHOLD]['date']) == 0 else \
-        data[data['confirmed']>T0_THRESHOLD]['date'].iloc[0]
     population = np.nan if len(wb_statistics[wb_statistics['countrycode']==country]['value'])==0 else \
         wb_statistics[wb_statistics['countrycode']==country]['value'].iloc[0]
+    t0 = np.nan if len(data[data['confirmed']>ABSOLUTE_T0_THRESHOLD]['date']) == 0 else \
+        data[data['confirmed']>ABSOLUTE_T0_THRESHOLD]['date'].iloc[0]
+    t0_relative = np.nan if len(data[((data['confirmed']/population)*1000000) > POP_RELATIVE_T0_THRESHOLD]) == 0 else \
+        data[((data['confirmed']/population)*1000000) > POP_RELATIVE_T0_THRESHOLD]['date'].iloc[0]
+
     days_since_t0 = np.repeat(np.nan,len(data)) if pd.isnull(t0) else \
         np.array([(date - t0).days for date in data['date'].values])
+    days_since_t0_relative = np.repeat(np.nan,len(data)) if pd.isnull(t0_relative) else \
+        np.array([(date - t0_relative).days for date in data['date'].values])
+
     new_cases_per_10k = 10000 * (ys / population)
     new_deaths_per_10k = 10000 * (zs / population)
 
@@ -293,6 +301,8 @@ for country in tqdm(countries, desc='Processing Epidemiological Time Series Data
         (epidemiology_series['new_tests_smoothed'], new_tests_smoothed))
     epidemiology_series['positive_rate'] = np.concatenate(
         (epidemiology_series['positive_rate'], positive_rate))
+    epidemiology_series['days_since_t0_pop'] = np.concatenate(
+        (epidemiology_series['days_since_t0_pop'], days_since_t0_relative))
 
 
 '''
@@ -360,6 +370,7 @@ COUNTRY - FULL COUNTRY NAME √
 CLASS - FIRST WAVE (ASCENDING - 1, DESCENDING - 2) OR SECOND WAVE (ASCENDING - 3, DESCENDING - 4) √
 POPULATION √
 T0 - DATE FIRST N CASES CONFIRMED √
+T0 RELATIVE - DATE FIRST N CASES PER MILLION CONFIRMED √
 PEAK_1 - HEIGHT OF FIRST PEAK √
 PEAK_2 - HEIGHT OF SECOND PEAK
 DATE_PEAK_1 - DATE OF FIRST WAVE PEAK √
@@ -379,14 +390,16 @@ COUNTRY √
 MAX SI - VALUE OF MAXIMUM SI √
 DATE OF PEAK SI - √
 RESPONSE TIME - TIME FROM T0 T0 PEAK SI √
+RESPONSE TIME - TIME FROM T0_POP TO PEAK SI 
 FLAG_RAISED - DATE FLAG RAISED FOR EACH FLAG IN L66 √
 FLAG_LOWERED - DATE FLAG LOWERED FOR EACH FLAG IN L66 √
 FLAG_RASIED_AGAIN - DATE FLAG RAISED AGAIN FOR EACH FLAG IN L66 √
 '''
 
-epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'population', 'T0', 'peak_1', 'peak_2',
-                                           'date_peak_1', 'date_peak_2', 'first_wave_start', 'first_wave_end',
-                                           'second_wave_start', 'second_wave_end','last_confirmed','testing_available'])
+epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'population', 't0', 't0_relative',
+                                           'peak_1', 'peak_2', 'date_peak_1', 'date_peak_2', 'first_wave_start',
+                                           'first_wave_end', 'second_wave_start', 'second_wave_end','last_confirmed',
+                                           'testing_available'])
 
 countries = epidemiology['countrycode'].unique()
 for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
@@ -399,10 +412,16 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         'EPI_ENTERING_FIRST', 'EPI_PAST_FIRST', 'EPI_ENTERING_SECOND', 'EPI_PAST_SECOND']].idxmax(axis=1).values[0]]
     data['population'] = np.nan if len(wb_statistics[wb_statistics['countrycode'] == country]) == 0 else \
         wb_statistics[wb_statistics['countrycode'] == country]['value'].values[0]
-    data['T0'] = np.nan if len(epidemiology_series[(epidemiology_series['countrycode']==country) &
-                                     (epidemiology_series['confirmed']>=T0_THRESHOLD)]['date']) == 0 else \
+    data['t0'] = np.nan if len(epidemiology_series[(epidemiology_series['countrycode']==country) &
+                                     (epidemiology_series['confirmed']>=ABSOLUTE_T0_THRESHOLD)]['date']) == 0 else \
         epidemiology_series[(epidemiology_series['countrycode']==country) &
-                                     (epidemiology_series['confirmed']>=T0_THRESHOLD)]['date'].iloc[0]
+                                     (epidemiology_series['confirmed']>=ABSOLUTE_T0_THRESHOLD)]['date'].iloc[0]
+    data['t0_relative'] = np.nan if len(epidemiology_series[(epidemiology_series['countrycode']==country) &
+                                     ((epidemiology_series['confirmed'] / data['population']) * 1000000
+                                      >= POP_RELATIVE_T0_THRESHOLD)]['date']) == 0 else \
+        epidemiology_series[(epidemiology_series['countrycode']==country) &
+                                     ((epidemiology_series['confirmed'] / data['population']) * 1000000
+                                      >= POP_RELATIVE_T0_THRESHOLD)]['date'].iloc[0]
 
     peak_characteristics = find_peaks(
         epidemiology_series[epidemiology_series['countrycode']==country]['new_per_day_smooth'].values,
@@ -468,7 +487,8 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         plt.savefig(PLOT_PATH + 'epidemiological/' + country + '.png')
         plt.close()
 
-government_response_panel = pd.DataFrame(columns=['countrycode', 'country', 'max_si','date_max_si','response_time'] +
+government_response_panel = pd.DataFrame(columns=['countrycode', 'country', 'max_si','date_max_si','response_time',
+                                                  'response_time_pop'] +
                                                  [flag + '_raised' for flag in flags] +
                                                  [flag + '_lowered' for flag in flags] +
                                                  [flag + '_raised_again' for flag in flags])
@@ -480,9 +500,16 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
     data['country'] = government_response_series[government_response_series['countrycode'] == country]['country'].iloc[0]
     data['max_si'] = government_response_series[government_response_series['countrycode'] == country]['si'].max()
     data['date_max_si'] = government_response_series[government_response_series['si'] == data['max_si']]['date'].iloc[0]
-    t0 = np.nan if len(epidemiology_panel[epidemiology_panel['countrycode']==country]['T0']) == 0 \
-        else epidemiology_panel[epidemiology_panel['countrycode']==country]['T0'].iloc[0]
+
+    population = np.nan if len(wb_statistics[wb_statistics['countrycode'] == country]['value']) == 0 else \
+        wb_statistics[wb_statistics['countrycode'] == country]['value'].iloc[0]
+    t0 = np.nan if len(epidemiology_panel[epidemiology_panel['countrycode']==country]['t0']) == 0 \
+        else epidemiology_panel[epidemiology_panel['countrycode']==country]['t0'].iloc[0]
+    t0_relative = np.nan if len(epidemiology_panel[epidemiology_panel['countrycode']==country]['t0_relative']) == 0 \
+        else epidemiology_panel[epidemiology_panel['countrycode']==country]['t0_relative'].iloc[0]
+
     data['response_time'] = np.nan if pd.isnull(t0) else (data['date_max_si'] - t0).days
+    data['response_time_pop'] = np.nan if pd.isnull(t0_relative) else (data['date_max_si'] - t0_relative).days
 
     for flag in flags:
         days_above = pd.Series(
@@ -514,10 +541,11 @@ PART 3 - SAVING FIGURE 1a
 '''
 
 start_date = epidemiology_series['date'].min()
-figure_1a = pd.DataFrame(columns=['countrycode','country','days_to_t0'])
+figure_1a = pd.DataFrame(columns=['countrycode','country','days_to_t0','days_to_t0_pop'])
 figure_1a['countrycode'] = epidemiology_panel['countrycode'].values
 figure_1a['country'] = epidemiology_panel['country'].values
-figure_1a['days_to_t0'] = (epidemiology_panel['T0']-start_date).apply(lambda x: x.days)
+figure_1a['days_to_t0'] = (epidemiology_panel['t0']-start_date).apply(lambda x: x.days)
+figure_1a['days_to_t0_pop'] = (epidemiology_panel['t0_relative']-start_date).apply(lambda x: x.days)
 # It looks like pandas cannot correctly serialise the geometry column so this
 # is being commented out. Possibly this merge could be done at plot time, or
 # the data could be pickled instead of written to a flat CSV. Since it is just
@@ -552,7 +580,7 @@ if SAVE_CSV:
 PART 4 - SAVING FIGURE 2
 '''
 
-data = epidemiology_series[['countrycode','country','date','days_since_t0']].merge(
+data = epidemiology_series[['countrycode','country','date','days_since_t0','days_since_t0_pop']].merge(
     epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
     government_response_series[['countrycode','date','si']],on=['countrycode','date'],how='left').dropna()
 
@@ -561,6 +589,7 @@ figure_2['COUNTRYCODE'] = data['countrycode']
 figure_2['COUNTRY'] = data['country']
 figure_2['CLASS'] = data['class']
 figure_2['t'] = data['days_since_t0']
+figure_2['t_pop'] = data['days_since_t0_pop']
 figure_2['stringency_index'] = data['si']
 
 if SAVE_CSV:
@@ -581,13 +610,16 @@ class_coarse = {
 data = epidemiology_panel[['countrycode', 'country', 'class', 'population', 'last_confirmed']]
 data['last_confirmed_per_10k'] = 10000 * epidemiology_panel['last_confirmed'] / epidemiology_panel['population']
 data['class'] = data['class'].apply(lambda x: class_coarse[x])
-data = data.merge(government_response_panel[['countrycode', 'response_time']], how='left', on='countrycode').dropna()
+data = data.merge(government_response_panel[['countrycode', 'response_time','response_time_pop']],
+                  how='left', on='countrycode').dropna()
 
 figure_3 = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
                                  'CLASS_COARSE', 'POPULATION', 'EPI_CONFIRMED', 'EPI_CONFIRMED_PER_10K'])
+
 figure_3['COUNTRYCODE'] = data['countrycode']
 figure_3['COUNTRY'] = data['country']
 figure_3['GOV_MAX_SI_DAYS_FROM_T0'] = data['response_time']
+figure_3['GOV_MAX_SI_DAYS_FROM_T0_POP'] = data['response_time_pop']
 figure_3['CLASS_COARSE'] = data['class']
 figure_3['POPULATION'] = data['population']
 figure_3['EPI_CONFIRMED'] = data['last_confirmed']
@@ -608,21 +640,23 @@ class_coarse = {
     4:'EPI_SECOND_WAVE'
 }
 
-data = epidemiology_series[['countrycode','country','date','confirmed','new_cases_per_10k','days_since_t0']].merge(
+data = epidemiology_series[['countrycode','country','date','confirmed','new_cases_per_10k','days_since_t0',
+                            'days_since_t0_pop']].merge(
     government_response_series[['countrycode','date','si']],on=['countrycode','date'],how='inner').merge(
     mobility_series[['countrycode','date','residential_smooth']],on=['countrycode','date'],how='inner').merge(
-    epidemiology_panel[['countrycode','class','T0']],on=['countrycode'],how='left').merge(
+    epidemiology_panel[['countrycode','class','t0','t0_relative']],on=['countrycode'],how='left').merge(
     government_response_panel[['countrycode','c6_stay_at_home_requirements_raised',
                                'c6_stay_at_home_requirements_lowered',
                                'c6_stay_at_home_requirements_raised_again']],on='countrycode',how='left')
 data['class_coarse'] = data['class'].apply(lambda x:class_coarse[x])
 
-figure_4 = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'T0', 'date', 'stringency_index', 'CLASS', 'CLASS_COARSE',
-                                 'GOV_C6_RAISED_DATE', 'GOV_C6_LOWERED_DATE', 'GOV_C6_RAISED_AGAIN_DATE',
+figure_4 = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'T0', 'T0_POP', 'date', 'stringency_index', 'CLASS',
+                                 'CLASS_COARSE', 'GOV_C6_RAISED_DATE', 'GOV_C6_LOWERED_DATE','GOV_C6_RAISED_AGAIN_DATE',
                                  'residential_smooth', 't', 'confirmed', 'new_per_day_smooth_per10k'])
 figure_4['COUNTRYCODE'] = data['countrycode']
 figure_4['COUNTRY'] = data['country']
-figure_4['T0'] = data['T0']
+figure_4['T0'] = data['t0']
+figure_4['T0_POP'] = data['t0_relative']
 figure_4['date'] = data['date']
 figure_4['stringency_index'] = data['si']
 figure_4['CLASS'] = data['class']
@@ -632,6 +666,7 @@ figure_4['GOV_C6_LOWERED_DATE'] = data['c6_stay_at_home_requirements_lowered']
 figure_4['GOV_C6_RAISED_AGAIN_DATE'] = data['c6_stay_at_home_requirements_raised_again']
 figure_4['residential_smooth'] = data['residential_smooth']
 figure_4['t'] = data['days_since_t0']
+figure_4['t_pop'] = data['days_since_t0_pop']
 figure_4['confirmed'] = data['confirmed']
 figure_4['new_per_day_smooth_per10k'] = data['new_cases_per_10k']
 

@@ -5,11 +5,14 @@ import json
 import psycopg2
 from tqdm import tqdm
 from csaps import csaps
+import matplotlib; matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import geopandas as gpd
 from scipy.signal import find_peaks
 import datetime
 from sklearn.linear_model import LinearRegression
+import seaborn as sns
 
 # SET SCRIPT PARAMETERS
 
@@ -545,4 +548,32 @@ plt.fill_between(age_dist['DATE'].unique(),
 
 plt.yticks(range(len(age_groups)), age_groups)
 plt.legend()
+# -------------------------------------------------------------------------------------------------------------------- #
+# USA age testing data
+base_columns = ['week','num_labs','total_tested','total_positive','total_positive_rate']
+age_groups = ['0_4','5_17','18_49','50_64','65_over']
+
+usa_patients = pd.DataFrame(columns=
+             base_columns + [age_group + suffix for
+                             age_group in age_groups for suffix in ['_tested','_positive','_positive_rate']],
+             data=pd.read_csv('./archive/commercial-lab.csv').iloc[6:26].values)
+usa_patients['week'] = usa_patients['week'].apply(lambda x: datetime.datetime.strptime(x + '1','%Y%W%w').date())
+
+median_age = list()
+lower_band = list()
+upper_band = list()
+
+for date in usa_patients['week'].unique():
+    data = usa_patients[usa_patients['week'] == date]
+    sns.barplot(age_groups,[int(data[age_group + '_positive'].values[0].replace(',','')) for age_group in age_groups])
+
+def animate(index):
+    data = usa_patients.iloc[index]
+    sns.barplot(age_groups, [float(data[age_group + '_positive'].replace(',', '')) for age_group in age_groups])
+    plt.title('Positive Cases per Demographic ' + datetime.datetime.strftime(data['week'],'%Y-%m-%d'))
+    plt.ylim(0,200000)
+
+fig = plt.figure(figsize=(7,10))
+ani = animation.FuncAnimation(fig, animate, frames=20, repeat = False)
+ani.save('./archive/usa_cases_demographics.gif', writer='imagemagick', fps=10)
 # -------------------------------------------------------------------------------------------------------------------- #
