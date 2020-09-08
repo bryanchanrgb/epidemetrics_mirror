@@ -499,7 +499,8 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
     data['countrycode'] = country
     data['country'] = government_response_series[government_response_series['countrycode'] == country]['country'].iloc[0]
     data['max_si'] = government_response_series[government_response_series['countrycode'] == country]['si'].max()
-    data['date_max_si'] = government_response_series[government_response_series['si'] == data['max_si']]['date'].iloc[0]
+    data['date_max_si'] = government_response_series[(government_response_series['countrycode'] == country) & \
+                                                     (government_response_series['si'] == data['max_si'])]['date'].iloc[0]
 
     population = np.nan if len(wb_statistics[wb_statistics['countrycode'] == country]['value']) == 0 else \
         wb_statistics[wb_statistics['countrycode'] == country]['value'].iloc[0]
@@ -609,7 +610,7 @@ class_coarse = {
 
 data = epidemiology_panel[['countrycode', 'country', 'class', 'population', 'last_confirmed']]
 data['last_confirmed_per_10k'] = 10000 * epidemiology_panel['last_confirmed'] / epidemiology_panel['population']
-data['class'] = data['class'].apply(lambda x: class_coarse[x])
+data['class_coarse'] = data['class'].apply(lambda x: class_coarse[x])
 data = data.merge(government_response_panel[['countrycode', 'response_time','response_time_pop']],
                   how='left', on='countrycode').dropna()
 
@@ -620,7 +621,8 @@ figure_3['COUNTRYCODE'] = data['countrycode']
 figure_3['COUNTRY'] = data['country']
 figure_3['GOV_MAX_SI_DAYS_FROM_T0'] = data['response_time']
 figure_3['GOV_MAX_SI_DAYS_FROM_T0_POP'] = data['response_time_pop']
-figure_3['CLASS_COARSE'] = data['class']
+figure_3['CLASS'] = data['class']
+figure_3['CLASS_COARSE'] = data['class_coarse']
 figure_3['POPULATION'] = data['population']
 figure_3['EPI_CONFIRMED'] = data['last_confirmed']
 figure_3['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
