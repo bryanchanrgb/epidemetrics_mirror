@@ -157,7 +157,7 @@ testing = pd.DataFrame(columns=['countrycode','date', 'new_tests', 'new_tests_sm
 
 for country in countries:
     data = raw_testing_data[raw_testing_data['countrycode'] == country].reset_index(drop=True)
-    if (len(data['new_tests'].dropna()) == 0):
+    if len(data['new_tests'].dropna()) == 0:
         continue
     data = data.iloc[
            data[data['new_tests'].notnull()].index[0]:data[data['new_tests'].notnull()].index[-1]].set_index('date')
@@ -530,7 +530,7 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
                 government_response_series['countrycode'] == country]['date'].iloc[
                 waves[0][1] + waves[1][1]]
         if len(waves) >= 4:
-            data[flag + '_lowered'] = government_response_series[
+            data[flag + '_raised_again'] = government_response_series[
                 government_response_series['countrycode'] == country]['date'].iloc[
                 waves[0][1] + waves[1][1] + waves[2][1]]
 
@@ -632,6 +632,7 @@ if SAVE_CSV:
 PART 6 - SAVING FIGURE 4
 '''
 
+# noinspection PyRedeclaration
 class_coarse = {
     0:'EPI_OTHER',
     1:'EPI_FIRST_WAVE',

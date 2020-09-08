@@ -577,3 +577,4 @@ fig = plt.figure(figsize=(7,10))
 ani = animation.FuncAnimation(fig, animate, frames=20, repeat = False)
 ani.save('./archive/usa_cases_demographics.gif', writer='imagemagick', fps=10)
 # -------------------------------------------------------------------------------------------------------------------- #
+
