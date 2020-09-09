@@ -10,6 +10,7 @@ import datetime
 
 from csaps import csaps
 from scipy.signal import find_peaks
+from sklearn.linear_model import LinearRegression
 
 warnings.filterwarnings('ignore')
 
@@ -27,6 +28,7 @@ PROMINENCE_THRESHOLD = 5
 ABSOLUTE_T0_THRESHOLD = 1000
 POP_RELATIVE_T0_THRESHOLD = 5 #per million people
 TEST_LAG = 0 #Lag between test date and test results
+DEATH_LAG = 0 #Ideally would be sampled from a random distribution of some sorts
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -77,13 +79,32 @@ assert not raw_government_response[['countrycode', 'date']].duplicated().any()
 sql_command = """SELECT * FROM administrative_division WHERE adm_level=0"""
 map_data = gpd.GeoDataFrame.from_postgis(sql_command, conn, geom_col='geometry')
 
-# GET COUNTRY POPULATIONS (2011 - 2019 est.)
-indicator_code = 'SP.POP.TOTL'
-sql_command = """SELECT countrycode, value, year FROM world_bank WHERE 
-adm_area_1 IS NULL AND indicator_code = %(indicator_code)s"""
-wb_statistics = pd.read_sql(sql_command, conn, params={'indicator_code': indicator_code})
-assert len(wb_statistics) == len(wb_statistics['countrycode'].unique())
-wb_statistics = wb_statistics.sort_values(by=['countrycode', 'year'], ascending=[True, False]).reset_index(drop=True)
+# GET COUNTRY STATISTICS (2011 - 2019 est.)
+indicator_codes = ('SP.POP.TOTL', 'EN.POP.DNST', 'NY.GNP.PCAP.PP.KD','SM.POP.NETM')
+indicator_codes_name = {
+    'SP.POP.TOTL': 'value',
+    'EN.POP.DNST': 'population_density',
+    'NY.GNP.PCAP.PP.KD': 'gni_per_capita',
+    'SM.POP.NETM': 'net_migration'}
+sql_command = """SELECT countrycode, indicator_code, value FROM world_bank WHERE 
+adm_area_1 IS NULL AND indicator_code IN %(indicator_code)s"""
+raw_wb_statistics = pd.read_sql(sql_command, conn, params={'indicator_code': indicator_codes}).dropna()
+assert not raw_wb_statistics[['countrycode','indicator_code']].duplicated().any()
+raw_wb_statistics = raw_wb_statistics.sort_values(by=['countrycode'], ascending=[True]).reset_index(drop=True)
+wb_statistics = pd.DataFrame()
+countries = raw_wb_statistics['countrycode'].unique()
+for country in countries:
+    data = dict()
+    data['countrycode'] = country
+    for indicator in indicator_codes:
+        if len(raw_wb_statistics[(raw_wb_statistics['countrycode'] == country) &
+                                 (raw_wb_statistics['indicator_code'] == indicator)]['value']) == 0:
+            continue
+        data[indicator_codes_name[indicator]] = raw_wb_statistics[
+            (raw_wb_statistics['countrycode'] == country) &
+            (raw_wb_statistics['indicator_code'] == indicator)]['value'].iloc[0]
+    wb_statistics = wb_statistics.append(data,ignore_index=True)
+wb_statistics['net_migration'] = wb_statistics['net_migration'].abs()
 
 # OWID DATA
 raw_testing_data = pd.read_csv('./owid-covid-data.csv', parse_dates=['date'])[[
@@ -372,7 +393,11 @@ POPULATION √
 T0 - DATE FIRST N CASES CONFIRMED √
 T0 RELATIVE - DATE FIRST N CASES PER MILLION CONFIRMED √
 PEAK_1 - HEIGHT OF FIRST PEAK √
-PEAK_2 - HEIGHT OF SECOND PEAK
+PEAK_2 - HEIGHT OF SECOND PEAK √
+PEAK_1_PER_10K
+PEAK_2_PER_10K
+PEAK_1_DEAD_PER_10K
+PEAK_2_DEAD_PER_10K
 DATE_PEAK_1 - DATE OF FIRST WAVE PEAK √
 DATE_PEAK_2 - DATE OF SECOND WAVE PEAK
 FIRST_WAVE_START - START OF FIRST WAVE  √
@@ -382,7 +407,14 @@ SECOND_WAVE_END - END OF SECOND WAVE √
 LAST_CONFIRMED - LATEST NUMBER OF CONFIRMED CASES √
 TESTING DATA AVAILABLE √
 
+CASE FATALITY RATE PER WAVE 
+
 PLOT ALL FOR LABELLING √
+
+MOB:
+PEAK_VALUE OF MOBILITY 
+PEAK DATE OF MOBILITY
+QUARANTINE FATIGUE
 
 GOV:
 COUNTRYCODE √
@@ -390,16 +422,19 @@ COUNTRY √
 MAX SI - VALUE OF MAXIMUM SI √
 DATE OF PEAK SI - √
 RESPONSE TIME - TIME FROM T0 T0 PEAK SI √
-RESPONSE TIME - TIME FROM T0_POP TO PEAK SI 
+RESPONSE TIME - TIME FROM T0_POP TO PEAK SI √
+RESPONSE TIME - TIME FROM T0_POP TO FLAG RAISED 
 FLAG_RAISED - DATE FLAG RAISED FOR EACH FLAG IN L66 √
 FLAG_LOWERED - DATE FLAG LOWERED FOR EACH FLAG IN L66 √
 FLAG_RASIED_AGAIN - DATE FLAG RAISED AGAIN FOR EACH FLAG IN L66 √
+FLAG RESPONSE TIME - T0_POP TO MAX FLAG FOR EACH FLAG IN L66√
+FLAG TOTAL DAYS √
 '''
 
 epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'population', 't0', 't0_relative',
                                            'peak_1', 'peak_2', 'date_peak_1', 'date_peak_2', 'first_wave_start',
                                            'first_wave_end', 'second_wave_start', 'second_wave_end','last_confirmed',
-                                           'testing_available'])
+                                           'testing_available','peak_1_cfr','peak_2_cfr'])
 
 countries = epidemiology['countrycode'].unique()
 for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
@@ -433,16 +468,26 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
 
     data['peak_1'] = np.nan
     data['peak_2'] = np.nan
+    data['peak_1_per_10k'] = np.nan
+    data['peak_2_per_10k'] = np.nan
+    data['peak_1_dead_per_10k'] = np.nan
+    data['peak_2_dead_per_10k'] = np.nan
     data['date_peak_1'] = np.nan
     data['date_peak_2'] = np.nan
     data['first_wave_start'] = np.nan
     data['first_wave_end'] = np.nan
     data['second_wave_start'] = np.nan
     data['second_wave_end'] = np.nan
+    data['peak_1_cfr'] = np.nan
+    data['peak_2_cfr'] = np.nan
 
     if len(genuine_peaks) >= 1:
         data['peak_1'] = epidemiology_series[
             epidemiology_series['countrycode'] == country]['new_per_day_smooth'].values[genuine_peaks[0]]
+        data['peak_1_per_10k'] = epidemiology_series[
+            epidemiology_series['countrycode'] == country]['new_cases_per_10k'].values[genuine_peaks[0]]
+        data['peak_1_dead_per_10k'] = epidemiology_series[
+            epidemiology_series['countrycode'] == country]['new_deaths_per_10k'].values[genuine_peaks[0]]
         data['date_peak_1'] = epidemiology_series[
             epidemiology_series['countrycode'] == country]['date'].values[genuine_peaks[0]]
         data['first_wave_start'] = epidemiology_series[
@@ -451,10 +496,24 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         data['first_wave_end'] = epidemiology_series[
             epidemiology_series['countrycode'] == country]['date'].values[
             peak_characteristics[1]['right_bases'][np.where(genuine_peak_indices != 0)][0]]
+        data['peak_1_cfr'] = epidemiology_series[
+                                 (epidemiology_series['countrycode'] == country) &
+                                 (epidemiology_series['date'] >= data['first_wave_start'] +
+                                  datetime.timedelta(days=DEATH_LAG)) &
+                                 (epidemiology_series['date'] <= data['first_wave_end'] +
+                                  datetime.timedelta(days=DEATH_LAG))]['dead_per_day_smooth'].sum()/\
+                             epidemiology_series[
+                                 (epidemiology_series['countrycode'] == country) &
+                                 (epidemiology_series['date'] >= data['first_wave_start']) &
+                                 (epidemiology_series['date'] <= data['first_wave_end'])]['new_per_day_smooth'].sum()
 
     if len(genuine_peaks) >= 2:
         data['peak_2'] = epidemiology_series[
     epidemiology_series['countrycode'] == country]['new_per_day_smooth'].values[genuine_peaks[1]]
+        data['peak_2_per_10k'] = epidemiology_series[
+            epidemiology_series['countrycode'] == country]['new_cases_per_10k'].values[genuine_peaks[1]]
+        data['peak_2_dead_per_10k'] = epidemiology_series[
+            epidemiology_series['countrycode'] == country]['new_deaths_per_10k'].values[genuine_peaks[1]]
         data['date_peak_2'] = epidemiology_series[
     epidemiology_series['countrycode'] == country]['date'].values[genuine_peaks[1]]
         data['second_wave_start'] = epidemiology_series[
@@ -462,6 +521,16 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
             peak_characteristics[1]['right_bases'][np.where(genuine_peak_indices != 0)][0]]
         data['second_wave_end'] = epidemiology_series[
     epidemiology_series['countrycode'] == country]['date'].iloc[-1]
+        data['peak_2_cfr'] = epidemiology_series[
+                                 (epidemiology_series['countrycode'] == country) &
+                                 (epidemiology_series['date'] >= data['second_wave_start'] +
+                                  datetime.timedelta(days=DEATH_LAG)) &
+                                 (epidemiology_series['date'] <= data['second_wave_end'] +
+                                  datetime.timedelta(days=DEATH_LAG))]['dead_per_day_smooth'].sum()/\
+                             epidemiology_series[
+                                 (epidemiology_series['countrycode'] == country) &
+                                 (epidemiology_series['date'] >= data['second_wave_start']) &
+                                 (epidemiology_series['date'] <= data['second_wave_end'])]['new_per_day_smooth'].sum()
 
     data['last_confirmed'] = epidemiology_series[epidemiology_series['countrycode']==country]['confirmed'].iloc[-1]
     data['testing_available'] = True if len(
@@ -487,11 +556,42 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         plt.savefig(PLOT_PATH + 'epidemiological/' + country + '.png')
         plt.close()
 
+mobility_panel = pd.DataFrame(columns=['countrycode','country'] +
+                                      [mobility_type + '_max' for mobility_type in mobilities] +
+                                      [mobility_type + '_max_date' for mobility_type in mobilities] +
+                                      [mobility_type + '_quarantine_fatigue' for mobility_type in mobilities])
+
+countries = mobility['countrycode'].unique()
+for country in tqdm(countries, desc='Processing Mobility Panel Data'):
+    data = dict()
+    data['countrycode'] = country
+    data['country'] = mobility_series[mobility_series['countrycode']==country]['country'].iloc[0]
+    for mobility_type in mobilities:
+        data[mobility_type + '_max'] = mobility_series[
+            mobility_series['countrycode']==country][mobility_type + '_smooth'].max()
+        data[mobility_type + '_max_date'] = mobility_series[
+            mobility_series['countrycode'] == country].iloc[
+            mobility_series[mobility_series['countrycode'] == country][mobility_type + '_smooth'].argmax()]['date']
+        data[mobility_type + '_quarantine_fatigue'] = np.nan
+
+        mob_data_to_fit = mobility_series[
+                        mobility_series['countrycode']==country][mobility_type + '_smooth'].iloc[
+                        mobility_series[mobility_series['countrycode']==country][mobility_type + '_smooth'].argmax()::]
+        mob_data_to_fit = mob_data_to_fit.dropna()
+        if len(mob_data_to_fit) != 0:
+            data[mobility_type + '_quarantine_fatigue'] = LinearRegression().fit(
+                np.arange(len(mob_data_to_fit)).reshape(-1,1),mob_data_to_fit.values).coef_[0]
+
+    mobility_panel = mobility_panel.append(data, ignore_index=True)
+    continue
+
 government_response_panel = pd.DataFrame(columns=['countrycode', 'country', 'max_si','date_max_si','response_time',
                                                   'response_time_pop'] +
                                                  [flag + '_raised' for flag in flags] +
                                                  [flag + '_lowered' for flag in flags] +
-                                                 [flag + '_raised_again' for flag in flags])
+                                                 [flag + '_raised_again' for flag in flags] +
+                                                 [flag + '_response_time' for flag in flags] +
+                                                 [flag + '_total_days' for flag in flags])
 
 countries = government_response['countrycode'].unique()
 for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
@@ -526,6 +626,10 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
         if len(waves) >= 2:
             data[flag + '_raised'] = government_response_series[
                 government_response_series['countrycode'] == country]['date'].iloc[waves[0][1]]
+            data[flag + '_response_time'] = np.nan if \
+                pd.isna(t0_relative) else \
+                (government_response_series[
+                     government_response_series['countrycode'] == country]['date'].iloc[waves[0][1]] - t0_relative).days
         if len(waves) >= 3:
             data[flag + '_lowered'] = government_response_series[
                 government_response_series['countrycode'] == country]['date'].iloc[
@@ -534,6 +638,9 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
             data[flag + '_raised_again'] = government_response_series[
                 government_response_series['countrycode'] == country]['date'].iloc[
                 waves[0][1] + waves[1][1] + waves[2][1]]
+
+        data[flag + '_total_days'] = government_response_series[
+            government_response_series['countrycode'] == country][flag + '_days_above_threshold'].sum()
 
     government_response_panel = government_response_panel.append(data,ignore_index=True)
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -686,6 +793,76 @@ figure_5 = epidemiology_series[[
 
 if SAVE_CSV:
     figure_5.to_csv(CSV_PATH + 'figure_5.csv')
+# -------------------------------------------------------------------------------------------------------------------- #
+'''
+PART 7 - SAVING TABLE 1
+'''
+
+'''
+Number of countries √
+Duration of first wave of cases [days] (epi panel) √
+Duration of second wave of cases [days] (epi panel) √
+Average Days to t0 (epi panel) √
+Average GDP per capita (wb panel) √
+Population density (wb panel) √
+Immigration (wb panel) √
+Days with “Stay at home” (gov panel) √
+Government response time [days between T0 and peak SI] (gov panel) √
+Government response time [T0 to C6 flag raised] (gov panel) √
+Number of new cases per day per 10,000 first peak (epi panel) √
+Number of new cases per day per 10,000 second peak (epi panel) √
+Number of deaths per day per 10,000 at first peak (epi panel) √
+Number of deaths per day per 10,000 at second peak (epi panel) √
+Case fatality rate first peak (epi panel) √
+Case fatality rate second peak (epi panel) √
+Peak date of New Cases (days since t0) (epi panel) √
+Peak date of Stringency (days since t0) (gov panel) √
+Peak date of Residential Mobility (days since t0) (mobility panel) 
+Quarantine Fatigue - Residential Mobility Correlation with time (First Wave Only) (mobility panel) 
+'''
+
+start_date = epidemiology_series['date'].min()
+data = epidemiology_panel[
+    ['countrycode', 'country', 'class', 't0_relative', 'peak_1_per_10k', 'peak_2_per_10k', 'peak_1_dead_per_10k',
+     'peak_2_dead_per_10k', 'peak_1_cfr', 'peak_2_cfr', 'first_wave_start', 'first_wave_end', 'second_wave_start',
+     'second_wave_end', 'date_peak_1', 'date_peak_2']].merge(
+    wb_statistics[[
+        'countrycode', 'gni_per_capita', 'net_migration', 'population_density']], on=['countrycode'], how='left').merge(
+    government_response_panel[[
+        'countrycode', 'c6_stay_at_home_requirements_total_days', 'response_time',
+        'c6_stay_at_home_requirements_response_time', 'date_max_si']], on=['countrycode'], how='left').merge(
+    mobility_panel[[
+        'countrycode', 'residential_max_date', 'residential_quarantine_fatigue']], on=['countrycode'], how='left')
+
+table1 = pd.DataFrame()
+table1['countrycode'] = data['countrycode']
+table1['class'] = data['class']
+table1['duration_first_wave'] = (data['first_wave_end'] - data['first_wave_start']).apply(lambda x: x.days)
+table1['duration_second_wave'] = (data['second_wave_end'] - data['second_wave_start']).apply(lambda x: x.days)
+table1['days_to_t0'] = (data['t0_relative'] - start_date).apply(lambda x: x.days)
+table1['gni_per_capita'] = data['gni_per_capita']
+table1['population_density'] = data['population_density']
+table1['net_migration'] = data['net_migration']
+table1['days_with_stay_at_home'] = data['c6_stay_at_home_requirements_total_days']
+table1['response_time_si'] = data['response_time']
+table1['response_time_stay_at_home'] = data['c6_stay_at_home_requirements_response_time']
+table1['new_cases_per_day_peak_1_per_10k'] = data['peak_1_per_10k']
+table1['new_cases_per_day_peak_2_per_10k'] = data['peak_2_per_10k']
+table1['new_deaths_per_day_peak_1_per_10k'] = data['peak_1_dead_per_10k']
+table1['new_deaths_per_day_peak_2_per_10k'] = data['peak_2_dead_per_10k']
+table1['cfr_peak_1'] = data['peak_1_cfr']
+table1['cfr_peak_2'] = data['peak_2_cfr']
+table1['new_cases_per_day_peak_1_date'] = (data['date_peak_1'] - data['t0_relative']).apply(lambda x: x.days)
+table1['new_cases_per_day_peak_2_date'] = (data['date_peak_2'] - data['t0_relative']).apply(lambda x: x.days)
+table1['government_response_peak_date'] = (data['date_max_si'] - data['t0_relative']).apply(lambda x: x.days)
+table1['mobility_residential_peak_date'] = (data['residential_max_date'] - data['t0_relative']).apply(lambda x: x.days)
+table1['mobility_quarantine_fatigue'] = data['residential_quarantine_fatigue']
+table1 = table1[(table1['class']!=0) & (~table1['days_to_t0'].isna())]
+table1 = table1[['countrycode','class']].groupby(by='class').count().join(table1.groupby(by=['class']).mean())
+table1 = table1.transpose()
+
+if SAVE_CSV:
+    table1.to_csv(CSV_PATH + 'table1.csv')
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 SAVING TIMESTAMP
