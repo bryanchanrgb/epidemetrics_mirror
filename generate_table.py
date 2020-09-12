@@ -646,6 +646,7 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 3 - SAVING FIGURE 1a
+Chloropleth of days to t0 per country
 '''
 
 start_date = epidemiology_series['date'].min()
@@ -671,6 +672,7 @@ if SAVE_CSV:
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 3 - SAVING FIGURE 1b
+Chloropleth of wave status per country
 '''
 
 figure_1b = epidemiology_panel[['countrycode','country','class']].dropna()
@@ -685,26 +687,48 @@ if SAVE_CSV:
     figure_1b.to_csv(CSV_PATH + 'figure_1b.csv')
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
-PART 4 - SAVING FIGURE 2
+PART 4 - SAVING FIGURE 2a
+Time series of stringency index
 '''
 
 data = epidemiology_series[['countrycode','country','date','days_since_t0','days_since_t0_pop']].merge(
     epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
     government_response_series[['countrycode','date','si']],on=['countrycode','date'],how='left').dropna()
 
-figure_2 = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','stringency_index'])
-figure_2['COUNTRYCODE'] = data['countrycode']
-figure_2['COUNTRY'] = data['country']
-figure_2['CLASS'] = data['class']
-figure_2['t'] = data['days_since_t0']
-figure_2['t_pop'] = data['days_since_t0_pop']
-figure_2['stringency_index'] = data['si']
+figure_2a = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','stringency_index'])
+figure_2a['COUNTRYCODE'] = data['countrycode']
+figure_2a['COUNTRY'] = data['country']
+figure_2a['CLASS'] = data['class']
+figure_2a['t'] = data['days_since_t0']
+figure_2a['t_pop'] = data['days_since_t0_pop']
+figure_2a['stringency_index'] = data['si']
 
 if SAVE_CSV:
-    figure_2.to_csv(CSV_PATH + 'figure_2.csv')
+    figure_2a.to_csv(CSV_PATH + 'figure_2a.csv')
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
-PART 5 - SAVING FIGURE 3
+PART 5 - SAVING FIGURE 2b
+Time series of mobility
+'''
+
+data = epidemiology_series[['countrycode','country','date','days_since_t0','days_since_t0_pop']].merge(
+    epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
+    mobility_series[['countrycode','date','residential_smooth']],on=['countrycode','date'],how='left').dropna()
+
+figure_2b = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','residential_smooth'])
+figure_2b['COUNTRYCODE'] = data['countrycode']
+figure_2b['COUNTRY'] = data['country']
+figure_2b['CLASS'] = data['class']
+figure_2b['t'] = data['days_since_t0']
+figure_2b['t_pop'] = data['days_since_t0_pop']
+figure_2b['residential_smooth'] = data['residential_smooth']
+
+if SAVE_CSV:
+    figure_2b.to_csv(CSV_PATH + 'figure_2b.csv')
+# -------------------------------------------------------------------------------------------------------------------- #
+'''
+PART 6 - SAVING FIGURE 2c
+Scatterplot of response time against cases
 '''
 
 class_coarse = {
@@ -715,30 +739,42 @@ class_coarse = {
     4:'EPI_SECOND_WAVE'
 }
 
-data = epidemiology_panel[['countrycode', 'country', 'class', 'population', 'last_confirmed']]
+data = epidemiology_panel[['countrycode', 'country', 'class' ,'class_coarse', 'population', 'last_confirmed']]
 data['last_confirmed_per_10k'] = 10000 * epidemiology_panel['last_confirmed'] / epidemiology_panel['population']
 data['class_coarse'] = data['class'].apply(lambda x: class_coarse[x])
 data = data.merge(government_response_panel[['countrycode', 'response_time','response_time_pop']],
                   how='left', on='countrycode').dropna()
 
-figure_3 = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
+figure_2c = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
                                  'CLASS_COARSE', 'POPULATION', 'EPI_CONFIRMED', 'EPI_CONFIRMED_PER_10K'])
 
-figure_3['COUNTRYCODE'] = data['countrycode']
-figure_3['COUNTRY'] = data['country']
-figure_3['GOV_MAX_SI_DAYS_FROM_T0'] = data['response_time']
-figure_3['GOV_MAX_SI_DAYS_FROM_T0_POP'] = data['response_time_pop']
-figure_3['CLASS'] = data['class']
-figure_3['CLASS_COARSE'] = data['class_coarse']
-figure_3['POPULATION'] = data['population']
-figure_3['EPI_CONFIRMED'] = data['last_confirmed']
-figure_3['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
+figure_2c['COUNTRYCODE'] = data['countrycode']
+figure_2c['COUNTRY'] = data['country']
+figure_2c['GOV_MAX_SI_DAYS_FROM_T0'] = data['response_time']
+figure_2c['GOV_MAX_SI_DAYS_FROM_T0_POP'] = data['response_time_pop']
+figure_2c['CLASS'] = data['class']
+figure_2c['CLASS_COARSE'] = data['class_coarse']
+figure_2c['POPULATION'] = data['population']
+figure_2c['EPI_CONFIRMED'] = data['last_confirmed']
+figure_2c['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
+
+if SAVE_CSV:
+    figure_2c.to_csv(CSV_PATH + 'figure_2c.csv')
+# -------------------------------------------------------------------------------------------------------------------- #
+'''
+PART 7 - SAVING FIGURE 3
+3x3 time series subplots of cases, deaths and testing
+'''
+figure_3 = epidemiology_series[[
+    'country', 'countrycode', 'date', 'new_per_day', 'new_per_day_smooth',
+    'dead_per_day', 'dead_per_day_smooth', 'new_tests', 'new_tests_smoothed', 'positive_rate']]
 
 if SAVE_CSV:
     figure_3.to_csv(CSV_PATH + 'figure_3.csv')
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
-PART 6 - SAVING FIGURE 4
+PART 8 - SAVING FIGURE 4
+Time series of cases, stringency and mobility for second wave countries
 '''
 
 # noinspection PyRedeclaration
@@ -785,17 +821,7 @@ if SAVE_CSV:
 
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
-PART 6 - SAVING FIGURE 5
-'''
-figure_5 = epidemiology_series[[
-    'country', 'countrycode', 'date', 'new_per_day', 'new_per_day_smooth',
-    'dead_per_day', 'dead_per_day_smooth', 'new_tests', 'new_tests_smoothed', 'positive_rate']]
-
-if SAVE_CSV:
-    figure_5.to_csv(CSV_PATH + 'figure_5.csv')
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 7 - SAVING TABLE 1
+PART 9 - SAVING TABLE 1
 '''
 
 '''
