@@ -570,7 +570,7 @@ for country in tqdm(countries, desc='Processing Mobility Panel Data'):
         data[mobility_type + '_max'] = mobility_series[
             mobility_series['countrycode']==country][mobility_type + '_smooth'].max()
         data[mobility_type + '_max_date'] = mobility_series[
-            mobility_series['countrycode'] == country].loc[
+            mobility_series['countrycode'] == country].iloc[
             mobility_series[mobility_series['countrycode'] == country][mobility_type + '_smooth'].argmax()]['date']
         data[mobility_type + '_quarantine_fatigue'] = np.nan
 
@@ -739,7 +739,8 @@ class_coarse = {
     4:'EPI_SECOND_WAVE'
 }
 
-data = epidemiology_panel[['countrycode', 'country', 'class' ,'class_coarse', 'population', 'last_confirmed']]
+data = epidemiology_panel[['countrycode', 'country', 'class' , 'population', 'last_confirmed']]
+data['class_coarse'] = data['class'].apply(lambda x:class_coarse[x])
 data['last_confirmed_per_10k'] = 10000 * epidemiology_panel['last_confirmed'] / epidemiology_panel['population']
 data['class_coarse'] = data['class'].apply(lambda x: class_coarse[x])
 data = data.merge(government_response_panel[['countrycode', 'response_time','response_time_pop']],
