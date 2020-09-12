@@ -570,7 +570,7 @@ for country in tqdm(countries, desc='Processing Mobility Panel Data'):
         data[mobility_type + '_max'] = mobility_series[
             mobility_series['countrycode']==country][mobility_type + '_smooth'].max()
         data[mobility_type + '_max_date'] = mobility_series[
-            mobility_series['countrycode'] == country].iloc[
+            mobility_series['countrycode'] == country].loc[
             mobility_series[mobility_series['countrycode'] == country][mobility_type + '_smooth'].argmax()]['date']
         data[mobility_type + '_quarantine_fatigue'] = np.nan
 
