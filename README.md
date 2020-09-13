@@ -22,7 +22,11 @@ $ python generate_plots.py
 
 Alternatively, running `sh run-server.sh` at the command line will start an HTTP
 server from which the `index.html` file will show the Vega-Lite visualisations.
-The specifications for these figures are in the `js` directory.
+The specifications for these figures are in the `js` directory. This makes use
+of a simplified TopoJSON file I created (using `mapshaper` from GADM shapefiles)
+and some simplified CSV files, essentially this just involved reading some data
+into R and selecting the appropriate columns and exporting in a convenient
+format.
 
 ## Downloading and computing summary table
 

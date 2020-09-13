@@ -1,3 +1,21 @@
+2020-09-08  Alex Zarebski  <aez@zoo-zarebski>
+
+	* js/time-series-smoothed-cases.json: Include a time series of the
+	smoothed daily incidence and the global average.
+	* js/t0-epi-state-boxplot.json: Include a boxplot chart to show
+	the distribution of wave states by t0 date.
+	* js/choropleth.json: Use colorbrewer2 to make this clearer and
+	reposition the legend.
+
+2020-08-26  Alex Zarebski  <aez@zoo-zarebski>
+
+	* index.html: Include a HTML page to display the visualisations
+	and to hold some comments about trying to understand them.
+
+	* README.md: Describe the process leading up to the additional
+	data files which really needs scripting when we get the time to do
+	it.
+
 2020-08-25  Alex Zarebski  <aez@zoo-zarebski>
 
 	* README.md: Include a description of how to look a the vega-lite

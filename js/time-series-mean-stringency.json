@@ -1,0 +1,49 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "width": 1000,
+    "height": 300,
+    "data": {"url": "data/fig2-stringency-time-series.csv"},
+
+    "selection": {
+        "epiState": {
+            "type": "multi",
+            "fields": ["CLASS"],
+            "bind": "legend"
+        }
+    },
+
+    "mark": {
+        "type": "line"
+    },
+
+    "encoding": {
+        "x": {
+            "field": "t",
+            "type": "quantitative",
+            "title": "Days after threshold reached"
+        },
+        "y": {
+            "field": "stringency_index",
+            "type": "quantitative",
+            "title": ["Mean Blavatnik", "stringency index"]
+        },
+        "detail": {
+            "field": "COUNTRYCODE"
+        },
+        "color": {
+            "condition": {
+                "selection": "epiState",
+                "field": "CLASS",
+                "type": "ordinal"
+            },
+            "value": "grey"
+        },
+        "opacity": {
+            "condition": {
+                "selection": "epiState",
+                "value": 1},
+            "value": 0.2
+        }
+    }
+}
+

@@ -6,6 +6,21 @@
     <script src="https://cdn.jsdelivr.net/npm/vega@5.13.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@4.14.1"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-embed@6.10.0"></script>
+
+    <style type="text/css">
+     body {
+         margin:40px auto;
+         max-width:1000px;
+         line-height:1.6;
+         font-size:18px;
+         color:#444;
+         padding:0 10px;
+     }
+     h1, h2, h3 {
+         line-height:1.2;
+     }
+    </style>
+
   </head>
 
   <body>
@@ -15,6 +30,50 @@
 
       <h1>Choropleth of the current state of local epidemics</h1>
       <div id="choropleth-state"></div>
+      <div>
+          <p>
+              The choropleths are hard to match in terms of colours because one
+              has a continuous variable and the other a discrete variable. Also,
+              there are two notions of missing data in the first map, there is
+              censoring which is a different kind of missing data to genuine
+              missing, which is the case in the second plot for some countries.
+              This is why Greenland looks strange between the two figures.
+          </p>
+      </div>
+
+
+      <h1>Time series of the Blavatnik NPI stringency index</h1>
+      <div id="time-series-stringency"></div>
+      <div>
+          <p>
+              The time series of the stringency index stratified by the
+              countries position in the epidemic are shown in the lines with the
+              mean values shown in the thicker lines. The substantial variation
+              in the stringency suggests that while there does appear to be a
+              significany signal here, it is not substantial.
+          </p>
+      </div>
+      <div id="time-series-mean-stringency"></div>
+      <div>
+          <p>
+              Select a particular epidemic wave state classification to
+              highlight by clicking on the corresponding legend entry. This
+              shows that there are very few entries in the 0th and 4th class.
+              But beyond that, there isn't a whole heap to say aside from a
+              slight trend towards greater restrictions among earlier stage
+              countries and that there is a clear pattern of rapidly increasing
+              stringency just before <em>T0</em> is reached. There are only a
+              few exceptions to this rule.
+          </p>
+      </div>
+
+      <h1>Scatter plot comparing timing of intervention and outcome</h1>
+      <div id="time-vs-confirmed-scatter"></div>
+      <!-- <div>
+           <p>
+           </p>
+           </div>
+      -->
 
       <script type="text/javascript" src="http://localhost:8000/js/plot.js"></script>
   </body>
