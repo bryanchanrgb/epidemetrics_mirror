@@ -1,0 +1,65 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "height": 300,
+    "width": 500,
+    "data": {
+        "url": "data/figure_4.csv"
+    },
+    "transform": [
+        {"filter": "datum.CLASS >= 3"},
+        {"filter": "datum.t > -40"}
+    ],
+    "layer": [
+        {
+            "mark": {
+                "type": "line",
+                "color": "#9ebcda"
+            },
+            "encoding": {
+                "x": {
+                    "field": "t",
+                    "type": "quantitative",
+                    "title": "Days past XXX threshold",
+                    "axis": {"grid": false}
+                },
+                "y": {
+                    "field": "new_per_day_smooth_per10k",
+                    "type": "quantitative",
+                    "title": "Smoothed daily cases (per 10k)"
+                },
+                "detail": {
+                    "field": "COUNTRYCODE",
+                    "type": "nominal"
+                },
+                "color": {
+                    "field": "",
+                    "type": "nominal"
+                }
+            }
+        },
+        {
+            "mark": {
+                "type": "line",
+                "color": "#8856a7",
+                "strokeWidth": 5,
+                "strokeDash": [20,10]
+            },
+            "transform": [
+                {
+                    "loess": "new_per_day_smooth_per10k",
+                    "on": "t"
+                }
+            ],
+            "encoding": {
+                "x": {
+                    "field": "t",
+                    "type": "quantitative"
+                },
+                "y": {
+                    "field": "new_per_day_smooth_per10k",
+                    "type": "quantitative"
+                }
+            }
+        }
+    ]
+}

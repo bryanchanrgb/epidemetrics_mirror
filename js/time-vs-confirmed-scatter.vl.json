@@ -1,0 +1,51 @@
+{
+    "height": 500,
+    "width": 500,
+    "data": {
+        "url": "data/fig3.csv"
+    },
+    "layer": [
+        {
+            "mark": "point",
+            "encoding": {
+                "x": {
+                    "field": "GOV_MAX_SI_DAYS_FROM_T0",
+                    "type": "quantitative",
+                    "title": "Days until cumulative threshold reached"
+                },
+                "y": {
+                    "field": "EPI_CONFIRMED_PER_10K",
+                    "type": "quantitative",
+                    "title": "Confirmed cases per 10,000"
+                },
+                "color": {
+                    "field": "CLASS_COARSE",
+                    "type": "ordinal",
+                    "title": "Epidemic wave state"
+                }
+            }
+        },
+        {
+            "mark": "line",
+            "transform": [
+                {
+                    "loess": "EPI_CONFIRMED_PER_10K",
+                    "on": "GOV_MAX_SI_DAYS_FROM_T0"
+                }
+            ],
+            "encoding": {
+                "x": {
+                    "field": "GOV_MAX_SI_DAYS_FROM_T0",
+                    "type": "quantitative"
+                },
+                "y": {
+                    "field": "EPI_CONFIRMED_PER_10K",
+                    "scale": {"type": "log"}
+                },
+                "color": {
+                    "value": "red"
+                }
+            }
+        }
+    ]
+}

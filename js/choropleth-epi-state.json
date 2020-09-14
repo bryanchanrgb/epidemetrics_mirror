@@ -1,7 +1,7 @@
 {
     "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
     "width": 1000,
-    "height": 500,
+    "height": 700,
     "projection": {
         "type": "equirectangular"
     },
@@ -22,11 +22,11 @@
             "lookup": "gid0",
             "from": {
                 "data": {
-                    "url": "data/fig1a-t0-days.csv",
-                    "name": "t0-data"
+                    "url": "data/fig1b-epi-state.csv",
+                    "name": "epi-state"
                 },
                 "key": "countrycode",
-                "fields": ["days_to_t0"]
+                "fields": ["class"]
             }
         }
     ],
@@ -34,27 +34,18 @@
     "encoding": {
         "color": {
             "condition": {
-                "test": "!isString(datum.days_to_t0)",
+                "test": {
+                    "not": {
+                        "field": "class",
+                        "oneOf": ["0", "1", "2", "3", "4"]
+                    }
+                },
                 "value": "#aaa"
             },
-            "field": "days_to_t0",
-            "type": "quantitative",
-            "title": ["Days until XXX", "threshold reached"],
-            "scale": {
-                "range": ["#8856a7", "#9ebcda", "#e0ecf4"]
-            },
-            "legend": {
-                "legendX": 20,
-                "legendY": 340,
-                "padding": 10,
-                "direction": "horizontal",
-                "strokeColor": "#bdbdbd",
-                "orient": "none"
-            }
+            "field": "class",
+            "type": "ordinal",
+            "title": ["Epidemic", "wave state"]
         }
-    },
-    "view": {
-        "stroke": null
     },
     "config": {
         "mark": {"invalid": null}

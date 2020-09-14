@@ -1,0 +1,27 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "height": 200,
+    "width": 300,
+    "data": {
+        "url": "data/fig1c-t0-epi-state.csv"
+    },
+    "mark": {
+        "type": "boxplot",
+        "color": "#8c96c6"
+    },
+    "encoding": {
+        "x": {
+            "field": "days_to_t0",
+            "type": "quantitative",
+            "title": "Days until XXX threshold reached",
+            "scale": {"zero": false},
+            "axis": {"grid": false}
+        },
+        "y": {
+            "field": "class",
+            "type": "ordinal",
+            "title": "Epidemic wave state",
+            "scale": {"reverse": true}
+        }
+    }
+}

@@ -1,0 +1,51 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "width": 1000,
+    "height": 700,
+    "data": {"url": "data/fig2-stringency-time-series.csv"},
+    "encoding": {
+        "x": {
+            "field": "t",
+            "type": "quantitative",
+            "title": "Days after threshold reached"
+        },
+        "color": {
+            "field": "CLASS",
+            "type": "ordinal",
+            "title": ["Epidemic", "wave state"]
+        }
+    },
+    "layer": [
+        {
+            "mark": {
+                "type": "line",
+                "opacity": 0.5
+            },
+            "encoding": {
+                "y": {
+                    "field": "stringency_index",
+                    "type": "quantitative",
+                    "title": "Blavatnik NPI Stringency Index"
+                },
+                "detail": {
+                    "field": "COUNTRYCODE",
+                    "type": "nominal"
+                }
+            }
+        },
+        {
+            "mark": {
+                "type": "line",
+                "size": 7
+
+            },
+            "encoding": {
+                "y": {
+                    "field": "stringency_index",
+                    "aggregate": "mean",
+                    "type": "quantitative"
+                }
+            }
+        }
+    ]
+}
