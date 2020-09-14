@@ -1,4 +1,4 @@
-# Epidemetrics - Generate Plots (Figures 2, 3, 4, 5)
+# Epidemetrics - Generate Plots (Figures 2, 3)
 
 # Load Packages, Clear, Sink -------------------------------------------------------
 
@@ -14,25 +14,22 @@ lapply(package_list, require, character.only = TRUE)
 # clear workspace
 rm(list=ls())
 
-# Set working directory
-setwd("C:/Users/bryan/OneDrive/Documents/GitHub/tarunsrivastava145/epidemetrics/")
-
 # Import Data -------------------------------------------------------------
 
 # Import csv file for Figure 2a
-figure_2a_data <- read_csv("Data/figure_2a.csv", 
+figure_2a_data <- read_csv("./data/figure_2a.csv", 
                           na = c("N/A","NA","#N/A"," ",""),
                           col_types = cols(COUNTRYCODE = col_factor(levels = NULL),
                                            COUNTRY = col_factor(levels = NULL),
                                            CLASS = col_factor(levels = c(1,2,3,4,0))))
 # Import csv file for Figure 2b
-figure_2b_data <- read_csv("Data/figure_2b.csv", 
+figure_2b_data <- read_csv("./data/figure_2b.csv", 
                            na = c("N/A","NA","#N/A"," ",""),
                            col_types = cols(COUNTRYCODE = col_factor(levels = NULL),
                                             COUNTRY = col_factor(levels = NULL),
                                             CLASS = col_factor(levels = c(1,2,3,4,0))))
 # Import csv file for figure 2c
-figure_2c_data <- read_csv("Data/figure_2c.csv", 
+figure_2c_data <- read_csv("./data/figure_2c.csv", 
                           na = c("N/A","NA","#N/A"," ",""),
                           col_types = cols(COUNTRYCODE = col_factor(levels = NULL),
                                            COUNTRY = col_factor(levels = NULL),
@@ -40,7 +37,7 @@ figure_2c_data <- read_csv("Data/figure_2c.csv",
                                            CLASS_COARSE = col_factor(levels = c("EPI_FIRST_WAVE","EPI_SECOND_WAVE"))))
 
 # Import csv file for figure 3
-figure_3_data <- read_csv("Data/figure_3.csv", 
+figure_3_data <- read_csv("./data/figure_3.csv", 
                           na = c("N/A","NA","#N/A"," ",""),
                           col_types = cols(country = col_factor(levels = NULL),
                                            countrycode = col_factor(levels = NULL),
@@ -153,13 +150,14 @@ figure_2c <- (ggplot(figure_2c_data, aes(x = GOV_MAX_SI_DAYS_FROM_T0_POP, y = EP
                   + labs(title = "Total Confirmed Cases Against Government Response Time", x = "Government Response Time (Days from T0 to Peak of Stringency)", y = "Total Confirmed Cases per 10,000 Population"))
 
 figure_2_all <- grid.arrange(grobs=list(figure_2a,figure_2b,figure_2c),
-                            widths = c(1, 1.2),
-                            layout_matrix = rbind(c(1, 3),
-                                                  c(2,  3)))
-ggsave("./Plots/figure_2a.png", plot = figure_2a, width = 9,  height = 7)
-ggsave("./Plots/figure_2b.png", plot = figure_2b, width = 9,  height = 7)
-ggsave("./Plots/figure_2c.png", plot = figure_2c, width = 9,  height = 7)
-ggsave("./Plots/figure_2.png", plot = figure_2_all, width = 15,  height = 8)
+                             widths = c(1, 1.2),
+                             layout_matrix = rbind(c(1, 3),
+                                                   c(2,  3)),
+                             top = "Figure 2: Government and Public Response")
+ggsave("./plots/figure_2a.png", plot = figure_2a, width = 9,  height = 7)
+ggsave("./plots/figure_2b.png", plot = figure_2b, width = 9,  height = 7)
+ggsave("./plots/figure_2c.png", plot = figure_2c, width = 9,  height = 7)
+ggsave("./plots/figure_2.png", plot = figure_2_all, width = 15,  height = 8)
 
 
 # Process Data for Figure 5 ------------------------------------------------
@@ -274,9 +272,9 @@ maxwidth <- do.call(grid::unit.pmax, widths)
 for (i in 1:length(grobs)){
   grobs[[i]]$widths[2:5] <- as.list(maxwidth)
 }
-figure_3_all <- do.call("grid.arrange", c(grobs, ncol = 3,top = "Cases, Deaths and Testing Over Time"))
+figure_3_all <- do.call("grid.arrange", c(grobs, ncol = 3,top = "Figure 3: Cases, Deaths and Testing Over Time"))
 
-ggsave("./Plots/figure_3.png", plot = figure_3_all, width = 12,  height = 9)
+ggsave("./plots/figure_3.png", plot = figure_3_all, width = 12,  height = 9)
 
 
 
