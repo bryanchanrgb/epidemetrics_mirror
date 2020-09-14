@@ -5,7 +5,7 @@ within the archive folder. Running the `generate_table.py` script will download
 the data from the OxCOVID19 database and generate the CSV files need to
 reproduce the figures in the paper. The CSVs should automatically be stored
 within the data folder along with a time stamp of when the database was
-accessed. The `SAVE_PLOTS` Boolean argument can be toggled to generate the plots
+accessed. Please note - figure_1.csv and figure_4.csv are delimited using semicolons ';', the remainder are deliminated using commas as usual. The `SAVE_PLOTS` Boolean argument can be toggled to generate the plots
 needed for data labelling.
 
 ```
