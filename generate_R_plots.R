@@ -281,7 +281,7 @@ ggsave("./plots/figure_3.png", plot = figure_3_all, width = 12,  height = 9)
 # USA Choropleth ---------------------------------------------------------------
 # Process Data for USA time series and choropleth ------------------------------
 # Import csv file for figure 4: Time series and choropleth for USA
-figure_4_data <- read_delim(file="C:/Users/bryan/OneDrive/Desktop/Epidemetrics R Plots/Data/usa_choropleth.csv",
+figure_4_data <- read_delim(file="./data/usa_choropleth.csv",
                             delim=";",
                             na = c("N/A","NA","#N/A"," ",""),
                             col_types = cols(gid = col_factor(levels = NULL),
