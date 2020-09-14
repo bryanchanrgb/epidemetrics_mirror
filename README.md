@@ -54,22 +54,22 @@ Generated from `figure_1a.csv`. Figure 1a is a map of the world with each countr
 Also generated from `figure_1b.csv`. Figure 1b is a map of the world with each country coded by its class, one of either entering first wave, past first wave, entering second wave, past second wave or other. It illustrates the stage at which each country finds itself at the current point in time.
 
 ### Figure 2a
-[[./plots/figure_2a.png]]
+![figure_2a](/plots/figure_2a.png)
 
 Generated from `figure_2a.csv`. Figure 2a is a time series of the stringency index over time aggregated for countries in each of the classes: entering first wave, past first wave, entering second wave and past second wave, with the x axis plotting t, the date relative to each country's T0 to control for the temporal differences across countries in the date at which their infections began. This figure attempts to illustrate the difference in government response between countries in each class in both timing and amplitude, showing descriptively whether governments in countries that are entering first wave responded earlier or with a greater degree of restrictions as compared to countries that are entering second wave. 
 
 ### Figure 2b
-[[./plots/figure_2b.png]]
+![figure_2b](/plots/figure_2b.png)
 
 Generated from `figure_2b.csv`. Figure 2b is a time series of residential mobility (relative to a baseline level defined as the median value for the corresponding day of the week during the 5-week period Jan 3 to Feb 6 2020) over time aggregated for countries in each of the classes: entering first wave, past first wave, entering second wave and past second wave. This figure attempts to illustrate the difference in public response between countries in each class in both timing and amplitude, with residential mobility serving as an indicator for whether people in certain countries stayed within their homes more.
 
 ### Figure 2c
-[[./plots/figure_2c.png]]
+![figure_2c](/plots/figure_2c.png)
 
 Generated from `figure_2c.csv`. Figure 2c is a scatter plot with government response time (defined as the number of days between the country's epidemic start date the the date at which it reached its peak level of government stringency) plotted on the x axis, and the latest total number of confirmed cases (normalized per 10000 population) plotted on the y axis. Countries are colour coded on whether they are in first wave or second.  This figure illustrates the significance of government response time. It shows that countries which respond quickly and pre-emptively, often months before the country's cases reaches epidemic status, exhibit a lower number of total cases, and as of yet have not experienced a second wave.
 
 ### Figure 3
-[[./plots/figure_3.png]]
+![figure_3](/plots/figure_3.png)
 
 Generated from `figure_3.csv`. Figure 3 shows the number of new cases per day, deaths per day and tests per day over time for 3 selected countries: the United States, Belgium and Australia. It provides illustrative examples of countries experiencing a second wave in confirmed cases, and shows the relative significance of increases in testing in explaining the magnitude of the observed second wave in testing.
 
