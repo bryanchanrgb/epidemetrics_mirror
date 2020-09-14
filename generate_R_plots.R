@@ -3,7 +3,7 @@
 # Load Packages, Clear, Sink -------------------------------------------------------
 
 # load packages
-package_list <- c("readr","ggplot2","gridExtra","plyr","dplyr","ggsci","RColorBrewer")
+package_list <- c("readr","ggplot2","gridExtra","plyr","dplyr","ggsci","RColorBrewer","viridis","sf")
 for (package in package_list){
   if (!package %in% installed.packages()){
     install.packages(package)
@@ -275,6 +275,107 @@ for (i in 1:length(grobs)){
 figure_3_all <- do.call("grid.arrange", c(grobs, ncol = 3,top = "Figure 3: Cases, Deaths and Testing Over Time"))
 
 ggsave("./plots/figure_3.png", plot = figure_3_all, width = 12,  height = 9)
+
+
+
+# USA Choropleth ---------------------------------------------------------------
+# Process Data for USA time series and choropleth ------------------------------
+# Import csv file for figure 4: Time series and choropleth for USA
+figure_4_data <- read_delim(file="C:/Users/bryan/OneDrive/Desktop/Epidemetrics R Plots/Data/usa_choropleth.csv",
+                            delim=";",
+                            na = c("N/A","NA","#N/A"," ",""),
+                            col_types = cols(gid = col_factor(levels = NULL),
+                                             date = col_date(format = "%Y-%m-%d"),
+                                             fips = col_factor(levels = NULL)))
+# Remove rows with NA in geometry. Required to convert column to shape object
+figure_4_data <- subset(figure_4_data,!is.na(geometry))
+# Convert "geometry" column to a sfc shape column 
+figure_4_data$geometry <- st_as_sfc(figure_4_data$geometry)
+# Convert dataframe to a sf shape object with "geometry" containing the shape information
+figure_4_data <- st_sf(figure_4_data)
+
+# Sort by GID and date
+figure_4_data <- figure_4_data[order(figure_4_data$gid, figure_4_data$date),]
+# Compute new cases per day as difference between daily case total
+figure_4_data[-1,"new_cases"] <- diff(figure_4_data$cases)
+# Remove first day of each GID as it does not have a value for new cases
+figure_4_data <- figure_4_data[duplicated(figure_4_data$gid),]
+# Set any negative values for new cases to 0
+figure_4_data[figure_4_data$new_cases<0,"new_cases"] <- 0
+# Compute new cases per 10000 popuation
+figure_4_data$new_cases_per_10k <- 10000*figure_4_data$new_cases/figure_4_data$Population
+
+# Select individual GIDs to show: take top 10 by total confirmed cases
+# Get max value of confirmed cases for each country
+figure_4_max_confirmed <- aggregate(figure_4_data[c("cases")],
+                                    by = list(figure_4_data$gid),
+                                    FUN = max,
+                                    na.rm=TRUE)
+figure_4_max_confirmed <- plyr::rename(figure_4_max_confirmed, c("Group.1"="gid"))
+figure_4_max_confirmed <- figure_4_max_confirmed[order(-figure_4_max_confirmed$cases),]
+top_n <- head(figure_4_max_confirmed, 5)
+figure_4a_data <- subset(figure_4_data,gid%in%top_n$gid)
+
+# Aggregate mean for each day
+figure_4a_data_agg <- aggregate(data.frame(figure_4_data[c("new_cases_per_10k")]),
+                                by = list(figure_4_data$date),
+                                FUN = mean,
+                                na.rm=TRUE)
+figure_4a_data_agg <- plyr::rename(figure_4a_data_agg, c("Group.1"="date"))
+
+# Define which dates to plot in choropleth
+date_1 <- as.Date("2020-04-15")
+date_2 <- as.Date("2020-07-15")
+
+figure_4b1_data <- subset(figure_4_data,date==date_1)
+figure_4b2_data <- subset(figure_4_data,date==date_2)
+
+color_max <- max(figure_4b1_data$new_cases_per_10k,figure_4b2_data$new_cases_per_10k)
+
+# Plot USA time series and choropleth ----------------------------------------------
+# Figure 4a: Time series of cases over time
+# Set up colour palette
+my_palette_1 <- brewer.pal(name="YlGnBu",n=4)[2]
+my_palette_2 <- brewer.pal(name="YlGnBu",n=4)[4]
+
+figure_4a <- (ggplot()
+               + geom_line(data = figure_4_data, aes(x=date, y=new_cases_per_10k), color=my_palette_1,size=1,na.rm=TRUE)
+               + geom_line(data = figure_4a_data_agg, aes(x=date, y=new_cases_per_10k), color=my_palette_2, size=2, na.rm=TRUE)
+               + labs(title="New Cases Over Time for US Counties", y="New Cases per Day per 10,000 Population", x="Date")
+               + scale_y_continuous(expand=c(0,0), limits=c(0, 3)) 
+               + theme_light()
+               + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
+
+# Figure 4b: Choropleth of US counties at particular timestamps
+
+figure_4b1 <- (ggplot(data = figure_4b1_data) 
+                + geom_sf(aes(fill=new_cases_per_10k), lwd=0, color=NA)
+                + labs(title=paste("New Cases per Day per United States County at",date_1), fill="New Cases per Day\nper 10,000")
+                + scale_fill_distiller(palette="GnBu", trans="reverse", limits=c(color_max,0))
+                + scale_x_continuous(expand=c(0,0), limits=c(-125, -65)) # coordinates are cropped to exclude Alaska
+                + scale_y_continuous(expand=c(0,0), limits=c(24, 50))
+                + theme_void()
+                + theme(plot.title = element_text(hjust = 0.5), panel.grid.major=element_line(colour = "transparent")))
+
+figure_4b2 <- (ggplot(data = figure_4b2_data) 
+               + geom_sf(aes(fill=new_cases_per_10k), lwd=0, color=NA)
+               + labs(title=paste("New Cases per Day per United States County at",date_2), fill="New Cases per Day\nper 10,000")
+               + scale_fill_distiller(palette="GnBu", trans="reverse", limits=c(color_max,0))
+               + scale_x_continuous(expand=c(0,0), limits=c(-125, -65)) # coordinates are cropped to exclude Alaska
+               + scale_y_continuous(expand=c(0,0), limits=c(24, 50))
+               + theme_void()
+               + theme(plot.title = element_text(hjust = 0.5), panel.grid.major=element_line(colour = "transparent")))
+
+figure_4_all <- grid.arrange(grobs=list(figure_4a,figure_4b1,figure_4b2),
+                             widths = c(1, 1),
+                             layout_matrix = rbind(c(1, 1),
+                                                   c(2, 3)),
+                             top = "Figure 4: USA Epidemiology Across Geographies and Time")
+
+ggsave("./plots/figure_4a.png", plot = figure_4a, width = 9,  height = 7)
+ggsave("./plots/figure_4b1.png", plot = figure_4b1, width = 9,  height = 7)
+ggsave("./plots/figure_4b2.png", plot = figure_4b2, width = 9,  height = 7)
+ggsave("./plots/figure_4.png", plot = figure_4_all, width = 15,  height = 12)
 
 
 
