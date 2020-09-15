@@ -281,7 +281,7 @@ ggsave("./plots/figure_3.png", plot = figure_3_all, width = 12,  height = 9)
 # USA Choropleth ---------------------------------------------------------------
 # Process Data for USA time series and choropleth ------------------------------
 # Import csv file for figure 4: Time series and choropleth for USA
-figure_4_data <- read_delim(file="./data/usa_choropleth.csv",
+figure_4_data <- read_delim(file="./data/figure_4.csv",
                             delim=";",
                             na = c("N/A","NA","#N/A"," ",""),
                             col_types = cols(gid = col_factor(levels = NULL),
@@ -329,8 +329,12 @@ date_2 <- as.Date("2020-07-15")
 
 figure_4b1_data <- subset(figure_4_data,date==date_1)
 figure_4b2_data <- subset(figure_4_data,date==date_2)
+figure_4b2_data$new_cases_per_10k[figure_4b2_data$new_cases_per_10k >= 5] <- 5 
 
 color_max <- max(figure_4b1_data$new_cases_per_10k,figure_4b2_data$new_cases_per_10k)
+color_max_ts <- 5
+figure_4b1_data$new_cases_per_10k[figure_4b1_data$new_cases_per_10k >= color_max_ts] <- color_max_ts 
+figure_4b2_data$new_cases_per_10k[figure_4b2_data$new_cases_per_10k >= color_max_ts] <- color_max_ts 
 
 # Plot USA time series and choropleth ----------------------------------------------
 # Figure 4a: Time series of cases over time
@@ -347,11 +351,10 @@ figure_4a <- (ggplot()
                + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
 
 # Figure 4b: Choropleth of US counties at particular timestamps
-
 figure_4b1 <- (ggplot(data = figure_4b1_data) 
                 + geom_sf(aes(fill=new_cases_per_10k), lwd=0, color=NA)
                 + labs(title=paste("New Cases per Day per United States County at",date_1), fill="New Cases per Day\nper 10,000")
-                + scale_fill_distiller(palette="GnBu", trans="reverse", limits=c(color_max,0))
+                + scale_fill_distiller(palette="GnBu", trans="reverse", limits=c(color_max_ts,0))
                 + scale_x_continuous(expand=c(0,0), limits=c(-125, -65)) # coordinates are cropped to exclude Alaska
                 + scale_y_continuous(expand=c(0,0), limits=c(24, 50))
                 + theme_void()
@@ -360,7 +363,7 @@ figure_4b1 <- (ggplot(data = figure_4b1_data)
 figure_4b2 <- (ggplot(data = figure_4b2_data) 
                + geom_sf(aes(fill=new_cases_per_10k), lwd=0, color=NA)
                + labs(title=paste("New Cases per Day per United States County at",date_2), fill="New Cases per Day\nper 10,000")
-               + scale_fill_distiller(palette="GnBu", trans="reverse", limits=c(color_max,0))
+               + scale_fill_distiller(palette="GnBu", trans="reverse", limits=c(color_max_ts,0))
                + scale_x_continuous(expand=c(0,0), limits=c(-125, -65)) # coordinates are cropped to exclude Alaska
                + scale_y_continuous(expand=c(0,0), limits=c(24, 50))
                + theme_void()

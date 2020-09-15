@@ -936,13 +936,15 @@ usa_cases = pd.read_csv('https://github.com/nytimes/covid-19-data/raw/master/us-
 translation_csv = pd.read_csv('https://github.com/covid19db/fetchers-python/raw/master/' +
                               'src/plugins/USA_NYT/translation.csv')
 
-figure_5 = usa_cases.merge(translation_csv[['input_adm_area_1','input_adm_area_2','gid']],
+figure_4 = usa_cases.merge(translation_csv[['input_adm_area_1','input_adm_area_2','gid']],
     left_on=['state','county'], right_on=['input_adm_area_1','input_adm_area_2'], how='left').merge(
     usa_populations[['FIPS','Population']], left_on=['fips'], right_on=['FIPS'], how='left')
 
-figure_5 = figure_5[['date', 'gid', 'fips', 'cases', 'Population']].sort_values(by=['gid','date']).dropna(subset=['gid'])
-figure_5 = usa_map[['gid','geometry']].merge(figure_5, on=['gid'], how='right')
-figure_5.to_csv(CSV_PATH + 'figure_5.csv', sep=';')
+figure_4 = figure_4[['date', 'gid', 'fips', 'cases', 'Population']].sort_values(by=['gid','date']).dropna(subset=['gid'])
+figure_4 = usa_map[['gid','geometry']].merge(figure_4, on=['gid'], how='right')
+
+if SAVE_CSV:
+    figure_4.to_csv(CSV_PATH + 'figure_4.csv', sep=';')
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 7 - SAVING TABLE 1
