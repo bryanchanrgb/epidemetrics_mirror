@@ -1,0 +1,72 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "width": 700,
+    "height": 350,
+    "autosize": {
+        "type": "fit",
+        "contains": "padding"
+    },
+    "projection": {
+        "type": "equirectangular"
+    },
+    "data": {
+        "url": "data/2020-09-13/gadm36_0.json",
+        "format": {
+            "type": "topojson",
+            "feature": "gadm36_0"
+        },
+        "name": "map-data"
+    },
+    "transform": [
+        {
+            "calculate": "datum.properties.GID_0",
+            "as": "gid0"
+        },
+        {
+            "lookup": "gid0",
+            "from": {
+                "data": {
+                    "url": "data/2020-09-13/fig1a-t0-days.csv",
+                    "name": "t0-data"
+                },
+                "key": "countrycode",
+                "fields": ["days_to_t0"]
+            }
+        }
+    ],
+    "mark": "geoshape",
+    "encoding": {
+        "color": {
+            "condition": {
+                "test": "!isString(datum.days_to_t0)",
+                "value": "#aaa"
+            },
+            "field": "days_to_t0",
+            "type": "quantitative",
+            "title": ["Days until epidemic", "established"],
+            "scale": {
+                "reverse": true,
+                "range": [
+                    "#e66101",
+                    "#fdb863",
+                    "#b2abd2",
+                    "#5e3c99"
+                ]
+            },
+            "legend": {
+                "legendX": 10,
+                "legendY": 200,
+                "padding": 5,
+                "direction": "horizontal",
+                "strokeColor": "#bdbdbd",
+                "orient": "none"
+            }
+        }
+    },
+    "view": {
+        "stroke": null
+    },
+    "config": {
+        "mark": {"invalid": null}
+    }
+}

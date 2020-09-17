@@ -1,0 +1,49 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "width": 280,
+    "height": 200,
+    "data": {
+        "url": "boxplot-data.json"
+    },
+    "encoding": {
+        "y": {
+            "field": "class",
+            "type": "nominal",
+            "title": "Epidemic wave state"
+        }
+    },
+    "layer": [
+        {
+            "mark": {"type": "rule"},
+            "encoding": {
+                "x": {
+                    "field": "lower",
+                    "type": "quantitative",
+                    "title": "Days until epidemic established"
+                },
+                "x2": {"field": "upper"},
+                "color": {"value": "#2c7fb8"}
+            }
+        },
+        {
+            "mark": {"type": "bar", "size": 14},
+            "encoding": {
+                "x": {"field": "q1", "type": "quantitative"},
+                "x2": {"field": "q3"}
+            }
+        },
+        {
+            "mark": {"type": "tick", "color": "white", "size": 14},
+            "encoding": {
+                "x": {"field": "median", "type": "quantitative"}
+            }
+        },
+        {
+            "transform": [{"flatten": ["outliers"]}],
+            "mark": {"type": "point", "style": "boxplot-outliers"},
+            "encoding": {
+                "x": {"field": "outliers", "type": "quantitative"}
+            }
+        }
+    ]
+}

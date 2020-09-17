@@ -1,0 +1,39 @@
+* Figures for *MANUSCRIPT TITLE*
+
+The colour pallete used comes from [[https://colorbrewer2.org/#type=sequential&scheme=YlGnBu&n=3][colorbrewer2]].
+
+** Figure 1 \(T_0\) Map
+
+[[./output/png/figure-1-t0-map.png]]
+
+=figure-1-t0-map.json= produces a choropleth showing the \(T_0\) across the
+globe.
+
+** Figure 1 \(T_0\) Wave State Boxplot
+
+[[./output/png/figure-1-t0-wave-state-boxplot.png]]
+
+=figure-1-t0-wave-state-boxplot.json= produces the boxplot of the \(T_0\)
+stratified by the epidemic wave state. Due to a bug in Vega-Lite we use the
+script =figure-1-t0-wave-state-boxplot.R= to compute the statistics of the
+boxplot and write them to an appropriate JSON file.
+
+** Figure 1 Cases And Deaths
+
+[[./output/png/figure-1-cases-and-deaths.png]]
+
+=figure-1-cases-and-deaths.json= produces the time series of confirmed cases and
+deaths along with the LOESS smoothing. To get the data into a useful format
+there is the script =figure-1-cases-and-deaths.R=
+
+** Figure 1 \(T_0\) and GNI per capita
+
+[[./output/png/figure-1-t0-and-gni.png]]
+
+=figure-1-t0-and-gni.json= produces the scatter plot looking at GNI per capita
+as a predictor of \(T_0\). The regression is a power law, but on the log-log
+scale it appears linear. The outlier at 25 days is from China.
+
+#+BEGIN_SRC
+"CHN",15187.1541555233,25 
+#+END_SRC
