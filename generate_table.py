@@ -865,14 +865,15 @@ if SAVE_CSV:
 
 data = epidemiology_series[['countrycode','country','date','days_since_t0','days_since_t0_pop']].merge(
     epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
-    mobility_series[['countrycode','date','residential_smooth']],on=['countrycode','date'],how='left').dropna()
+    mobility_series[['countrycode','date','residential','residential_smooth']],on=['countrycode','date'],how='left').dropna()
 
-figure_2b = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','residential_smooth'])
+figure_2b = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','residential','residential_smooth'])
 figure_2b['COUNTRYCODE'] = data['countrycode']
 figure_2b['COUNTRY'] = data['country']
 figure_2b['CLASS'] = data['class']
 figure_2b['t'] = data['days_since_t0']
 figure_2b['t_pop'] = data['days_since_t0_pop']
+figure_2b['residential'] = data['residential']
 figure_2b['residential_smooth'] = data['residential_smooth']
 
 if SAVE_CSV:
