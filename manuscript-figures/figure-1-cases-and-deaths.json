@@ -1,0 +1,160 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "data": {
+        "url": "cases-and-deaths-data.json"
+    },
+    "transform": [
+        {
+            "filter": {
+                "not": {
+                    "field": "countrycode",
+                    "equal": "USA"
+                }
+            }
+        }
+    ],
+    "hconcat": [
+        {
+            "title": {
+                "text": "Confirmed cases",
+                "align": "center"
+            },
+            "width": 290,
+            "height": 200,
+            "autosize": {
+                "type": "fit",
+                "contains": "padding"
+            },
+            "transform": [
+                {
+                    "filter": {
+                        "field": "variable",
+                        "equal": "new_per_day"
+                    }
+                }
+            ],
+            "layer": [
+                {
+                    "mark": {
+                        "type": "line",
+                        "size": 0.6
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "date",
+                            "type": "temporal",
+                            "title": null,
+                            "axis": {
+                                "grid": false
+                            }
+                        },
+                        "y": {
+                            "field": "value",
+                            "type": "quantitative",
+                            "title": null,
+                            "scale": {"type": "sqrt",
+                                      "nice": false,
+                                      "domain": [-10, 4700]}
+                        }
+                    }
+                },
+                {
+                    "mark": {
+                        "type": "line",
+                        "size": 5.0,
+                        "color": "firebrick"
+                    },
+                    "transform": [
+                        {
+                            "loess": "value",
+                            "on": "date"
+                        }
+                    ],
+                    "encoding": {
+                        "x": {
+                            "field": "date",
+                            "type": "temporal",
+                            "title": null
+                        },
+                        "y": {
+                            "field": "value",
+                            "type": "quantitative",
+                            "title": null
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "title": {
+                "text": "Deaths",
+                "align": "center"
+            },
+            "width": 290,
+            "height": 200,
+            "autosize": {
+                "type": "fit",
+                "contains": "padding"
+            },
+            "transform": [
+                {
+                    "filter": {
+                        "field": "variable",
+                        "equal": "dead_per_day"
+                    }
+                }
+            ],
+            "layer": [
+                {
+                    "mark": {
+                        "type": "line",
+                        "size": 0.6
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "date",
+                            "type": "temporal",
+                            "title": null,
+                            "axis": {
+                                "grid": false
+                            }
+                        },
+                        "y": {
+                            "field": "value",
+                            "type": "quantitative",
+                            "title": null,
+                            "scale": {"type": "sqrt",
+                                      "nice": false,
+                                      "domain": [-0.2, 120]}
+                        }
+                    }
+                },
+                {
+                    "mark": {
+                        "type": "line",
+                        "size": 5.0,
+                        "color": "firebrick"
+                    },
+                    "transform": [
+                        {
+                            "loess": "value",
+                            "on": "date"
+                        }
+                    ],
+                    "encoding": {
+                        "x": {
+                            "field": "date",
+                            "type": "temporal",
+                            "title": null
+                        },
+                        "y": {
+                            "field": "value",
+                            "type": "quantitative",
+                            "title": null
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

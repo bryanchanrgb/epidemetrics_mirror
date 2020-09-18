@@ -7,6 +7,7 @@ import os
 import warnings
 from tqdm import tqdm
 import datetime
+from skimage.transform import resize
 
 from csaps import csaps
 from scipy.signal import find_peaks
@@ -936,16 +937,58 @@ usa_cases = pd.read_csv('https://github.com/nytimes/covid-19-data/raw/master/us-
 translation_csv = pd.read_csv('https://github.com/covid19db/fetchers-python/raw/master/' +
                               'src/plugins/USA_NYT/translation.csv')
 
-figure_5 = usa_cases.merge(translation_csv[['input_adm_area_1','input_adm_area_2','gid']],
+figure_4 = usa_cases.merge(translation_csv[['input_adm_area_1','input_adm_area_2','gid']],
     left_on=['state','county'], right_on=['input_adm_area_1','input_adm_area_2'], how='left').merge(
     usa_populations[['FIPS','Population']], left_on=['fips'], right_on=['FIPS'], how='left')
 
-figure_5 = figure_5[['date', 'gid', 'fips', 'cases', 'Population']].sort_values(by=['gid','date']).dropna(subset=['gid'])
-figure_5 = usa_map[['gid','geometry']].merge(figure_5, on=['gid'], how='right')
-figure_5.to_csv(CSV_PATH + 'figure_5.csv', sep=';')
+figure_4 = figure_4[['date', 'gid', 'fips', 'cases', 'Population']].sort_values(by=['gid','date']).dropna(subset=['gid'])
+figure_4 = usa_map[['gid','geometry']].merge(figure_4, on=['gid'], how='right')
+
+if SAVE_CSV:
+    figure_4.to_csv(CSV_PATH + 'figure_4.csv', sep=';')
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
-PART 7 - SAVING TABLE 1
+PART 7 - FIGURE 4b LASAGNA PLOT
+'''
+usa_t0 = epidemiology_panel[epidemiology_panel['countrycode'] == 'USA']['t0_relative'].iloc[0]
+map_discrete_step = 5
+figure_4b = usa_cases.merge(translation_csv[['input_adm_area_1', 'input_adm_area_2', 'gid']],
+            left_on=['state', 'county'], right_on=['input_adm_area_1', 'input_adm_area_2'], how='left').merge(
+            usa_populations[['FIPS', 'Lat', 'Long_']], left_on=['fips'], right_on=['FIPS'], how='left')
+
+figure_4b = figure_4b[['fips', 'Long_', 'date', 'cases']]
+figure_4b['date'] = (figure_4b['date'].apply(
+    lambda x: datetime.datetime.strptime(x, '%Y-%m-%d').date())-usa_t0).apply(lambda x:x.days)
+figure_4b = figure_4b.sort_values\
+    (by=['Long_', 'date', 'fips'], ascending=[True, True, True]).dropna(subset=['fips', 'Long_'])
+
+figure_4b['long_discrete'] = figure_4b['Long_'].apply(lambda x: map_discrete_step * round(x / map_discrete_step))
+heatmap = figure_4b[['date', 'long_discrete', 'cases']].groupby(by=['date', 'long_discrete'], as_index=False).sum()
+heatmap = heatmap[heatmap['date'] >= 0]
+bins = np.arange(heatmap['long_discrete'].min(),
+                 heatmap['long_discrete'].max() + map_discrete_step, step=map_discrete_step)
+
+emptyframe = pd.DataFrame(columns=['date', 'long_discrete', 'cases'])
+emptyframe['date'] = np.repeat(np.unique(heatmap['date']), len(bins))
+emptyframe['long_discrete'] = np.tile(bins, len(np.unique(heatmap['date'])))
+emptyframe['cases'] = np.zeros(len(emptyframe['long_discrete']))
+
+figure_4b = emptyframe.merge(
+    heatmap, on=['date', 'long_discrete'], how='left', suffixes=['_', '']).fillna(0)[['date', 'long_discrete', 'cases']]
+figure_4b = pd.pivot_table(figure_4b,index=['date'],columns=['long_discrete'],values=['cases'])
+figure_4b = figure_4b.reindex(index=figure_4b.index[::-1]).values.astype(int)
+figure_4b = resize(figure_4b, (150, 150))
+
+plt.figure(figsize=(20,7))
+plt.imshow(figure_4b, cmap='plasma', interpolation='nearest')
+plt.ylabel('Days Since T0')
+plt.xlabel('Longitude')
+plt.xticks([0, 75, 150], [-175, -120, -65])
+plt.yticks([0, 75, 150], [186, 93, 0])
+plt.savefig(PLOT_PATH + 'lasgna.png')
+# -------------------------------------------------------------------------------------------------------------------- #
+'''
+PART 8 - SAVING TABLE 1
 '''
 
 '''

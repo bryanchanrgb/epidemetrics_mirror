@@ -380,6 +380,7 @@ date_2 <- as.Date("2020-07-21")
 # Subset for the two dates select
 figure_4b1_data <- subset(figure_4_data,date==date_1)
 figure_4b2_data <- subset(figure_4_data,date==date_2)
+figure_4b2_data$new_cases_per_10k[figure_4b2_data$new_cases_per_10k >= 5] <- 5 
 
 # Set max value to show. Censor any values above this 
 color_max <- 250

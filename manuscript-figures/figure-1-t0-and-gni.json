@@ -1,0 +1,59 @@
+{
+    "$schema": "https://vega.github.io/schema/vega-lite/v4.json",
+    "width": 280,
+    "height": 200,
+    "data": {
+        "url": "t0-and-gni.csv"
+    },
+    "layer": [
+        {
+            "mark": "point",
+            "encoding": {
+                "x": {
+                    "field": "gni_per_capita",
+                    "type": "quantitative",
+                    "scale": {
+                        "type": "log",
+                        "nice": false,
+                        "domain": [500,200000]
+                    },
+                    "title": "GNI per capita"
+                },
+                "y": {
+                    "field": "days_to_t0",
+                    "type": "quantitative",
+                    "scale": {
+                        "type": "log",
+                        "nice": false,
+                        "domain": [20,300]
+                    },
+                    "title": "Days until epidemic established"
+                }
+            }
+        },
+        {
+            "mark": {
+                "type": "line",
+                "color": "firebrick"
+            },
+            "transform": [
+                {
+                    "regression": "days_to_t0",
+                    "on": "gni_per_capita",
+                    "method": "pow",
+                    "extent": [500,200000]
+                }
+            ],
+            "encoding": {
+                "x": {
+                    "field": "gni_per_capita",
+                    "type": "quantitative"
+                },
+                "y": {
+                    "field": "days_to_t0",
+                    "type": "quantitative"
+                }
+            }
+        }
+    ]
+}

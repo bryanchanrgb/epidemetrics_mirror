@@ -30,3 +30,4 @@ var spec_time_vs_confirmed_scatter = "http://localhost:8000/js/time-vs-confirmed
 
 vegaEmbed('#time-vs-confirmed-scatter', spec_time_vs_confirmed_scatter).then(function(result) {
 }).catch(console.error);
+
