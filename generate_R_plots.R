@@ -182,6 +182,16 @@ figure_3_data_plot_smooth <- melt(subset(figure_3_data,country%in%c(country_a,co
                                   id.vars=c("country","countrycode","date"),
                                   measure.vars=c("new_per_day_smooth","dead_per_day_smooth","new_tests_smoothed"),
                                   na.rm=TRUE)
+
+figure_3_data_plot_positive <- melt(subset(figure_3_data,country%in%c(country_a,country_b,country_c)), 
+                                  id.vars=c("country","countrycode","date"),
+                                  measure.vars=c("positive_rate"),
+                                  na.rm=TRUE)
+
+# Scale up the positive rate to fit on the same axis
+#figure_3_data_plot_positive <-
+#figure_3_data_plot[(figure_3_data_plot$country==country_a)&(figure_3_data_plot$variable=="new_tests"),"value"]
+  
 # rename values
 figure_3_data_plot <- figure_3_data_plot %>% mutate(variable=recode(variable, 
                                                                     "new_per_day"="New Cases per Day",
@@ -337,12 +347,6 @@ figure_4_data <- read_delim(file="./data/figure_4.csv",
                             col_types = cols(gid = col_factor(levels = NULL),
                                              date = col_date(format = "%Y-%m-%d"),
                                              fips = col_factor(levels = NULL)))
-# Remove rows with NA in geometry. Required to convert column to shape object
-figure_4_data <- subset(figure_4_data,!is.na(geometry))
-# Convert "geometry" column to a sfc shape column 
-figure_4_data$geometry <- st_as_sfc(figure_4_data$geometry)
-# Convert dataframe to a sf shape object with "geometry" containing the shape information
-figure_4_data <- st_sf(figure_4_data)
 
 # Sort by GID and date
 figure_4_data <- figure_4_data[order(figure_4_data$gid, figure_4_data$date),]
@@ -366,10 +370,10 @@ figure_4_max_confirmed <- figure_4_max_confirmed[order(-figure_4_max_confirmed$c
 top_n <- head(figure_4_max_confirmed, 5)
 figure_4a_data <- subset(figure_4_data,gid%in%top_n$gid)
 
-# Aggregate sum for each day
-figure_4a_data_agg <- aggregate(data.frame(figure_4_data[c("cases")]),
+# Aggregate for each day
+figure_4a_data_agg <- aggregate(figure_4_data[c("new_cases")],
                                 by = list(figure_4_data$date),
-                                FUN = sum,
+                                FUN = mean,
                                 na.rm=TRUE)
 figure_4a_data_agg <- plyr::rename(figure_4a_data_agg, c("Group.1"="date"))
 
@@ -389,18 +393,38 @@ figure_4b1_data$new_cases_censored[figure_4b1_data$new_cases_censored > color_ma
 figure_4b2_data$new_cases_censored <- figure_4b2_data$new_cases
 figure_4b2_data$new_cases_censored[figure_4b2_data$new_cases_censored > color_max] <- color_max
 
+# Convert the dataframe for figure_4b1 and 4b2 data into spatial dataframe
+# Remove rows with NA in geometry. Required to convert column to shape object
+figure_4b1_data <- subset(figure_4b1_data,!is.na(geometry))
+figure_4b2_data <- subset(figure_4b2_data,!is.na(geometry))
+# Convert "geometry" column to a sfc shape column 
+figure_4b1_data$geometry <- st_as_sfc(figure_4b1_data$geometry)
+figure_4b2_data$geometry <- st_as_sfc(figure_4b2_data$geometry)
+# Convert dataframe to a sf shape object with "geometry" containing the shape information
+figure_4b1_data <- st_sf(figure_4b1_data)
+figure_4b2_data <- st_sf(figure_4b2_data)
+
+y_max = max(figure_4a_data_agg$new_cases)
+
 # Figure 4: USA time series and choropleth ----------------------------------------------
 # Set up colour palette
 my_palette_1 <- brewer.pal(name="YlGnBu",n=4)[2]
 my_palette_2 <- brewer.pal(name="YlGnBu",n=4)[4]
 my_palette_3 <- "GnBu"
+my_palette_4 <- brewer.pal(name="Oranges",n=4)[4]
+
 
 # Figure 4a: Time series of US counties
 figure_4a <- (ggplot()
-              + geom_line(data = figure_4_data, aes(x=date, y=new_cases), color=my_palette_1,size=1,na.rm=TRUE)
+              + geom_line(data = figure_4_data, aes(x=date, y=new_cases, group=gid), alpha=0.3, color=my_palette_1,size=1,na.rm=TRUE)
               + geom_line(data = figure_4a_data_agg, aes(x=date, y=new_cases), color=my_palette_2, size=2, na.rm=TRUE)
+              #+ geom_smooth(data = figure_4a_data_agg, aes(x=date, y=new_cases), color=my_palette_2,size=2,na.rm=TRUE)
+              + geom_vline(xintercept=date_1,linetype="dashed", color=my_palette_4, size=1)
+              + geom_vline(xintercept=date_2,linetype="dashed", color=my_palette_4, size=1)
+              + annotate("text",x=date_1+3,y=6000,hjust=0,label=paste("Date of first peak:",date_1),color=my_palette_4)
+              + annotate("text",x=date_2+3,y=6000,hjust=0,label=paste("Date of second peak:",date_2),color=my_palette_4)
               + labs(title="New Cases Over Time for US Counties", y="New Cases per Day", x="Date")
-              + scale_y_continuous(expand=c(0,0), limits=c(0, 3)) 
+              + scale_y_continuous(expand=c(0,0), limits=c(0, NA)) 
               + theme_light()
               + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
 
