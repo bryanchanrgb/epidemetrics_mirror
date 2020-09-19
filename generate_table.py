@@ -964,27 +964,39 @@ figure_4b = figure_4b.sort_values\
     (by=['Long_', 'date', 'fips'], ascending=[True, True, True]).dropna(subset=['fips', 'Long_'])
 
 figure_4b['long_discrete'] = figure_4b['Long_'].apply(lambda x: map_discrete_step * round(x / map_discrete_step))
-heatmap = figure_4b[['date', 'long_discrete', 'cases']].groupby(by=['date', 'long_discrete'], as_index=False).sum()
+figure_4b = figure_4b[figure_4b['long_discrete'] >= -125]
+
+figure_4b = figure_4b.set_index(['fips','date'])
+figure_4b = figure_4b.sort_index()
+figure_4b['new_cases_per_day'] = np.nan
+for idx in figure_4b.index.levels[0]:
+    figure_4b['new_cases_per_day'][idx] = figure_4b['cases'][idx].diff()
+figure_4b = figure_4b.reset_index()[['date', 'long_discrete', 'new_cases_per_day', 'fips']]
+figure_4b['new_cases_per_day'] = figure_4b['new_cases_per_day'].clip(lower=0, upper=None)
+
+heatmap = figure_4b[['date', 'long_discrete', 'new_cases_per_day']].groupby(
+    by=['date', 'long_discrete'], as_index=False).sum()
 heatmap = heatmap[heatmap['date'] >= 0]
 bins = np.arange(heatmap['long_discrete'].min(),
                  heatmap['long_discrete'].max() + map_discrete_step, step=map_discrete_step)
 
-emptyframe = pd.DataFrame(columns=['date', 'long_discrete', 'cases'])
+emptyframe = pd.DataFrame(columns=['date', 'long_discrete', 'new_cases_per_day'])
 emptyframe['date'] = np.repeat(np.unique(heatmap['date']), len(bins))
 emptyframe['long_discrete'] = np.tile(bins, len(np.unique(heatmap['date'])))
-emptyframe['cases'] = np.zeros(len(emptyframe['long_discrete']))
-
+emptyframe['new_cases_per_day'] = np.zeros(len(emptyframe['long_discrete']))
 figure_4b = emptyframe.merge(
-    heatmap, on=['date', 'long_discrete'], how='left', suffixes=['_', '']).fillna(0)[['date', 'long_discrete', 'cases']]
-figure_4b = pd.pivot_table(figure_4b,index=['date'],columns=['long_discrete'],values=['cases'])
+    heatmap, on=['date', 'long_discrete'], how='left', suffixes=['_', '']).fillna(0)[
+    ['date', 'long_discrete', 'new_cases_per_day']]
+
+figure_4b = pd.pivot_table(figure_4b,index=['date'],columns=['long_discrete'],values=['new_cases_per_day'])
 figure_4b = figure_4b.reindex(index=figure_4b.index[::-1]).values.astype(int)
 figure_4b = resize(figure_4b, (150, 150))
 
-plt.figure(figsize=(20,7))
+plt.figure(figsize=(10,10))
 plt.imshow(figure_4b, cmap='plasma', interpolation='nearest')
 plt.ylabel('Days Since T0')
 plt.xlabel('Longitude')
-plt.xticks([0, 75, 150], [-175, -120, -65])
+plt.xticks([0, 75, 150], [-125, -95, -65])
 plt.yticks([0, 75, 150], [186, 93, 0])
 plt.savefig(PLOT_PATH + 'lasgna.png')
 # -------------------------------------------------------------------------------------------------------------------- #
