@@ -437,12 +437,12 @@ FLAG_RASIED_AGAIN - DATE FLAG RAISED AGAIN FOR EACH FLAG IN L66 √
 FLAG RESPONSE TIME - T0_POP TO MAX FLAG FOR EACH FLAG IN L66√
 FLAG TOTAL DAYS √
 '''
-
 epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'population', 't0', 't0_relative',
                                            'peak_1', 'peak_2', 'date_peak_1', 'date_peak_2', 'first_wave_start',
                                            'first_wave_end', 'second_wave_start', 'second_wave_end','last_confirmed',
                                            'testing_available','peak_1_cfr','peak_2_cfr',
-                                           'dead_class','tests_class','positive_rate_ratio','R2_dead','R2_tests'])
+                                           'dead_class','tests_class','first_wave_positive_rate','second_wave_positive_rate',
+                                           'R2_dead','R2_tests'])
 
 countries = epidemiology['countrycode'].unique()
 for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
@@ -498,7 +498,12 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['second_wave_end'] = np.nan
     data['peak_1_cfr'] = np.nan
     data['peak_2_cfr'] = np.nan
-
+    data['tests_class'] = np.nan
+    data['first_wave_positive_rate'] = np.nan
+    data['second_wave_positive_rate'] = np.nan
+    data['R2_dead'] = np.nan
+    data['R2_tests'] = np.nan
+    
     if len(genuine_peaks) >= 1:
         data['peak_1'] = epidemiology_series[
             epidemiology_series['countrycode'] == country]['new_per_day_smooth'].values[genuine_peaks[0]]
@@ -553,58 +558,16 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['last_confirmed'] = epidemiology_series[epidemiology_series['countrycode']==country]['confirmed'].iloc[-1]
     data['testing_available'] = True if len(
         epidemiology_series[epidemiology_series['countrycode']==country]['new_tests'].dropna()) > 0 else False
-    
-    if len(genuine_peaks)>=2 and data['testing_available']==True:
-        # positive rate ratio: the positive rate at peak 1 divided by positive rate at peak 2. If this is high, may indicate that 2nd wave is test driven.
-        data['positive_rate_ratio'] = \
-            epidemiology_series[epidemiology_series['countrycode'] == country]['positive_rate'].values[genuine_peaks[0]] / \
-            epidemiology_series[epidemiology_series['countrycode'] == country]['positive_rate'].values[genuine_peaks[1]]
-    else: 
-        data['positive_rate_ratio'] = np.nan
-    
-    if data['class']>=3 and data['testing_available']==True:
-        # Get R^2 of 2 regressions: Confirmed on Deaths (forward 14 days), vs. Confirmed on Tests. If tests explains more of the variance, may indicate 2nd wave is test driven.
-        X = epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day']
-        y = epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day']
-        X = np.array(X.iloc[14:]).reshape(-1,1)     # 14 day lag from confirmed to death
-        y = y.iloc[:-14]
-        data['R2_dead'] = LinearRegression().fit(X, y).score(X, y)
-        X = epidemiology_series[epidemiology_series['countrycode'] == country][['new_per_day','new_tests']].dropna(how='any')
-        y = X['new_per_day']
-        X = np.array(X['new_tests']).reshape(-1,1)     # assume no lag from test to confirmed
-        data['R2_tests'] = LinearRegression().fit(X, y).score(X, y)
-    else:
-        data['R2_dead'] = np.nan
-        data['R2_tests'] = np.nan
-    
-    if SAVE_PLOTS:
-        plt.figure(figsize=(20, 7))
-        plt.title('New Cases Per Day with Spline Fit for ' + country)
-        plt.ylabel('New Cases per Day')
-        plt.xlabel('Date')
-        plt.plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
-                 epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day'].values,
-                 label='New Cases per Day')
-        plt.plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
-                 epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day_smooth'].values,
-                 label='New Cases per Day Spline')
-        plt.plot([epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values[i]
-                  for i in peak_characteristics[0]],
-                 [epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day_smooth'].values[i]
-                  for i in peak_characteristics[0]], "X", ms=20, color='red')
-        plt.legend()
-        plt.savefig(PLOT_PATH + 'epidemiological/cases/' + country + '_cases.png')
-        plt.close()
 
     # Classify wave status for deaths
     dead_prominence_threshold = max(PROMINENCE_THRESHOLD_DEAD, 
                                     RELATIVE_PROMINENCE_THRESHOLD*np.nanmax(epidemiology_series
                                                                       [epidemiology_series['countrycode']==country]
                                                                       ['dead_per_day_smooth']))
-    peak_characteristics = find_peaks(
+    dead_peak_characteristics = find_peaks(
         epidemiology_series[epidemiology_series['countrycode']==country]['dead_per_day_smooth'].values,
         prominence=dead_prominence_threshold, distance=DISTANCE)
-    genuine_peaks = peak_characteristics[0]
+    genuine_peaks = dead_peak_characteristics[0]
     data['dead_class'] = 2*len(genuine_peaks)
     if data['dead_class'] > 0 and genuine_peaks[-1]<len(epidemiology_series[epidemiology_series['countrycode'] == country]):
         last_peak_date = epidemiology_series[
@@ -616,24 +579,6 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                                                      [epidemiology_series['countrycode']==country]
                                                                      ['dead_per_day_smooth']):
             data['dead_class'] = data['dead_class'] + 1
-    if SAVE_PLOTS:
-        plt.figure(figsize=(20, 7))
-        plt.title('Deaths Per Day with Spline Fit for ' + country)
-        plt.ylabel('Deaths per Day')
-        plt.xlabel('Date')
-        plt.plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
-                 epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day'].values,
-                 label='Deaths per Day')
-        plt.plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
-                 epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day_smooth'].values,
-                 label='Deaths per Day Spline')
-        plt.plot([epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values[i]
-                  for i in peak_characteristics[0]],
-                 [epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day_smooth'].values[i]
-                  for i in peak_characteristics[0]], "X", ms=20, color='red')
-        plt.legend()
-        plt.savefig(PLOT_PATH + 'epidemiological/dead/' + country + '_dead.png')
-        plt.close()
 
     # Classify wave status for tests
     if data['testing_available']:
@@ -641,10 +586,10 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                         RELATIVE_PROMINENCE_THRESHOLD*np.nanmax(epidemiology_series
                                                                           [epidemiology_series['countrycode']==country]
                                                                           ['new_tests_smoothed']))
-        peak_characteristics = find_peaks(
+        tests_peak_characteristics = find_peaks(
             epidemiology_series[epidemiology_series['countrycode']==country]['new_tests_smoothed'].values,
             prominence=tests_prominence_threshold, distance=DISTANCE)
-        genuine_peaks = peak_characteristics[0]
+        genuine_peaks = tests_peak_characteristics[0]
         data['tests_class'] = 2*len(genuine_peaks)
         if data['tests_class'] > 0 and genuine_peaks[-1]<len(epidemiology_series[epidemiology_series['countrycode'] == country]):
             last_peak_date = epidemiology_series[
@@ -656,31 +601,76 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                                                          [epidemiology_series['countrycode']==country]
                                                                          ['new_tests_smoothed']):
                 data['tests_class'] = data['tests_class'] + 1
+        
+        # Get R^2 of 2 regressions: Confirmed on Deaths (forward 14 days), vs. Confirmed on Tests. If tests explains more of the variance, may indicate 2nd wave is test driven.
+        X = epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day']
+        y = epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day']
+        X = np.array(X.iloc[14:]).reshape(-1,1)     # 14 day lag from confirmed to death
+        y = y.iloc[:-14]
+        data['R2_dead'] = LinearRegression().fit(X, y).score(X, y)
+        X = epidemiology_series[epidemiology_series['countrycode'] == country][['new_per_day','new_tests']].dropna(how='any')
+        y = X['new_per_day']
+        X = np.array(X['new_tests']).reshape(-1,1)     # assume no lag from test to confirmed
+        data['R2_tests'] = LinearRegression().fit(X, y).score(X, y)
+        
+        if len(genuine_peaks)>=1:
+        # Compare the positive rate during wave 1 with the positive rate during wave 2. If positive rate is much higher in first wave, may indicate that 2nd wave is test driven.
+            data['first_wave_positive_rate'] = np.nanmean(epidemiology_series[
+                 (epidemiology_series['countrycode'] == country) &
+                 (epidemiology_series['date'] >= data['first_wave_start']) &
+                 (epidemiology_series['date'] <= data['first_wave_end'])]['positive_rate'])
+            if len(genuine_peaks)>=2:
+                data['second_wave_positive_rate'] = np.nanmean(epidemiology_series[
+                     (epidemiology_series['countrycode'] == country) &
+                     (epidemiology_series['date'] >= data['second_wave_start']) &
+                     (epidemiology_series['date'] <= data['second_wave_end'])]['positive_rate'])
     
-        if SAVE_PLOTS:
-            plt.figure(figsize=(20, 7))
-            plt.title('Tests Per Day with Spline Fit for ' + country)
-            plt.ylabel('Tests per Day')
-            plt.xlabel('Date')
-            plt.plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
+    if SAVE_PLOTS:
+        f, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
+        axes[0].plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
+                 epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day'].values,
+                 label='New Cases per Day')
+        axes[0].plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
+                 epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day_smooth'].values,
+                 label='New Cases per Day Spline')
+        axes[0].plot([epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values[i]
+                  for i in peak_characteristics[0]],
+                 [epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day_smooth'].values[i]
+                  for i in peak_characteristics[0]], "X", ms=20, color='red')
+        axes[1].plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
+                 epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day'].values,
+                 label='Deaths per Day')
+        axes[1].plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
+                 epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day_smooth'].values,
+                 label='Deaths per Day Spline')
+        axes[1].plot([epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values[i]
+                  for i in peak_characteristics[0]],
+                 [epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day_smooth'].values[i]
+                  for i in peak_characteristics[0]], "X", ms=20, color='red')
+        if data['testing_available']:
+            axes[2].plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
                      epidemiology_series[epidemiology_series['countrycode'] == country]['new_tests'].values,
                      label='Tests per Day')
-            plt.plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
+            axes[2].plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
                      epidemiology_series[epidemiology_series['countrycode'] == country]['new_tests_smoothed'].values,
                      label='Tests per Day Spline')
-            plt.plot([epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values[i]
+            axes[2].plot([epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values[i]
                       for i in peak_characteristics[0]],
                      [epidemiology_series[epidemiology_series['countrycode'] == country]['new_tests_smoothed'].values[i]
                       for i in peak_characteristics[0]], "X", ms=20, color='red')
-            plt.legend()
-            plt.savefig(PLOT_PATH + 'epidemiological/tests/' + country + '_tests.png')
-            plt.close()
-    else:
-        data['tests_class'] = np.nan
+        axes[0].set_title('New Cases per Day')
+        axes[0].set_ylabel('New Cases per Day')
+        axes[1].set_title('Deaths per Day')
+        axes[1].set_ylabel('Deaths per Day')
+        axes[2].set_title('Tests per Day')
+        axes[2].set_ylabel('Tests per Day')
+        f.suptitle('Cases, Deaths and Tests per Day for ' + country)
+        plt.savefig(PLOT_PATH + 'epidemiological/' + country + '.png')
+        plt.close('all')    
     
     epidemiology_panel = epidemiology_panel.append(data,ignore_index=True)
     
-
+    
 mobility_panel = pd.DataFrame(columns=['countrycode','country'] +
                                       [mobility_type + '_max' for mobility_type in mobilities] +
                                       [mobility_type + '_max_date' for mobility_type in mobilities] +
