@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 INTITALISE SCRIPT PARAMETERS
 '''
 
-SAVE_PLOTS = True
+SAVE_PLOTS = False
 SAVE_CSV = True
 PLOT_PATH = './plots/'
 CSV_PATH = './data/'
@@ -28,14 +28,14 @@ DISTANCE = 21
 PROMINENCE_THRESHOLD = 5            # Absolute prominence threshold (in number of new cases)
 PROMINENCE_THRESHOLD_DEAD = 2     # Absolute prominence threshold (in number of new deaths)
 PROMINENCE_THRESHOLD_TESTS = 10      # Absolute prominence threshold (in number of new tests)
-RELATIVE_PROMINENCE_THRESHOLD = 0.3 # Prominence relative to absolute max of time series
+RELATIVE_PROMINENCE_THRESHOLD = 0.3 # Prominence relative to the max of time series (smoothed)
 CLASS_1_THRESHOLD = 100             # Threshold in number of new cases per day (smoothed) to be considered entering first wave
 CLASS_1_THRESHOLD_DEAD = 5          # Threshold in number of dead per day (smoothed) to be considered entering first wave for deaths
 CLASS_1_THRESHOLD_TESTS = 200       # Threshold in number of tests per day (smoothed) to be considered entering first wave for tests
 ABSOLUTE_T0_THRESHOLD = 1000
 POP_RELATIVE_T0_THRESHOLD = 5 #per million people
 TEST_LAG = 0 #Lag between test date and test results
-DEATH_LAG = 0 #Ideally would be sampled from a random distribution of some sorts
+DEATH_LAG = 21 #Ideally would be sampled from a random distribution of some sorts
 
 
 conn = psycopg2.connect(
@@ -60,7 +60,7 @@ assert not raw_epidemiology[['countrycode', 'date']].duplicated().any()
 
 # GET RAW MOBILITY TABLE
 source = 'GOOGLE_MOBILITY'
-mobilities = ['residential']
+mobilities = ['residential','workplace','transit_stations','retail_recreation']
 
 sql_command = """SELECT * FROM mobility WHERE source = %(source)s AND adm_area_1 is NULL"""
 raw_mobility = pd.read_sql(sql_command, conn, params={'source': source})
@@ -617,8 +617,8 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         # Get R^2 of 2 regressions: Confirmed on Deaths (forward 14 days), vs. Confirmed on Tests. If tests explains more of the variance, may indicate 2nd wave is test driven.
         X = epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day']
         y = epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day']
-        X = np.array(X.iloc[14:]).reshape(-1,1)     # 14 day lag from confirmed to death
-        y = y.iloc[:-14]
+        X = np.array(X.iloc[DEATH_LAG:]).reshape(-1,1)     # X day lag from confirmed to death
+        y = y.iloc[:-DEATH_LAG]
         data['R2_dead'] = LinearRegression().fit(X, y).score(X, y)
         X = epidemiology_series[epidemiology_series['countrycode'] == country][['new_per_day','new_tests']].dropna(how='any')
         y = X['new_per_day']
@@ -994,7 +994,8 @@ if SAVE_CSV:
 
 data = epidemiology_series[['countrycode','country','date','days_since_t0','days_since_t0_pop']].merge(
     epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
-    mobility_series[['countrycode','date','residential','residential_smooth']],on=['countrycode','date'],how='left').dropna()
+    mobility_series[['countrycode','date','residential','residential_smooth','workplace','workplace_smooth',
+                     'transit_stations','transit_stations_smooth','retail_recreation','retail_recreation_smooth']].dropna(how='all'),on=['countrycode','date'],how='inner')
 
 figure_2b = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','residential','residential_smooth'])
 figure_2b['COUNTRYCODE'] = data['countrycode']
@@ -1004,6 +1005,12 @@ figure_2b['t'] = data['days_since_t0']
 figure_2b['t_pop'] = data['days_since_t0_pop']
 figure_2b['residential'] = data['residential']
 figure_2b['residential_smooth'] = data['residential_smooth']
+figure_2b['workplace'] = data['residential']
+figure_2b['workplace_smooth'] = data['residential_smooth']
+figure_2b['transit_stations'] = data['residential']
+figure_2b['transit_stations_smooth'] = data['residential_smooth']
+figure_2b['retail_recreation'] = data['residential']
+figure_2b['retail_recreation_smooth'] = data['residential_smooth']
 
 if SAVE_CSV:
     figure_2b.to_csv(CSV_PATH + 'figure_2b.csv')
