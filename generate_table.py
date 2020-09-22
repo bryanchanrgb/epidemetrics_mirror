@@ -19,8 +19,8 @@ warnings.filterwarnings('ignore')
 INTITALISE SCRIPT PARAMETERS
 '''
 
-SAVE_PLOTS = False
-SAVE_CSV = False
+SAVE_PLOTS = True
+SAVE_CSV = True
 PLOT_PATH = './plots/'
 CSV_PATH = './data/'
 SMOOTH = 0.001
@@ -29,6 +29,9 @@ PROMINENCE_THRESHOLD = 5            # Absolute prominence threshold (in number o
 PROMINENCE_THRESHOLD_DEAD = 2     # Absolute prominence threshold (in number of new deaths)
 PROMINENCE_THRESHOLD_TESTS = 10      # Absolute prominence threshold (in number of new tests)
 RELATIVE_PROMINENCE_THRESHOLD = 0.3 # Prominence relative to absolute max of time series
+CLASS_1_THRESHOLD = 100             # Threshold in number of new cases per day (smoothed) to be considered entering first wave
+CLASS_1_THRESHOLD_DEAD = 5          # Threshold in number of dead per day (smoothed) to be considered entering first wave for deaths
+CLASS_1_THRESHOLD_TESTS = 200       # Threshold in number of tests per day (smoothed) to be considered entering first wave for tests
 ABSOLUTE_T0_THRESHOLD = 1000
 POP_RELATIVE_T0_THRESHOLD = 5 #per million people
 TEST_LAG = 0 #Lag between test date and test results
@@ -218,9 +221,9 @@ epidemiology_series = {
 }
 
 if SAVE_PLOTS:
-    os.makedirs(PLOT_PATH + 'epidemiological/cases/', exist_ok=True)
-    os.makedirs(PLOT_PATH + 'epidemiological/dead/', exist_ok=True)
-    os.makedirs(PLOT_PATH + 'epidemiological/tests/', exist_ok=True)
+    for i in range(0,6):
+        os.makedirs(PLOT_PATH + 'epidemiological/class_' + str(i) + '/', exist_ok=True)
+
 
 # INITIALISE MOBILITY TIME SERIES
 mobility_series = {
@@ -483,6 +486,9 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                                                      [epidemiology_series['countrycode']==country]
                                                                      ['new_per_day_smooth']):
             data['class'] = data['class'] + 1
+    elif data['class'] == 0:
+        if np.nanmax(epidemiology_series.loc[epidemiology_series["countrycode"]==country,"new_per_day_smooth"]) >= CLASS_1_THRESHOLD:
+            data['class'] = data['class'] + 1
 
     data['peak_1'] = np.nan
     data['peak_2'] = np.nan
@@ -579,7 +585,10 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                                                      [epidemiology_series['countrycode']==country]
                                                                      ['dead_per_day_smooth']):
             data['dead_class'] = data['dead_class'] + 1
-
+    elif data['dead_class'] == 0:
+        if np.nanmax(epidemiology_series.loc[epidemiology_series["countrycode"]==country,"dead_per_day_smooth"]) >= CLASS_1_THRESHOLD_DEAD:
+            data['dead_class'] = data['dead_class'] + 1
+            
     # Classify wave status for tests
     if data['testing_available']:
         tests_prominence_threshold = max(PROMINENCE_THRESHOLD_TESTS, 
@@ -601,7 +610,10 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                                                          [epidemiology_series['countrycode']==country]
                                                                          ['new_tests_smoothed']):
                 data['tests_class'] = data['tests_class'] + 1
-        
+        elif data['tests_class'] == 0:
+            if np.nanmax(epidemiology_series.loc[epidemiology_series["countrycode"]==country,"new_tests_smoothed"]) >= CLASS_1_THRESHOLD_TESTS:
+                data['tests_class'] = data['tests_class'] + 1
+            
         # Get R^2 of 2 regressions: Confirmed on Deaths (forward 14 days), vs. Confirmed on Tests. If tests explains more of the variance, may indicate 2nd wave is test driven.
         X = epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day']
         y = epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day']
@@ -644,9 +656,9 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                  epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day_smooth'].values,
                  label='Deaths per Day Spline')
         axes[1].plot([epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values[i]
-                  for i in peak_characteristics[0]],
+                  for i in dead_peak_characteristics[0]],
                  [epidemiology_series[epidemiology_series['countrycode'] == country]['dead_per_day_smooth'].values[i]
-                  for i in peak_characteristics[0]], "X", ms=20, color='red')
+                  for i in dead_peak_characteristics[0]], "X", ms=20, color='red')
         if data['testing_available']:
             axes[2].plot(epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values,
                      epidemiology_series[epidemiology_series['countrycode'] == country]['new_tests'].values,
@@ -655,9 +667,9 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                      epidemiology_series[epidemiology_series['countrycode'] == country]['new_tests_smoothed'].values,
                      label='Tests per Day Spline')
             axes[2].plot([epidemiology_series[epidemiology_series['countrycode'] == country]['date'].values[i]
-                      for i in peak_characteristics[0]],
+                      for i in tests_peak_characteristics[0]],
                      [epidemiology_series[epidemiology_series['countrycode'] == country]['new_tests_smoothed'].values[i]
-                      for i in peak_characteristics[0]], "X", ms=20, color='red')
+                      for i in tests_peak_characteristics[0]], "X", ms=20, color='red')
         axes[0].set_title('New Cases per Day')
         axes[0].set_ylabel('New Cases per Day')
         axes[1].set_title('Deaths per Day')
@@ -665,12 +677,15 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         axes[2].set_title('Tests per Day')
         axes[2].set_ylabel('Tests per Day')
         f.suptitle('Cases, Deaths and Tests per Day for ' + country)
-        plt.savefig(PLOT_PATH + 'epidemiological/' + country + '.png')
+        plt.savefig(PLOT_PATH + 'epidemiological/class_' +str(data['class']) +'/' + country + '.png')
         plt.close('all')    
     
     epidemiology_panel = epidemiology_panel.append(data,ignore_index=True)
     
+if SAVE_CSV:
+    epidemiology_panel.to_csv(CSV_PATH + 'epidemiology_panel.csv')
     
+
 mobility_panel = pd.DataFrame(columns=['countrycode','country'] +
                                       [mobility_type + '_max' for mobility_type in mobilities] +
                                       [mobility_type + '_max_date' for mobility_type in mobilities] +
