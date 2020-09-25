@@ -49,22 +49,20 @@ cur = conn.cursor()
 # GET RAW EPIDEMIOLOGY TABLE
 source = "WRD_ECDC"
 exclude = ['Other continent', 'Asia', 'Europe', 'America', 'Africa', 'Oceania']
-
-sql_command = """SELECT * FROM epidemiology WHERE source = %(source)s"""
-raw_epidemiology = pd.read_sql(sql_command, conn, params={'source': source})
-raw_epidemiology = raw_epidemiology[raw_epidemiology['adm_area_1'].isnull()].sort_values(by=['countrycode', 'date'])
+cols = 'countrycode, country, date, confirmed, dead'
+sql_command = """SELECT """ + cols + """ FROM epidemiology WHERE adm_area_1 IS NULL AND source = %(source)s"""
+raw_epidemiology = pd.read_sql(sql_command, conn, params={'source':source})
+raw_epidemiology = raw_epidemiology.sort_values(by=['countrycode', 'date'])
 raw_epidemiology = raw_epidemiology[~raw_epidemiology['country'].isin(exclude)].reset_index(drop=True)
-raw_epidemiology = raw_epidemiology[['countrycode', 'country', 'date', 'confirmed', 'dead']]
 # Check no conflicting values for each country and date
 assert not raw_epidemiology[['countrycode', 'date']].duplicated().any()
 
 # GET RAW MOBILITY TABLE
 source = 'GOOGLE_MOBILITY'
 mobilities = ['residential','workplace','transit_stations','retail_recreation']
-
-sql_command = """SELECT * FROM mobility WHERE source = %(source)s AND adm_area_1 is NULL"""
+cols = 'countrycode, country, date, ' +  ', '.join(mobilities)
+sql_command = """SELECT """ + cols + """ FROM mobility WHERE source = %(source)s AND adm_area_1 is NULL"""
 raw_mobility = pd.read_sql(sql_command, conn, params={'source': source})
-raw_mobility = raw_mobility[['countrycode', 'country', 'date'] + mobilities]
 raw_mobility = raw_mobility.sort_values(by=['countrycode', 'date']).reset_index(drop=True)
 # Check no conflicting values for each country and date
 assert not raw_mobility[['countrycode', 'date']].duplicated().any()
@@ -72,8 +70,8 @@ assert not raw_mobility[['countrycode', 'date']].duplicated().any()
 # GET RAW GOVERNMENT RESPONSE TABLE
 flags = ['c6_stay_at_home_requirements']
 flag_thresholds = {'c6_stay_at_home_requirements': 2}
-
-sql_command = """SELECT * FROM government_response"""
+cols = 'countrycode, country, date, stringency_index, ' +  ', '.join(flags)
+sql_command = """SELECT """ + cols + """ FROM government_response"""
 raw_government_response = pd.read_sql(sql_command, conn)
 raw_government_response = raw_government_response.sort_values(by=['countrycode', 'date']).reset_index(drop=True)
 raw_government_response = raw_government_response[['countrycode', 'country', 'date', 'stringency_index'] + flags]
@@ -115,17 +113,12 @@ for country in countries:
 wb_statistics['net_migration'] = wb_statistics['net_migration'].abs()
 
 # OWID DATA
-raw_testing_data = pd.read_csv('./owid-covid-data.csv', parse_dates=['date'])[[
-    'iso_code', 'date', 'new_tests', 'new_tests_smoothed', 'positive_rate']].rename(columns={'iso_code':'countrycode'})
+raw_testing_data = pd.read_csv('https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/' +
+                               'owid-covid-data.csv'
+                               , parse_dates=['date'])[[
+                                'iso_code', 'date', 'new_tests', 'new_tests_smoothed', 'positive_rate']].rename(columns={'iso_code':'countrycode'})
 raw_testing_data['date'] = raw_testing_data['date'].apply(lambda x:x.date())
-
-# GET COUNTRY LABELS
-class_dictionary = {
-    'EPI_ENTERING_FIRST': 1,
-    'EPI_PAST_FIRST': 2,
-    'EPI_ENTERING_SECOND': 3,
-    'EPI_PAST_SECOND': 4}
-labelled_columns = pd.read_csv('./peak_labels.csv')
+                                                          
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 0 - PRE-PROCESSING
@@ -134,7 +127,7 @@ PART 0 - PRE-PROCESSING
 # EPIDEMIOLOGY PROCESSING
 countries = raw_epidemiology['countrycode'].unique()
 epidemiology = pd.DataFrame(columns=['countrycode', 'country', 'date', 'confirmed', 'new_per_day','dead_per_day'])
-for country in countries:
+for country in tqdm(countries, desc='Pre-processing Epidemiological Data'):
     data = raw_epidemiology[raw_epidemiology['countrycode'] == country].set_index('date')
     data = data.reindex([x.date() for x in pd.date_range(data.index.values[0], data.index.values[-1])])
     data[['countrycode', 'country']] = data[['countrycode', 'country']].fillna(method='backfill')
@@ -157,7 +150,7 @@ for country in countries:
 countries = raw_mobility['countrycode'].unique()
 mobility = pd.DataFrame(columns=['countrycode', 'country', 'date'] + mobilities)
 
-for country in countries:
+for country in tqdm(countries, desc='Pre-processing Mobility Data'):
     data = raw_mobility[raw_mobility['countrycode'] == country].set_index('date')
     data = data.reindex([x.date() for x in pd.date_range(data.index.values[0], data.index.values[-1])])
     data[['countrycode', 'country']] = data[['countrycode', 'country']].fillna(method='backfill')
@@ -170,7 +163,7 @@ for country in countries:
 countries = raw_government_response['countrycode'].unique()
 government_response = pd.DataFrame(columns=['countrycode', 'country', 'date'] + flags)
 
-for country in countries:
+for country in tqdm(countries, desc='Pre-processing Government Response Data'):
     data = raw_government_response[raw_government_response['countrycode'] == country].set_index('date')
     data = data.reindex([x.date() for x in pd.date_range(data.index.values[0], data.index.values[-1])])
     data[['countrycode', 'country']] = data[['countrycode', 'country']].fillna(method='backfill')
@@ -184,7 +177,7 @@ countries = [country for country in raw_testing_data['countrycode'].unique()
              if not(pd.isnull(country)) and (len(country) == 3)] #remove some odd values in the countrycode column
 testing = pd.DataFrame(columns=['countrycode','date', 'new_tests', 'new_tests_smoothed', 'positive_rate'])
 
-for country in countries:
+for country in tqdm(countries, desc='Pre-processing Testing Data'):
     data = raw_testing_data[raw_testing_data['countrycode'] == country].reset_index(drop=True)
     if len(data['new_tests'].dropna()) == 0:
         continue
