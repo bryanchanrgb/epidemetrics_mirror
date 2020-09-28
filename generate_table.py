@@ -11,6 +11,7 @@ from skimage.transform import resize
 
 from csaps import csaps
 from scipy.signal import find_peaks
+from scipy.stats import kendalltau
 from sklearn.linear_model import LinearRegression
 
 warnings.filterwarnings('ignore')
@@ -135,13 +136,13 @@ for country in tqdm(countries, desc='Pre-processing Epidemiological Data'):
     data['new_per_day'] = data['confirmed'].diff()
     data.reset_index(inplace=True)
     data['new_per_day'].iloc[np.array(data[data['new_per_day'] < 0].index)] = \
-        data['new_per_day'].iloc[np.array(epidemiology[epidemiology['new_per_day'] < 0].index) - 1]
+        data['new_per_day'].iloc[np.array(data[data['new_per_day'] < 0].index) - 1]
     data['new_per_day'] = data['new_per_day'].fillna(method='bfill')
     data['dead'] = data['dead'].interpolate(method='linear')
     data['dead_per_day'] = data['dead'].diff()
     data.reset_index(inplace=True)
     data['dead_per_day'].iloc[np.array(data[data['dead_per_day'] < 0].index)] = \
-        data['dead_per_day'].iloc[np.array(epidemiology[epidemiology['dead_per_day'] < 0].index) - 1]
+        data['dead_per_day'].iloc[np.array(data[data['dead_per_day'] < 0].index) - 1]
     data['dead_per_day'] = data['dead_per_day'].fillna(method='bfill')
     epidemiology = pd.concat((epidemiology, data)).reset_index(drop=True)
     continue
@@ -438,7 +439,7 @@ epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'p
                                            'first_wave_end', 'second_wave_start', 'second_wave_end','last_confirmed',
                                            'testing_available','peak_1_cfr','peak_2_cfr',
                                            'dead_class','tests_class','first_wave_positive_rate','second_wave_positive_rate',
-                                           'R2_dead','R2_tests'])
+                                           'tau_dead','tau_p_dead','tau_tests','tau_p_tests'])
 
 countries = epidemiology['countrycode'].unique()
 for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
@@ -500,8 +501,10 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['tests_class'] = np.nan
     data['first_wave_positive_rate'] = np.nan
     data['second_wave_positive_rate'] = np.nan
-    data['R2_dead'] = np.nan
-    data['R2_tests'] = np.nan
+    data['tau_dead'] = np.nan
+    data['tau_p_dead'] = np.nan
+    data['tau_tests'] = np.nan
+    data['tau_p_tests'] = np.nan
     
     if len(genuine_peaks) >= 1:
         data['peak_1'] = epidemiology_series[
@@ -612,11 +615,11 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         y = epidemiology_series[epidemiology_series['countrycode'] == country]['new_per_day']
         X = np.array(X.iloc[DEATH_LAG:]).reshape(-1,1)     # X day lag from confirmed to death
         y = y.iloc[:-DEATH_LAG]
-        data['R2_dead'] = LinearRegression().fit(X, y).score(X, y)
+        data['tau_dead'],data['tau_p_dead'] = kendalltau(X,y)
         X = epidemiology_series[epidemiology_series['countrycode'] == country][['new_per_day','new_tests']].dropna(how='any')
         y = X['new_per_day']
         X = np.array(X['new_tests']).reshape(-1,1)     # assume no lag from test to confirmed
-        data['R2_tests'] = LinearRegression().fit(X, y).score(X, y)
+        data['tau_tests'],data['tau_p_tests'] = kendalltau(X,y)
         
         if len(genuine_peaks)>=1:
         # Compare the positive rate during wave 1 with the positive rate during wave 2. If positive rate is much higher in first wave, may indicate that 2nd wave is test driven.
@@ -1076,6 +1079,40 @@ figure_4 = usa_map[['gid','geometry']].merge(figure_4, on=['gid'], how='right')
 
 if SAVE_CSV:
     figure_4.to_csv(CSV_PATH + 'figure_4.csv', sep=';')
+    
+# -------------------------------------------------------------------------------------------------------------------- #
+  
+'''
+PART 6.5 - FIGURE 4A STACKED AREA PLOT BY STATE
+'''    
+# GET RAW CONFIRMED CASES TABLE FOR USA STATES
+cols = 'countrycode, adm_area_1, date, confirmed'
+sql_command = """SELECT """ + cols + """ FROM epidemiology WHERE countrycode = 'USA' AND source = 'USA_NYT' AND adm_area_1 IS NOT NULL AND adm_area_2 IS NULL"""
+raw_usa = pd.read_sql(sql_command, conn)
+raw_usa = raw_usa.sort_values(by=['adm_area_1', 'date']).reset_index(drop=True)
+
+states = raw_usa['adm_area_1'].unique()
+figure_4a = pd.DataFrame(columns=['countrycode', 'adm_area_1','date','confirmed','new_per_day','new_per_day_smooth'])
+for state in tqdm(states, desc='Processing USA Epidemiological Data'):
+    data = raw_usa[raw_usa['adm_area_1'] == state].set_index('date')
+    data = data.reindex([x.date() for x in pd.date_range(data.index.values[0], data.index.values[-1])])
+    data['confirmed'] = data['confirmed'].interpolate(method='linear')
+    data['new_per_day'] = data['confirmed'].diff()
+    data.reset_index(inplace=True)
+    data['new_per_day'].iloc[np.array(data[data['new_per_day'] < 0].index)] = \
+        data['new_per_day'].iloc[np.array(data[data['new_per_day'] < 0].index) - 1]
+    data['new_per_day'] = data['new_per_day'].fillna(method='bfill')
+    x = np.arange(len(data['date']))
+    y = data['new_per_day'].values
+    ys = csaps(x, y, x, smooth=SMOOTH)
+    data['new_per_day_smooth'] = ys
+    figure_4a = pd.concat((figure_4a, data)).reset_index(drop=True)
+    continue
+
+if SAVE_CSV:
+    figure_4a.to_csv(CSV_PATH + 'figure_4a.csv', sep=',')
+
+
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 7 - FIGURE 4b LASAGNA PLOT

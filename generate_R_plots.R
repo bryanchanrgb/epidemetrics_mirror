@@ -14,7 +14,7 @@ lapply(package_list, require, character.only = TRUE)
 # clear workspace
 rm(list=ls())
 
-setwd("C:/Users/bryan/OneDrive/Desktop/Epidemetrics R Plots")
+# Set working directory
 
 # Import Data -------------------------------------------------------------
 
@@ -339,52 +339,65 @@ ggsave("./plots/figure_3.png", plot = figure_3_all, width = 12,  height = 9)
 
 # Plot figure 4: USA Choropleth ---------------------------------------------------------------
 
-# Process Data for figure 4 -------------------------------------------------------------------
+# Import Data for figure 4 -------------------------------------------------------------------
 # Import csv file for figure 4: Time series and choropleth for USA
-figure_4_data <- read_delim(file="./data/figure_4.csv",
+figure_4a_data <- read_csv(file="./data/figure_4a.csv",
+                           na = c("N/A","NA","#N/A"," ",""),
+                           col_types = cols(countrycode = col_factor(levels = NULL),
+                                            date = col_date(format = "%Y-%m-%d"),
+                                            adm_area_1 = col_factor(levels = NULL)))
+
+figure_4b_data <- read_delim(file="./data/figure_4.csv",
                             delim=";",
                             na = c("N/A","NA","#N/A"," ",""),
                             col_types = cols(gid = col_factor(levels = NULL),
                                              date = col_date(format = "%Y-%m-%d"),
                                              fips = col_factor(levels = NULL)))
 
+# Process Data for figure 4 -------------------------------------------------------------------
+# Figure 4a processing
+# Get top 10 states by total confirmed cases, group others into Others
+figure_4a_max <- aggregate(figure_4a_data[c("confirmed")],
+                           by = list(figure_4a_data$adm_area_1),
+                           FUN = max,
+                           na.rm=TRUE)
+figure_4a_max <- plyr::rename(figure_4a_max, c("Group.1"="adm_area_1"))
+figure_4a_max <- figure_4a_max[order(-figure_4a_max$confirmed),]
+top_n <- head(figure_4a_max$adm_area_1,10)
+figure_4a_data$State <- figure_4a_data$adm_area_1
+levels(figure_4a_data$State) <- c(levels(figure_4a_data$State), "Others")
+figure_4a_data[!figure_4a_data$adm_area_1%in%top_n,"State"] <- "Others"
+figure_4a_data$State <- factor(figure_4a_data$State, levels=c(lapply(top_n, as.character), "Others"))
+
+figure_4a_agg <- aggregate(figure_4a_data[c("new_per_day_smooth")],
+                           by = list(figure_4a_data$State,figure_4a_data$date),
+                           FUN = sum,
+                           na.rm=TRUE)
+figure_4a_agg <- plyr::rename(figure_4a_agg, c("Group.1"="State","Group.2"="date"))
+# Manually order the states to get a nice colour order
+manual_states <- c('New York','New Jersey','Illinois','California','Texas','Florida','Georgia','Arizona','North Carolina','Tennessee','Others')
+figure_4a_agg$State <- factor(figure_4a_agg$State, levels=manual_states)
+
+
+# Figure 4b processing
 # Sort by GID and date
-figure_4_data <- figure_4_data[order(figure_4_data$gid, figure_4_data$date),]
+figure_4b_data <- figure_4b_data[order(figure_4b_data$gid, figure_4b_data$date),]
 # Compute new cases per day as difference between daily case total
-figure_4_data[-1,"new_cases"] <- diff(figure_4_data$cases)
+figure_4b_data[-1,"new_cases"] <- diff(figure_4b_data$cases)
 # Remove first day of each GID as it does not have a value for new cases
-figure_4_data <- figure_4_data[duplicated(figure_4_data$gid),]
+figure_4b_data <- figure_4b_data[duplicated(figure_4b_data$gid),]
 # Set any negative values for new cases to 0
-figure_4_data[figure_4_data$new_cases<0,"new_cases"] <- 0
+figure_4b_data[figure_4b_data$new_cases<0,"new_cases"] <- 0
 # Compute new cases per 10000 popuation
-figure_4_data$new_cases_per_10k <- 10000*figure_4_data$new_cases/figure_4_data$Population
-
-# Select individual GIDs to show: take top 5 by total confirmed cases
-# Get max value of confirmed cases for each county
-figure_4_max_confirmed <- aggregate(figure_4_data[c("cases")],
-                                    by = list(figure_4_data$gid),
-                                    FUN = max,
-                                    na.rm=TRUE)
-figure_4_max_confirmed <- plyr::rename(figure_4_max_confirmed, c("Group.1"="gid"))
-figure_4_max_confirmed <- figure_4_max_confirmed[order(-figure_4_max_confirmed$cases),]
-top_n <- head(figure_4_max_confirmed, 5)
-figure_4a_data <- subset(figure_4_data,gid%in%top_n$gid)
-
-# Aggregate for each day
-figure_4a_data_agg <- aggregate(figure_4_data[c("new_cases")],
-                                by = list(figure_4_data$date),
-                                FUN = mean,
-                                na.rm=TRUE)
-figure_4a_data_agg <- plyr::rename(figure_4a_data_agg, c("Group.1"="date"))
+figure_4b_data$new_cases_per_10k <- 10000*figure_4b_data$new_cases/figure_4b_data$Population
 
 # Define which dates to plot in choropleth
 date_1 <- as.Date("2020-04-14")
 date_2 <- as.Date("2020-07-21")
 
 # Subset for the two dates select
-figure_4b1_data <- subset(figure_4_data,date==date_1)
-figure_4b2_data <- subset(figure_4_data,date==date_2)
-figure_4b2_data$new_cases_per_10k[figure_4b2_data$new_cases_per_10k >= 5] <- 5 
+figure_4b1_data <- subset(figure_4b_data,date==date_1)
+figure_4b2_data <- subset(figure_4b_data,date==date_2)
 
 # Set max value to show. Censor any values above this 
 color_max <- 250
@@ -414,19 +427,17 @@ my_palette_3 <- "GnBu"
 my_palette_4 <- brewer.pal(name="Oranges",n=4)[4]
 
 
-# Figure 4a: Time series of US counties
-figure_4a <- (ggplot()
-              + geom_line(data = figure_4_data, aes(x=date, y=new_cases, group=gid), alpha=0.3, color=my_palette_1,size=1,na.rm=TRUE)
-              + geom_line(data = figure_4a_data_agg, aes(x=date, y=new_cases), color=my_palette_2, size=2, na.rm=TRUE)
-              #+ geom_smooth(data = figure_4a_data_agg, aes(x=date, y=new_cases), color=my_palette_2,size=2,na.rm=TRUE)
-              + geom_vline(xintercept=date_1,linetype="dashed", color=my_palette_4, size=1)
-              + geom_vline(xintercept=date_2,linetype="dashed", color=my_palette_4, size=1)
-              + annotate("text",x=date_1+3,y=6000,hjust=0,label=paste("Date of first peak:",date_1),color=my_palette_4)
-              + annotate("text",x=date_2+3,y=6000,hjust=0,label=paste("Date of second peak:",date_2),color=my_palette_4)
-              + labs(title="New Cases Over Time for US Counties", y="New Cases per Day", x="Date")
-              + scale_y_continuous(expand=c(0,0), limits=c(0, NA)) 
-              + theme_light()
-              + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
+# Figure 4a: Stacked Area Time series of US counties
+figure_4a <-  (ggplot(data=figure_4a_agg, aes(x=date,y=new_per_day_smooth,fill=State))
+               + geom_area(alpha=0.8, colour="white", na.rm=TRUE)
+               + scale_fill_viridis(discrete=T)
+               + labs(title="New Cases Over Time for US States", y="New Cases per Day (Smoothed)", x="Date")
+               + scale_x_date(date_breaks="months", date_labels="%b")
+               + scale_y_continuous(expand=c(0,0), limits=c(0, NA))
+               + theme_light()
+               + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7)
+                       ,plot.margin=unit(c(0,0,0,0),"pt"), legend.position = c(0.07, 0.75)))
+
 
 # Figure 4b: Choropleth of US counties at USA peak dates
 figure_4b1 <- (ggplot(data = figure_4b1_data) 
@@ -447,13 +458,7 @@ figure_4b2 <- (ggplot(data = figure_4b2_data)
                + theme_void()
                + theme(plot.title = element_text(hjust = 0.5), panel.grid.major=element_line(colour = "transparent")))
 
-figure_4_all <- grid.arrange(grobs=list(figure_4a,figure_4b1,figure_4b2),
-                             widths = c(1, 1),
-                             layout_matrix = rbind(c(1, 1),
-                                                   c(2, 3)),
-                             top = "Figure 4: USA Epidemiology Across Geographies and Time")
 
-ggsave("./plots/figure_4a.png", plot = figure_4a, width = 9,  height = 7)
+ggsave("./plots/figure_4a.png", plot = figure_4a, width = 15,  height = 7)
 ggsave("./plots/figure_4b1.png", plot = figure_4b1, width = 9,  height = 7)
 ggsave("./plots/figure_4b2.png", plot = figure_4b2, width = 9,  height = 7)
-ggsave("./plots/figure_4.png", plot = figure_4_all, width = 15,  height = 12)
