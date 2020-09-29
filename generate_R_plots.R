@@ -3,7 +3,7 @@
 # Load Packages, Clear, Sink -------------------------------------------------------
 
 # load packages
-package_list <- c("readr","ggplot2","gridExtra","plyr","dplyr","ggsci","RColorBrewer","viridis","sf","reshape2")
+package_list <- c("readr","ggplot2","gridExtra","plyr","dplyr","ggsci","RColorBrewer","viridis","sf","reshape2","ggpubr","egg")
 for (package in package_list){
   if (!package %in% installed.packages()){
     install.packages(package)
@@ -172,59 +172,51 @@ country_a = "United States"
 country_b = "Belgium"
 country_c = "Australia"
 
-# Melt dataframe to long form - non-smoothed
-figure_3_data_plot <- melt(subset(figure_3_data,country%in%c(country_a,country_b,country_c)), 
-                           id.vars=c("country","countrycode","date"),
-                           measure.vars=c("new_per_day","dead_per_day","new_tests"),
-                           na.rm=TRUE)
-# Melt dataframe to long form - smoothed
-figure_3_data_plot_smooth <- melt(subset(figure_3_data,country%in%c(country_a,country_b,country_c)), 
-                                  id.vars=c("country","countrycode","date"),
-                                  measure.vars=c("new_per_day_smooth","dead_per_day_smooth","new_tests_smoothed"),
-                                  na.rm=TRUE)
-
-figure_3_data_plot_positive <- melt(subset(figure_3_data,country%in%c(country_a,country_b,country_c)), 
-                                  id.vars=c("country","countrycode","date"),
-                                  measure.vars=c("positive_rate"),
-                                  na.rm=TRUE)
-
-# Scale up the positive rate to fit on the same axis
-#figure_3_data_plot_positive <-
-#figure_3_data_plot[(figure_3_data_plot$country==country_a)&(figure_3_data_plot$variable=="new_tests"),"value"]
-  
-# rename values
-figure_3_data_plot <- figure_3_data_plot %>% mutate(variable=recode(variable, 
-                                                                    "new_per_day"="New Cases per Day",
-                                                                    "dead_per_day"="Deaths per Day",
-                                                                    "new_tests"="Tests per Day"))
-figure_3_data_plot_smooth <- figure_3_data_plot_smooth %>% mutate(variable=recode(variable, 
-                                                                                  "new_per_day_smooth"="New Cases per Day",
-                                                                                  "dead_per_day_smooth"="Deaths per Day",
-                                                                                  "new_tests_smoothed"="Tests per Day"))
-
-# Plot Figure 3 - with facet grid ------------------------------------------------------------
-
-# Set up colour palette
-my_palette_1 <- brewer.pal(name="YlGnBu",n=4)[2]
-my_palette_2 <- brewer.pal(name="YlGnBu",n=4)[4]
-my_palette_3 <- brewer.pal(name="Oranges",n=4)[4]
-
-
-figure_3_grid <- (ggplot() 
-                  + geom_line(data=figure_3_data_plot, aes(x = date, y = value),size=1,color=my_palette_1,na.rm=TRUE)
-                  + geom_line(data=figure_3_data_plot_smooth, aes(x = date, y = value),size=1,color=my_palette_2,na.rm=TRUE)
-                  + facet_wrap(variable~country, scales="free", nrow=3)
-                  + theme_light()
-                  + scale_y_continuous(expand = c(0,0),limits = c(0, NA))
-                  + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
-
-# Need to:
-# Add positive rate
-# Add y axis labels for each variable
-# Title and axis labels
-
-ggsave("./plots/figure_3_grid.png", plot = figure_3_grid, width = 12,  height = 9)
-
+# # Melt dataframe to long form - non-smoothed
+# figure_3_data_plot <- melt(subset(figure_3_data,country%in%c(country_a,country_b,country_c)),
+#                            id.vars=c("country","countrycode","date"),
+#                            measure.vars=c("new_per_day","dead_per_day","new_tests"),
+#                            na.rm=TRUE)
+# # Melt dataframe to long form - smoothed
+# figure_3_data_plot_smooth <- melt(subset(figure_3_data,country%in%c(country_a,country_b,country_c)),
+#                                   id.vars=c("country","countrycode","date"),
+#                                   measure.vars=c("new_per_day_smooth","dead_per_day_smooth","new_tests_smoothed"),
+#                                   na.rm=TRUE)
+# # Melt dataframe to long form - positive rate
+# figure_3_data_plot_positive <- melt(subset(figure_3_data,country%in%c(country_a,country_b,country_c)),
+#                                   id.vars=c("country","countrycode","date"),
+#                                   measure.vars=c("positive_rate"),
+#                                   na.rm=TRUE)
+# # rename values
+# figure_3_data_plot <- figure_3_data_plot %>% mutate(variable=recode(variable,
+#                                                                     "new_per_day"="New Cases per Day",
+#                                                                     "dead_per_day"="Deaths per Day",
+#                                                                     "new_tests"="Tests per Day"))
+# figure_3_data_plot_smooth <- figure_3_data_plot_smooth %>% mutate(variable=recode(variable,
+#                                                                                   "new_per_day_smooth"="New Cases per Day",
+#                                                                                   "dead_per_day_smooth"="Deaths per Day",
+#                                                                                   "new_tests_smoothed"="Tests per Day"))
+# 
+# # Plot Figure 3 - with facet grid ------------------------------------------------------------
+# # Set up colour palette
+# my_palette_1 <- brewer.pal(name="YlGnBu",n=4)[2]
+# my_palette_2 <- brewer.pal(name="YlGnBu",n=4)[4]
+# my_palette_3 <- brewer.pal(name="Oranges",n=4)[4]
+# 
+# 
+# figure_3_grid <- (ggplot()
+#                   + geom_line(data=figure_3_data_plot, aes(x = date, y = value),size=1,color=my_palette_1,na.rm=TRUE)
+#                   + geom_line(data=figure_3_data_plot_smooth, aes(x = date, y = value),size=1,color=my_palette_2,na.rm=TRUE)
+#                   + facet_wrap(variable~country, scales="free", nrow=3)
+#                   + theme_light()
+#                   + scale_y_continuous(expand = c(0,0),limits = c(0, NA))
+#                   + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
+# # Need to:
+# # Add positive rate
+# # Add y axis labels for each variable
+# # Title and axis labels
+# 
+# ggsave("./plots/figure_3_grid.png", plot = figure_3_grid, width = 12,  height = 9)
 
 
 # Plot Figure 3 - with individual subplots and grid arrange ---------------------------------
@@ -236,14 +228,14 @@ my_palette_3 <- brewer.pal(name="Oranges",n=4)[4]
 
 # Individual subplots
 figure_3_a_1 <- (ggplot(subset(figure_3_data,country==country_a)) 
-                 + geom_line(aes(x = date, y = new_per_day),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = new_per_day),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = new_per_day_smooth),size=1,color=my_palette_2,na.rm=TRUE)
                  + labs(title=country_a, y="New Cases per Day", x=element_blank())
                  + theme_light()
                  + scale_y_continuous(expand = c(0,0),limits = c(0, NA))
-                 + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
+                 + theme(plot.title=element_text(size=12, hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
 figure_3_a_2 <- (ggplot(subset(figure_3_data,country==country_a)) 
-                 + geom_line(aes(x = date, y = dead_per_day),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = dead_per_day),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = dead_per_day_smooth),size=1,color=my_palette_2,na.rm=TRUE)
                  + labs(y="Deaths per Day",x=element_blank())
                  + scale_y_continuous(expand = c(0,0),limits = c(0, NA))
@@ -253,10 +245,10 @@ figure_3_a_2 <- (ggplot(subset(figure_3_data,country==country_a))
 max_tests_a=max(subset(figure_3_data,country==country_a)$new_tests,na.rm=TRUE)
 max_positive_rate_a=max(subset(figure_3_data,country==country_a)$positive_rate,na.rm=TRUE)
 figure_3_a_3 <- (ggplot(subset(figure_3_data,country==country_a)) 
-                 + geom_line(aes(x = date, y = new_tests),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = new_tests),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = new_tests_smoothed),size=1,color=my_palette_2,na.rm=TRUE)
                  + geom_line(aes(x = date, y = positive_rate*(max_tests_a/max_positive_rate_a)),color=my_palette_3,na.rm=TRUE)
-                 + scale_y_continuous(name = "Tests per Day (Smoothed)", 
+                 + scale_y_continuous(name = "Tests per Day", 
                                       expand = c(0,0),limits = c(0, NA),
                                       sec.axis = sec_axis(~./(max_tests_a/max_positive_rate_a), name = element_blank()))
                  + labs(x="Date")
@@ -264,14 +256,14 @@ figure_3_a_3 <- (ggplot(subset(figure_3_data,country==country_a))
                  + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt"),
                          axis.title.y.left = element_text(color=my_palette_2), axis.title.y.right = element_text(color=my_palette_3)))
 figure_3_b_1 <- (ggplot(subset(figure_3_data,country==country_b))
-                 + geom_line(aes(x = date, y = new_per_day),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = new_per_day),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = new_per_day_smooth),size=1,color=my_palette_2,na.rm=TRUE)
                  + labs(title=country_b,x=element_blank(),y=element_blank())
                  + scale_y_continuous(expand = c(0,0),limits = c(0, NA))
                  + theme_light()
-                 + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
+                 + theme(plot.title=element_text(size=12, hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
 figure_3_b_2 <- (ggplot(subset(figure_3_data,country==country_b)) 
-                 + geom_line(aes(x = date, y = dead_per_day),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = dead_per_day),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = dead_per_day_smooth),size=1,color=my_palette_2,na.rm=TRUE)
                  + labs(x=element_blank(),y=element_blank())
                  + scale_y_continuous(expand = c(0,0),limits = c(0, NA))
@@ -280,7 +272,7 @@ figure_3_b_2 <- (ggplot(subset(figure_3_data,country==country_b))
 max_tests_b=max(subset(figure_3_data,country==country_b)$new_tests,na.rm=TRUE)
 max_positive_rate_b=max(subset(figure_3_data,country==country_b)$positive_rate,na.rm=TRUE)
 figure_3_b_3 <- (ggplot(subset(figure_3_data,country==country_b)) 
-                 + geom_line(aes(x = date, y = new_tests),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = new_tests),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = new_tests_smoothed),size=1,color=my_palette_2,na.rm=TRUE)
                  + geom_line(aes(x = date, y = positive_rate*(max_tests_b/max_positive_rate_b)),color=my_palette_3,na.rm=TRUE)
                  + scale_y_continuous(name = element_blank(),
@@ -291,14 +283,14 @@ figure_3_b_3 <- (ggplot(subset(figure_3_data,country==country_b))
                  + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt"),
                          axis.title.y.left = element_text(color=my_palette_2), axis.title.y.right = element_text(color=my_palette_3)))
 figure_3_c_1 <- (ggplot(subset(figure_3_data,country==country_c)) 
-                 + geom_line(aes(x = date, y = new_per_day),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = new_per_day),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = new_per_day_smooth),size=1,color=my_palette_2,na.rm=TRUE)
                  + labs(title=country_c,x=element_blank(),y=element_blank())
                  + scale_y_continuous(expand = c(0,0),limits = c(0, NA))
                  + theme_light()
-                 + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
+                 + theme(plot.title=element_text(size=12, hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt")))
 figure_3_c_2 <- (ggplot(subset(figure_3_data,country==country_c))
-                 + geom_line(aes(x = date, y = dead_per_day),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = dead_per_day),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = dead_per_day_smooth),size=1,color=my_palette_2,na.rm=TRUE)
                  + labs(x=element_blank(),y=element_blank())
                  + scale_y_continuous(expand = c(0,0),limits = c(0, NA))
@@ -307,34 +299,25 @@ figure_3_c_2 <- (ggplot(subset(figure_3_data,country==country_c))
 max_tests_c=max(subset(figure_3_data,country==country_c)$new_tests,na.rm=TRUE)
 max_positive_rate_c=max(subset(figure_3_data,country==country_c)$positive_rate,na.rm=TRUE)
 figure_3_c_3 <- (ggplot(subset(figure_3_data,country==country_c)) 
-                 + geom_line(aes(x = date, y = new_tests),size=1,color=my_palette_1,na.rm=TRUE)
+                 + geom_line(aes(x = date, y = new_tests),size=0.7,color=my_palette_1,na.rm=TRUE)
                  + geom_line(aes(x = date, y = new_tests_smoothed),size=1,color=my_palette_2,na.rm=TRUE)
                  + geom_line(aes(x = date, y = positive_rate*(max_tests_c/max_positive_rate_c)),color=my_palette_3,na.rm=TRUE)
                  + scale_y_continuous(name = element_blank(), 
                                       expand = c(0,0),limits = c(0, NA),
-                                      sec.axis = sec_axis(~./(max_tests_c/max_positive_rate_c), name = "Positive Rate (Smoothed)"))
+                                      sec.axis = sec_axis(~./(max_tests_c/max_positive_rate_c), name = "Positive Rate"))
                  + labs(x="Date")
                  + theme_light()
                  + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt"),
                          axis.title.y.left = element_text(color=my_palette_2), axis.title.y.right = element_text(color=my_palette_3)))
 
 # Combining subplots
-plots <- list(figure_3_a_1,figure_3_b_1,figure_3_c_1,
-              figure_3_a_2,figure_3_b_2,figure_3_c_2,
-              figure_3_a_3,figure_3_b_3,figure_3_c_3)
-grobs <- list()
-widths <- list()
-for (i in 1:length(plots)){
-  grobs[[i]] <- ggplotGrob(plots[[i]])
-  widths[[i]] <- grobs[[i]]$widths[2:5]
-}
-maxwidth <- do.call(grid::unit.pmax, widths)
-for (i in 1:length(grobs)){
-  grobs[[i]]$widths[2:5] <- as.list(maxwidth)
-}
-figure_3_all <- do.call("grid.arrange", c(grobs, ncol = 3,top = "Figure 3: Cases, Deaths and Testing Over Time"))
+figure_3_all <- egg::ggarrange(figure_3_a_1,figure_3_b_1,figure_3_c_1,
+                figure_3_a_2,figure_3_b_2,figure_3_c_2,
+                figure_3_a_3,figure_3_b_3,figure_3_c_3)
+figure_3_all <- annotate_figure(figure_3_all,
+                  top = text_grob("Figure 3: Cases, Deaths and Testing Over Time", size = 14))
 
-ggsave("./plots/figure_3.png", plot = figure_3_all, width = 12,  height = 9)
+ggsave("./plots/figure_3.png", plot = figure_3_all, width = 12,  height = 8)
 
 
 # Plot figure 4: USA Choropleth ---------------------------------------------------------------

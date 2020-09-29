@@ -680,7 +680,7 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     
 if SAVE_CSV:
     epidemiology_panel.to_csv(CSV_PATH + 'epidemiology_panel.csv')
-    
+
 
 mobility_panel = pd.DataFrame(columns=['countrycode','country'] +
                                       [mobility_type + '_max' for mobility_type in mobilities] +
