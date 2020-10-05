@@ -1195,6 +1195,11 @@ for state in tqdm(states, desc='Processing USA Epidemiological Data'):
     figure_4a = pd.concat((figure_4a, data)).reset_index(drop=True)
     continue
 
+# Get latitude and longitude for states
+sql_command = """SELECT adm_area_1, latitude, longitude FROM administrative_division WHERE adm_level=1 AND countrycode='USA'"""
+states_lat_long = pd.read_sql(sql_command, conn)
+figure_4a = figure_4a.merge(states_lat_long, on='adm_area_1')
+
 if SAVE_CSV:
     figure_4a.to_csv(CSV_PATH + 'figure_4a.csv', sep=',')
 
