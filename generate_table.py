@@ -454,7 +454,7 @@ FLAG TOTAL DAYS √
 epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'population', 't0', 't0_relative',
                                            'peak_1', 'peak_2', 'date_peak_1', 'date_peak_2', 'first_wave_start',
                                            'first_wave_end', 'duration_first_wave', 'second_wave_start', 'second_wave_end','last_confirmed',
-                                           'testing_available','peak_1_cfr','peak_2_cfr',
+                                           'last_dead','testing_available','peak_1_cfr','peak_2_cfr',
                                            'dead_class','tests_class','first_wave_positive_rate','second_wave_positive_rate',
                                            'tau_dead','tau_p_dead','tau_tests','tau_p_tests',
                                            'confirmed_first_wave','dead_first_wave','tests_first_wave',
@@ -560,6 +560,7 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                  (country_series['date'] <= data['second_wave_end'])]['new_per_day_smooth'].sum()
     
     data['last_confirmed'] = country_series['confirmed'].iloc[-1]
+    data['last_dead'] = country_series['dead'].iloc[-1]
     data['testing_available'] = True if len(country_series['new_tests'].dropna()) > 0 else False
 
     # Classify wave status for deaths
@@ -1081,10 +1082,10 @@ class_coarse = {
     6:'EPI_THIRD_WAVE'
 }
 
-data = epidemiology_panel[['countrycode', 'country', 'class' , 'population', 'last_confirmed','t0_relative','first_wave_start','first_wave_end','duration_first_wave']]
+data = epidemiology_panel[['countrycode', 'country', 'class' , 'population', 'last_confirmed','last_dead','t0_relative','first_wave_start','first_wave_end','duration_first_wave']]
 data['class_coarse'] = data['class'].apply(lambda x:class_coarse[x])
 data['last_confirmed_per_10k'] = 10000 * epidemiology_panel['last_confirmed'] / epidemiology_panel['population']
-data['class_coarse'] = data['class'].apply(lambda x: class_coarse[x])
+data['last_dead_per_10k'] = 10000 * epidemiology_panel['last_dead'] / epidemiology_panel['population']
 data = data.merge(government_response_panel[['countrycode','response_time_pop','max_si',
                                              'si_at_t0','si_at_peak_1',
                                              'si_days_above_threshold',
@@ -1097,6 +1098,7 @@ data = data.merge(government_response_panel[['countrycode','response_time_pop','
 
 figure_2c = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
                                  'CLASS_COARSE', 'POPULATION', 'EPI_CONFIRMED', 'EPI_CONFIRMED_PER_10K',
+                                 'EPI_DEAD', 'EPI_DEAD_PER_10K',
                                  'T0','EPI_DURATION_FIRST_WAVE','MAX_SI',
                                  'SI_AT_T0','SI_AT_PEAK_1','SI_DAYS_ABOVE_THRESHOLD','SI_DAYS_ABOVE_THRESHOLD_FIRST_WAVE'] +
                                  [flag.upper() + '_AT_T0' for flag in flags] +
@@ -1112,6 +1114,8 @@ figure_2c['CLASS_COARSE'] = data['class_coarse']
 figure_2c['POPULATION'] = data['population']
 figure_2c['EPI_CONFIRMED'] = data['last_confirmed']
 figure_2c['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
+figure_2c['EPI_DEAD'] = data['last_dead']
+figure_2c['EPI_DEAD_PER_10K'] = data['last_dead_per_10k']
 figure_2c['T0'] = data['t0_relative']
 figure_2c['EPI_DURATION_FIRST_WAVE'] = data['duration_first_wave']
 figure_2c['MAX_SI'] = data['max_si']
