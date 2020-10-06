@@ -3,7 +3,8 @@
 # Load Packages, Clear, Sink -------------------------------------------------------
 
 # load packages
-package_list <- c("readr","ggplot2","gridExtra","plyr","dplyr","ggsci","RColorBrewer","viridis","sf","reshape2","ggpubr","egg","scales")
+package_list <- c("readr","ggplot2","gridExtra","plyr","dplyr","ggsci","RColorBrewer",
+                  "viridis","sf","reshape2","ggpubr","egg","scales","plotrix")
 for (package in package_list){
   if (!package %in% installed.packages()){
     install.packages(package)
@@ -64,20 +65,20 @@ figure_2a_agg <- aggregate(figure_2a_data[c("stringency_index")],
                            by = list(figure_2a_data$CLASS, figure_2a_data$t_pop),
                            FUN = mean)
 figure_2a_agg <- plyr::rename(figure_2a_agg, c("Group.1"="CLASS", "Group.2"="t_pop","stringency_index"="mean_si"))
-figure_2a_sd <- aggregate(figure_2a_data[c("stringency_index")],
-                           by = list(figure_2a_data$CLASS, figure_2a_data$t_pop),
-                           FUN = sd)
-figure_2a_sd <- plyr::rename(figure_2a_sd, c("Group.1"="CLASS", "Group.2"="t_pop","stringency_index"="sd_si"))
+figure_2a_se <- aggregate(figure_2a_data[c("stringency_index")],
+                          by = list(figure_2a_data$CLASS, figure_2a_data$t_pop),
+                          FUN = std.error)
+figure_2a_se <- plyr::rename(figure_2a_se, c("Group.1"="CLASS", "Group.2"="t_pop","stringency_index"="se_si"))
 figure_2a_agg <- merge(figure_2a_agg,figure_2a_sd, by=c("CLASS","t_pop"))
 
 figure_2b_agg <- aggregate(figure_2b_data[c("residential","workplace","transit_stations","retail_recreation")],
                            by = list(figure_2b_data$CLASS, figure_2b_data$t_pop),
                            FUN = mean)
 figure_2b_agg <- plyr::rename(figure_2b_agg, c("Group.1"="CLASS", "Group.2"="t_pop"))
-figure_2b_sd <- aggregate(figure_2b_data[c("residential","workplace","transit_stations","retail_recreation")],
+figure_2b_se <- aggregate(figure_2b_data[c("residential","workplace","transit_stations","retail_recreation")],
                           by = list(figure_2b_data$CLASS, figure_2b_data$t_pop),
-                          FUN = sd)
-figure_2b_sd <- plyr::rename(figure_2b_sd, c("Group.1"="CLASS", "Group.2"="t_pop"))
+                          FUN = std.error)
+figure_2b_se <- plyr::rename(figure_2b_se, c("Group.1"="CLASS", "Group.2"="t_pop"))
 figure_2b_agg <- merge(figure_2b_agg,figure_2b_sd, by=c("CLASS","t_pop"))
 
 
@@ -148,7 +149,7 @@ ggsave("./plots/figure_2a_loess.png", plot = figure_2a_loess, width = 9,  height
 
 figure_2a_alt <- (ggplot(figure_2a_agg, aes(x = t_pop, y = mean_si, colour = CLASS)) 
               + geom_line(size=1,show.legend = FALSE,na.rm=TRUE)
-              + geom_ribbon(aes(ymin=mean_si-sd_si, ymax=mean_si+sd_si, fill = CLASS), linetype=2, alpha=0.1, show.legend = FALSE)
+              + geom_ribbon(aes(ymin=mean_si-se_si, ymax=mean_si+se_si, fill = CLASS), linetype=2, alpha=0.1, show.legend = FALSE)
               + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
               + annotate("text",x=2,y=97,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
               + theme_light()
@@ -158,7 +159,7 @@ figure_2a_alt <- (ggplot(figure_2a_agg, aes(x = t_pop, y = mean_si, colour = CLA
               + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
               + scale_y_continuous(breaks=seq(0,100,10),expand = c(0,0),limits = c(0, 100))
               + labs(title = "Average Stringency Index Over Time", x = "Days Since T0", y = "Stringency Index"))
-ggsave("./plots/figure_2a_sd.png", plot = figure_2a_alt, width = 9,  height = 7)
+ggsave("./plots/figure_2a_se.png", plot = figure_2a_alt, width = 9,  height = 7)
 
 # Figure 2b: Line plot of residential mobility over time for each country class
 mobilities = c("residential", "workplace", "transit_stations", "retail_recreation")
@@ -194,7 +195,7 @@ for (mobility in mobilities)
                     + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
                     + scale_y_continuous(expand = c(0,0))
                     + labs(title = paste("Average ",mobility," Mobility Over Time",sep=""), x = "Days Since T0", y = paste(mobility," Mobility (Change from Baseline, Smoothed)",sep="")))
-  ggsave(paste("./plots/figure_2b_sd_",mobility,".png",sep=''), plot = figure_2b_alt, width = 9,  height = 7)
+  ggsave(paste("./plots/figure_2b_se_",mobility,".png",sep=''), plot = figure_2b_alt, width = 9,  height = 7)
 }
 
 # Figure 2c: Scatter plot of government response time against number of cases for each country
@@ -271,7 +272,7 @@ for (x in x_vars) {
   ggsave(paste("./plots/figure_2c/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
 }
 
-figure_2_all <- grid.arrange(grobs=list(figure_2a,figure_2b,figure_2c),
+figure_2_all <- grid.arrange(grobs=list(figure_2a_alt,figure_2b_alt,figure_2c),
                              widths = c(1, 1.2),
                              layout_matrix = rbind(c(1, 3),
                                                    c(2,  3)),
