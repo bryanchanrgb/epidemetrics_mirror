@@ -63,7 +63,12 @@ figure_2c_data <- subset(figure_2c_data,CLASS!=0)
 figure_2a_agg <- aggregate(figure_2a_data[c("stringency_index")],
                            by = list(figure_2a_data$CLASS, figure_2a_data$t_pop),
                            FUN = mean)
-figure_2a_agg <- plyr::rename(figure_2a_agg, c("Group.1"="CLASS", "Group.2"="t_pop"))
+figure_2a_agg <- plyr::rename(figure_2a_agg, c("Group.1"="CLASS", "Group.2"="t_pop","stringency_index"="mean_si"))
+figure_2a_sd <- aggregate(figure_2a_data[c("stringency_index")],
+                           by = list(figure_2a_data$CLASS, figure_2a_data$t_pop),
+                           FUN = sd)
+figure_2a_sd <- plyr::rename(figure_2a_sd, c("Group.1"="CLASS", "Group.2"="t_pop","stringency_index"="sd_si"))
+figure_2a_agg <- merge(figure_2a_agg,figure_2a_sd, by=c("CLASS","t_pop"))
 
 figure_2b_agg <- aggregate(figure_2b_data[c("residential_smooth")],
                            by = list(figure_2b_data$CLASS, figure_2b_data$t_pop),
@@ -106,8 +111,8 @@ my_palette_1 <- brewer.pal(name="PuOr",n=5)[c(1,2,4,5)]
 my_palette_2 <- brewer.pal(name="Oranges",n=4)[4]
 
 # Figure 2a: Line plot of stringency index over time for each country class
-figure_2a <- (ggplot(figure_2a_data, aes(x = t_pop, y = stringency_index, colour = CLASS)) 
-              + geom_line(aes(group=interaction(CLASS,COUNTRY),color=CLASS), size=0.1, alpha = 0.3,na.rm=TRUE)
+figure_2a_loess <- (ggplot(figure_2a_data, aes(x = t_pop, y = stringency_index, colour = CLASS)) 
+              #+ geom_line(aes(group=interaction(CLASS,COUNTRY),color=CLASS), size=0.1, alpha = 0.3,na.rm=TRUE)
               + geom_smooth(method="loess", level=0.95, span=0.3, na.rm=TRUE)
               + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
               + annotate("text",x=2,y=97,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
@@ -118,7 +123,21 @@ figure_2a <- (ggplot(figure_2a_data, aes(x = t_pop, y = stringency_index, colour
               + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
               + scale_y_continuous(breaks=seq(0,100,10),expand = c(0,0),limits = c(0, 100))
               + labs(title = "Average Stringency Index Over Time", x = "Days Since T0", y = "Stringency Index"))
-figure_2a
+ggsave("./plots/figure_2a_loess.png", plot = figure_2a_loess, width = 9,  height = 7)
+
+figure_2a_alt <- (ggplot(figure_2a_agg, aes(x = t_pop, y = mean_si, colour = CLASS)) 
+              + geom_line(size=1,show.legend = FALSE,na.rm=TRUE)
+              + geom_ribbon(aes(ymin=mean_si-sd_si, ymax=mean_si+sd_si, fill = CLASS), linetype=2, alpha=0.1, show.legend = FALSE)
+              + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
+              + annotate("text",x=2,y=97,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
+              + theme_light()
+              + coord_cartesian(xlim=c(t_min, t_max))
+              + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
+              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
+              + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
+              + scale_y_continuous(breaks=seq(0,100,10),expand = c(0,0),limits = c(0, 100))
+              + labs(title = "Average Stringency Index Over Time", x = "Days Since T0", y = "Stringency Index"))
+ggsave("./plots/figure_2a_sd.png", plot = figure_2a_alt, width = 9,  height = 7)
 
 # Figure 2b: Line plot of residential mobility over time for each country class
 figure_2b <- (ggplot(figure_2b_agg, aes(x = t_pop, y = residential_smooth, colour = CLASS)) 

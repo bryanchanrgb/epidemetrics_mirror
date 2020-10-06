@@ -760,6 +760,8 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
     country_series = government_response_series[government_response_series['countrycode'] == country]
     data['countrycode'] = country
     data['country'] = country_series['country'].iloc[0]
+    if all(pd.isnull(country_series['si'])): # if no values for SI, skip to next country
+        continue
     data['max_si'] = country_series['si'].max()
     data['date_max_si'] = country_series[country_series['si'] == data['max_si']]['date'].iloc[0]
 
@@ -1062,12 +1064,12 @@ figure_2b['t'] = data['days_since_t0']
 figure_2b['t_pop'] = data['days_since_t0_pop']
 figure_2b['residential'] = data['residential']
 figure_2b['residential_smooth'] = data['residential_smooth']
-figure_2b['workplace'] = data['residential']
-figure_2b['workplace_smooth'] = data['residential_smooth']
-figure_2b['transit_stations'] = data['residential']
-figure_2b['transit_stations_smooth'] = data['residential_smooth']
-figure_2b['retail_recreation'] = data['residential']
-figure_2b['retail_recreation_smooth'] = data['residential_smooth']
+figure_2b['workplace'] = data['workplace']
+figure_2b['workplace_smooth'] = data['workplace_smooth']
+figure_2b['transit_stations'] = data['transit_stations']
+figure_2b['transit_stations_smooth'] = data['transit_stations_smooth']
+figure_2b['retail_recreation'] = data['retail_recreation']
+figure_2b['retail_recreation_smooth'] = data['retail_recreation_smooth']
 
 if SAVE_CSV:
     figure_2b.to_csv(CSV_PATH + 'figure_2b.csv')
