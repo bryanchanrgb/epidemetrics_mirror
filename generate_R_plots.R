@@ -58,35 +58,39 @@ label_countries <- c("USA","GBR","ESP","BRA","JAP","IND","ZAF","BEL","AUS")
 # Remove Others class from data. Only keep classes 1-4 for now, 5 has low sample size
 figure_2a_data <- subset(figure_2a_data,CLASS%in%c(1,2,3,4))
 figure_2b_data <- subset(figure_2b_data,CLASS%in%c(1,2,3,4))
+figure_2b_data <- subset(figure_2b_data,COUNTRY!='Guinea-Bissau')
 figure_2c_data <- subset(figure_2c_data,CLASS%in%c(1,2,3,4))
 
-# Aggregate data by class and t_pop, mean mean and sd for each date
+# Aggregate data by class and t_1_dead, mean mean and sd for each date
+# Figure 2a mean and standard errors
 figure_2a_agg <- aggregate(figure_2a_data[c("stringency_index")],
-                           by = list(figure_2a_data$CLASS, figure_2a_data$t_pop),
-                           FUN = mean)
-figure_2a_agg <- plyr::rename(figure_2a_agg, c("Group.1"="CLASS", "Group.2"="t_pop","stringency_index"="mean_si"))
+                           by = list(figure_2a_data$CLASS, figure_2a_data$t_1_dead),
+                           FUN = mean,
+                           na.action = na.pass)
+figure_2a_agg <- plyr::rename(figure_2a_agg, c("Group.1"="CLASS", "Group.2"="t_1_dead","stringency_index"="mean_si"))
 figure_2a_se <- aggregate(figure_2a_data[c("stringency_index")],
-                          by = list(figure_2a_data$CLASS, figure_2a_data$t_pop),
+                          by = list(figure_2a_data$CLASS, figure_2a_data$t_1_dead),
                           FUN = std.error)
-figure_2a_se <- plyr::rename(figure_2a_se, c("Group.1"="CLASS", "Group.2"="t_pop","stringency_index"="se_si"))
-figure_2a_agg <- merge(figure_2a_agg,figure_2a_sd, by=c("CLASS","t_pop"))
+figure_2a_se <- plyr::rename(figure_2a_se, c("Group.1"="CLASS", "Group.2"="t_1_dead","stringency_index"="se_si"))
+figure_2a_agg <- merge(figure_2a_agg,figure_2a_se, by=c("CLASS","t_1_dead"))
 
+# Figure 2b mean and standard errors
 figure_2b_agg <- aggregate(figure_2b_data[c("residential","workplace","transit_stations","retail_recreation")],
-                           by = list(figure_2b_data$CLASS, figure_2b_data$t_pop),
+                           by = list(figure_2b_data$CLASS, figure_2b_data$t_1_dead),
                            FUN = mean)
-figure_2b_agg <- plyr::rename(figure_2b_agg, c("Group.1"="CLASS", "Group.2"="t_pop"))
+figure_2b_agg <- plyr::rename(figure_2b_agg, c("Group.1"="CLASS", "Group.2"="t_1_dead"))
 figure_2b_se <- aggregate(figure_2b_data[c("residential","workplace","transit_stations","retail_recreation")],
-                          by = list(figure_2b_data$CLASS, figure_2b_data$t_pop),
+                          by = list(figure_2b_data$CLASS, figure_2b_data$t_1_dead),
                           FUN = std.error)
-figure_2b_se <- plyr::rename(figure_2b_se, c("Group.1"="CLASS", "Group.2"="t_pop"))
-figure_2b_agg <- merge(figure_2b_agg,figure_2b_sd, by=c("CLASS","t_pop"))
+figure_2b_se <- plyr::rename(figure_2b_se, c("Group.1"="CLASS", "Group.2"="t_1_dead"))
+figure_2b_agg <- merge(figure_2b_agg,figure_2b_se, by=c("CLASS","t_1_dead"))
 
 
-# Get the number of elements in each class to work out the t_pop xlim values
+# Get the number of elements in each class to work out the t_1_dead xlim values
 figure_2a_count <- aggregate(figure_2a_data[c("stringency_index")],
-                             by = list(figure_2a_data$CLASS, figure_2a_data$t_pop),
+                             by = list(figure_2a_data$CLASS, figure_2a_data$t_1_dead),
                              FUN = length)
-figure_2a_count <- plyr::rename(figure_2a_count, c("Group.1"="CLASS", "Group.2"="t_pop","stringency_index"="n_present"))
+figure_2a_count <- plyr::rename(figure_2a_count, c("Group.1"="CLASS", "Group.2"="t_1_dead","stringency_index"="n_present"))
 figure_2a_count_max <- aggregate(figure_2a_count[c("n_present")],
                                  by = list(figure_2a_count$CLASS),
                                  FUN = max)
@@ -94,22 +98,22 @@ figure_2a_count_max <- plyr::rename(figure_2a_count_max, c("Group.1"="CLASS","n_
 figure_2a_count <- merge(figure_2a_count,figure_2a_count_max, by="CLASS")
 
 figure_2b_count <- aggregate(figure_2b_data[c("residential")],
-                             by = list(figure_2b_data$CLASS, figure_2b_data$t_pop),
+                             by = list(figure_2b_data$CLASS, figure_2b_data$t_1_dead),
                              FUN = length)
-figure_2b_count <- plyr::rename(figure_2b_count, c("Group.1"="CLASS", "Group.2"="t_pop","residential"="n_present"))
+figure_2b_count <- plyr::rename(figure_2b_count, c("Group.1"="CLASS", "Group.2"="t_1_dead","residential"="n_present"))
 figure_2b_count_max <- aggregate(figure_2b_count[c("n_present")],
                                  by = list(figure_2b_count$CLASS),
                                  FUN = max)
 figure_2b_count_max <- plyr::rename(figure_2b_count_max, c("Group.1"="CLASS","n_present"="n_total"))
 figure_2b_count <- merge(figure_2b_count,figure_2b_count_max, by="CLASS")
 
-# n_threshold determines where to cut off t_pop xlim values. Only takes t_pop values for which there are >= n_threshold % of the total present for each class
-n_threshold = 0.8
+# n_threshold determines where to cut off t_1_dead xlim values. Only takes t_1_dead values for which there are >= n_threshold % of the total present for each class
+n_threshold = 0.75
 figure_2a_count <- subset(figure_2a_count, n_present>=n_threshold*n_total)
 figure_2b_count <- subset(figure_2b_count, n_present>=n_threshold*n_total)
 
-t_min = min(figure_2a_count$t_pop, figure_2b_count$t_pop)
-t_max = max(figure_2a_count$t_pop, figure_2b_count$t_pop)
+t_min = min(figure_2a_count$t_1_dead, figure_2b_count$t_1_dead)
+t_max = max(figure_2a_count$t_1_dead, figure_2b_count$t_1_dead)
 
 # Calculate duration flags raised in first wave for figure 2c
 flags = c("SI",
@@ -120,7 +124,9 @@ flags = c("SI",
           "C5_CLOSE_PUBLIC_TRANSPORT",
           "C6_STAY_AT_HOME_REQUIREMENTS",
           "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT",
-          "C8_INTERNATIONAL_TRAVEL_CONTROLS")
+          "C8_INTERNATIONAL_TRAVEL_CONTROLS",
+          "H2_TESTING_POLICY",
+          "H3_CONTACT_TRACING")
           
 for (flag in flags){
   figure_2c_data[,paste(flag,"_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",sep="")] <- figure_2c_data[,paste(flag,"_DAYS_ABOVE_THRESHOLD_FIRST_WAVE",sep="")]/figure_2c_data[,"EPI_DURATION_FIRST_WAVE"]
@@ -132,61 +138,61 @@ for (flag in flags){
 my_palette_1 <- brewer.pal(name="PuOr",n=5)[c(1,2,4,5)]
 my_palette_2 <- brewer.pal(name="Oranges",n=4)[4]
 
-# Figure 2a: Line plot of stringency index over time for each country class
-figure_2a_loess <- (ggplot(figure_2a_data, aes(x = t_pop, y = stringency_index, colour = CLASS)) 
-              #+ geom_line(aes(group=interaction(CLASS,COUNTRY),color=CLASS), size=0.1, alpha = 0.3,na.rm=TRUE)
-              + geom_smooth(method="loess", level=0.95, span=0.3, na.rm=TRUE)
-              + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
-              + annotate("text",x=2,y=97,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
-              + theme_light()
-              + coord_cartesian(xlim=c(t_min, t_max))
-              + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
-              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
-              + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
-              + scale_y_continuous(breaks=seq(0,100,10),expand = c(0,0),limits = c(0, 100))
-              + labs(title = "Average Stringency Index Over Time", x = "Days Since T0", y = "Stringency Index"))
-ggsave("./plots/figure_2a_loess.png", plot = figure_2a_loess, width = 9,  height = 7)
+# # Figure 2a: Line plot of stringency index over time for each country class
+# figure_2a_loess <- (ggplot(figure_2a_data, aes(x = t_1_dead, y = stringency_index, colour = CLASS)) 
+#               #+ geom_line(aes(group=interaction(CLASS,COUNTRY),color=CLASS), size=0.1, alpha = 0.3,na.rm=TRUE)
+#               + geom_smooth(method="loess", level=0.95, span=0.3, na.rm=TRUE)
+#               + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
+#               + annotate("text",x=2,y=97,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
+#               + theme_light()
+#               + coord_cartesian(xlim=c(t_min, t_max))
+#               + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
+#               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
+#               + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
+#               + scale_y_continuous(breaks=seq(0,100,10),expand = c(0,0),limits = c(0, 100))
+#               + labs(title = "Average Stringency Index Over Time", x = "Days Since T0", y = "Stringency Index"))
+# ggsave("./plots/figure_2a_loess.png", plot = figure_2a_loess, width = 9,  height = 7)
 
-figure_2a_alt <- (ggplot(figure_2a_agg, aes(x = t_pop, y = mean_si, colour = CLASS)) 
+figure_2a <- (ggplot(figure_2a_agg, aes(x = t_1_dead, y = mean_si, colour = CLASS)) 
               + geom_line(size=1,show.legend = FALSE,na.rm=TRUE)
               + geom_ribbon(aes(ymin=mean_si-se_si, ymax=mean_si+se_si, fill = CLASS), linetype=2, alpha=0.1, show.legend = FALSE)
-              + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
-              + annotate("text",x=2,y=97,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
+              #+ geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
+              #+ annotate("text",x=2,y=97,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
               + theme_light()
               + coord_cartesian(xlim=c(t_min, t_max))
               + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
               + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
               + scale_y_continuous(breaks=seq(0,100,10),expand = c(0,0),limits = c(0, 100))
-              + labs(title = "Average Stringency Index Over Time", x = "Days Since T0", y = "Stringency Index"))
-ggsave("./plots/figure_2a_se.png", plot = figure_2a_alt, width = 9,  height = 7)
+              + labs(title = "Average Stringency Index Over Time", x = "Days Since First Recorded Death", y = "Stringency Index"))
+ggsave("./plots/figure_2a.png", plot = figure_2a, width = 9,  height = 7)
 
 # Figure 2b: Line plot of residential mobility over time for each country class
-mobilities = c("residential", "workplace", "transit_stations", "retail_recreation")
+mobilities = c("workplace", "transit_stations", "retail_recreation", "residential")
 # Figure 2b for each mobility with loess smoothing
-for (mobility in mobilities)
-{
-  figure_2b_loess <- (ggplot(figure_2b_data, aes_string(x = "t_pop", y = mobility, colour = "CLASS")) 
-                      + geom_smooth(method="loess", level=0.95, span=0.3, na.rm=TRUE, show.legend=FALSE)
-                      + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
-                      #+ annotate("text",x=2,y=27,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
-                      + theme_light()
-                      + coord_cartesian(xlim=c(t_min, t_max))
-                      + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
-                      + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
-                      + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
-                      + scale_y_continuous(expand = c(0,0))
-                      + labs(title = paste("Average ",mobility," Mobility Over Time",sep=""), x = "Days Since T0", y = paste(mobility," Mobility (Change from Baseline, Smoothed)",sep="")))
-  ggsave(paste("./plots/figure_2b_loess_",mobility,".png",sep=''), plot = figure_2b_loess, width = 9,  height = 7)
-}
+# for (mobility in mobilities)
+# {
+#   figure_2b_loess <- (ggplot(figure_2b_data, aes_string(x = "t_1_dead", y = mobility, colour = "CLASS")) 
+#                       + geom_smooth(method="loess", level=0.95, span=0.3, na.rm=TRUE, show.legend=FALSE)
+#                       + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
+#                       #+ annotate("text",x=2,y=27,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
+#                       + theme_light()
+#                       + coord_cartesian(xlim=c(t_min, t_max))
+#                       + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
+#                       + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
+#                       + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
+#                       + scale_y_continuous(expand = c(0,0))
+#                       + labs(title = paste("Average ",mobility," Mobility Over Time",sep=""), x = "Days Since T0", y = paste(mobility," Mobility (Change from Baseline, Smoothed)",sep="")))
+#   ggsave(paste("./plots/figure_2b_loess_",mobility,".png",sep=''), plot = figure_2b_loess, width = 9,  height = 7)
+# }
 
 # Figure 2b for each mobility with mean and sd
 for (mobility in mobilities)
 {
-  figure_2b_alt <- (ggplot(figure_2b_agg, aes_string(x = "t_pop", y = paste(mobility,".x",sep=""), colour = "CLASS")) 
+  figure_2b <- (ggplot(figure_2b_agg, aes_string(x = "t_1_dead", y = paste(mobility,".x",sep=""), colour = "CLASS")) 
                     + geom_line(size=1,show.legend = FALSE,na.rm=TRUE)
                     + geom_ribbon(aes_string(ymin=paste(mobility,".x-",mobility,".y",sep=""), ymax=paste(mobility,".x+",mobility,".y",sep=""), fill = "CLASS"), linetype=2, alpha=0.1, show.legend = FALSE)
-                    + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
+                    #+ geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
                     #+ annotate("text",x=2,y=27,hjust=0,label="T0 (First Day Surpassing Cumulative 5 Cases per Million)",color=my_palette_2)
                     + theme_light()
                     + coord_cartesian(xlim=c(t_min, t_max))
@@ -194,34 +200,50 @@ for (mobility in mobilities)
                     + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
                     + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
                     + scale_y_continuous(expand = c(0,0))
-                    + labs(title = paste("Average ",mobility," Mobility Over Time",sep=""), x = "Days Since T0", y = paste(mobility," Mobility (Change from Baseline, Smoothed)",sep="")))
-  ggsave(paste("./plots/figure_2b_se_",mobility,".png",sep=''), plot = figure_2b_alt, width = 9,  height = 7)
+                    + labs(title = paste("Average ",mobility," Mobility Over Time",sep=""), x = "Days Since First Recorded Death", y = paste(mobility," Mobility (Change from Baseline, Smoothed)",sep="")))
+  ggsave(paste("./plots/figure_2b_",mobility,".png",sep=''), plot = figure_2b, width = 9,  height = 7)
 }
 
 # Figure 2c: Scatter plot of government response time against number of cases for each country
-figure_2c <- (ggplot(figure_2c_data, aes(x = GOV_MAX_SI_DAYS_FROM_T0_POP, y = EPI_DEAD_PER_10K, colour = CLASS)) 
+figure_2c <- (ggplot(figure_2c_data, aes(x = SI_DAYS_TO_THRESHOLD, y = EPI_DEAD_PER_10K, colour = CLASS)) 
               + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
-              + geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
-              + annotate("text",x=2,y=490,hjust=0,label="T0",color=my_palette_2)
+              #+ geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
+              #+ annotate("text",x=2,y=490,hjust=0,label="T0",color=my_palette_2)
               # Label countries that have high number of deaths, or early/late government response times
               + geom_text(data=subset(figure_2c_data,
                                       (COUNTRYCODE %in% label_countries) |
-                                        (EPI_CONFIRMED_PER_10K >= quantile(figure_2c_data$EPI_CONFIRMED_PER_10K, 0.95,na.rm=TRUE)) |
-                                        (GOV_MAX_SI_DAYS_FROM_T0_POP >= quantile(figure_2c_data$GOV_MAX_SI_DAYS_FROM_T0_POP, 0.95,na.rm=TRUE)) |
-                                        (GOV_MAX_SI_DAYS_FROM_T0_POP <= quantile(figure_2c_data$GOV_MAX_SI_DAYS_FROM_T0_POP, 0.02,na.rm=TRUE))),
+                                        #(EPI_DEAD_PER_10K >= quantile(figure_2c_data$EPI_DEAD_PER_10K, 0.95,na.rm=TRUE)) |
+                                        (SI_DAYS_TO_THRESHOLD >= quantile(figure_2c_data$SI_DAYS_TO_THRESHOLD, 0.95,na.rm=TRUE)) |
+                                        (SI_DAYS_TO_THRESHOLD <= quantile(figure_2c_data$SI_DAYS_TO_THRESHOLD, 0.05,na.rm=TRUE))),
                           aes(label=COUNTRY),
                           hjust=-0.1, vjust=-0.1,
                           show.legend = FALSE)
               + theme_light()
-              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
+              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.8, 0.2))
               + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
-              + scale_x_continuous(breaks=seq(-125,200,25),expand = c(0,0),limits = c(-125, 200))
+              + scale_x_continuous(breaks=seq(-125,175,25),expand = c(0,0),limits = c(-125, 175))
               + scale_y_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
-              + labs(title = "Total Deaths Against Government Response Time", x = "Government Response Time (Days from T0 to Peak of Stringency)", y = "Total Deaths per 10,000 Population"))
+              + labs(title = "Total Deaths Against Government Response Time", x = "Government Response Time (Days from First Death to Stringency Index of 60 or Above)", y = "Total Deaths per 10,000 Population"))
 ggsave("./plots/figure_2c.png", plot = figure_2c, width = 9,  height = 7)
 
+# Combine figure_2a, 2b, 2c
+figure_2_all <- grid.arrange(grobs=list(figure_2a,figure_2b,figure_2c),
+                             widths = c(1.1, 1),
+                             layout_matrix = rbind(c(1, 3),
+                                                   c(2,  3)))
+figure_2_all <- annotate_figure(figure_2_all,
+                                top = text_grob("Figure 2: Government and Public Response", size = 14))
+ggsave("./plots/figure_2.png", plot = figure_2_all, width = 15,  height = 8)
+
 # Figure 2c: Testing other variables for scatter plot
-x_vars = c("GOV_MAX_SI_DAYS_FROM_T0_POP",
+# Create directories. y variables: duration of first wave, or cumulative deaths per 10k.
+dir.create('./plots/figure_2c/y_duration/x_days_to_threshold')
+dir.create('./plots/figure_2c/y_dead/x_days_to_threshold')
+dir.create('./plots/figure_2c/y_duration/x_proportion_first_wave')
+dir.create('./plots/figure_2c/y_dead/x_proportion_first_wave')
+
+# Define explanatory variables
+x_vars = c("GOV_MAX_SI_DAYS_FROM_T0",
            "MAX_SI",
            "SI_AT_PEAK_1",
           "SI_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
@@ -233,32 +255,41 @@ x_vars = c("GOV_MAX_SI_DAYS_FROM_T0_POP",
           "C6_STAY_AT_HOME_REQUIREMENTS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
           "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
           "C8_INTERNATIONAL_TRAVEL_CONTROLS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-          "SI_DAYS_ABOVE_THRESHOLD",
-          "C1_SCHOOL_CLOSING_DAYS_ABOVE_THRESHOLD",
-          "C2_WORKPLACE_CLOSING_DAYS_ABOVE_THRESHOLD",
-          "C3_CANCEL_PUBLIC_EVENTS_DAYS_ABOVE_THRESHOLD",
-          "C4_RESTRICTIONS_ON_GATHERINGS_DAYS_ABOVE_THRESHOLD",
-          "C5_CLOSE_PUBLIC_TRANSPORT_DAYS_ABOVE_THRESHOLD",
-          "C6_STAY_AT_HOME_REQUIREMENTS_DAYS_ABOVE_THRESHOLD",
-          "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT_DAYS_ABOVE_THRESHOLD",
-          "C8_INTERNATIONAL_TRAVEL_CONTROLS_DAYS_ABOVE_THRESHOLD")
+          "H2_TESTING_POLICY_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+          "H3_CONTACT_TRACING_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+          "SI_DAYS_TO_THRESHOLD",
+          "C1_SCHOOL_CLOSING_DAYS_TO_THRESHOLD",
+          "C2_WORKPLACE_CLOSING_DAYS_TO_THRESHOLD",
+          "C3_CANCEL_PUBLIC_EVENTS_DAYS_TO_THRESHOLD",
+          "C4_RESTRICTIONS_ON_GATHERINGS_DAYS_TO_THRESHOLD",
+          "C5_CLOSE_PUBLIC_TRANSPORT_DAYS_TO_THRESHOLD",
+          "C6_STAY_AT_HOME_REQUIREMENTS_DAYS_TO_THRESHOLD",
+          "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT_DAYS_TO_THRESHOLD",
+          "C8_INTERNATIONAL_TRAVEL_CONTROLS_DAYS_TO_THRESHOLD",
+          "H2_TESTING_POLICY_DAYS_TO_THRESHOLD",
+          "H3_CONTACT_TRACING_DAYS_TO_THRESHOLD")
 
 for (x in x_vars) {
-  for (y in c("EPI_CONFIRMED_PER_10K","EPI_DEAD_PER_10K")) { # with log10 y axis
-    figure_2c_loop <- (ggplot(figure_2c_data, aes_string(x = x, y = y, colour = "CLASS")) 
-              + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
-              + geom_text(data=subset(figure_2c_data,
-                                      (COUNTRYCODE %in% label_countries)),
-                          aes(label=COUNTRY),
-                          hjust=-0.1, vjust=-0.1,
-                          show.legend = FALSE)
-              + theme_light()
-              + scale_y_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
-              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
-              + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave")))
-    ggsave(paste("./plots/figure_2c/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
-  }
-  y = "EPI_DURATION_FIRST_WAVE" # with linear axis
+  y = "EPI_DEAD_PER_10K" # with log axis
+  figure_2c_loop <- (ggplot(figure_2c_data, aes_string(x = x, y = y, colour = "CLASS")) 
+                      + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+                      + geom_text(data=subset(figure_2c_data,
+                                              (COUNTRYCODE %in% label_countries)),
+                                  aes(label=COUNTRY),
+                                  hjust=-0.1, vjust=-0.1,
+                                  show.legend = FALSE)
+                      + theme_light()
+                      + scale_y_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
+                      + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
+                      + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave")))
+    if (grepl('DAYS_TO_THRESHOLD', x, fixed=TRUE)){
+      ggsave(paste("./plots/figure_2c/y_dead/x_days_to_threshold/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
+    } else if (grepl('DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION', x, fixed=TRUE)){
+      ggsave(paste("./plots/figure_2c/y_dead/x_proportion_first_wave/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
+    } else {
+      ggsave(paste("./plots/figure_2c/y_dead/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
+    }
+  y = "EPI_DURATION_FIRST_WAVE"  # with linear axis
   figure_2c_loop <- (ggplot(figure_2c_data, aes_string(x = x, y = y, colour = "CLASS")) 
                      + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
                      + geom_text(data=subset(figure_2c_data,
@@ -269,15 +300,14 @@ for (x in x_vars) {
                      + theme_light()
                      + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
                      + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave")))
-  ggsave(paste("./plots/figure_2c/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
+  if (grepl('DAYS_TO_THRESHOLD', x, fixed=TRUE)){
+    ggsave(paste("./plots/figure_2c/y_duration/x_days_to_threshold/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
+  } else if (grepl('DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION', x, fixed=TRUE)){
+    ggsave(paste("./plots/figure_2c/y_duration/x_proportion_first_wave/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
+  } else {
+    ggsave(paste("./plots/figure_2c/y_duration/figure_2c_",x,"_",y,".png",sep=''), plot = figure_2c_loop, width = 9,  height = 7)
+  }
 }
-
-figure_2_all <- grid.arrange(grobs=list(figure_2a_alt,figure_2b_alt,figure_2c),
-                             widths = c(1, 1.2),
-                             layout_matrix = rbind(c(1, 3),
-                                                   c(2,  3)),
-                             top = "Figure 2: Government and Public Response")
-ggsave("./plots/figure_2.png", plot = figure_2_all, width = 15,  height = 8)
 
 
 # Process Data for Figure 3 ------------------------------------------------
@@ -561,3 +591,108 @@ figure_4b2 <- (ggplot(data = figure_4b2_data)
 ggsave("./plots/figure_4a.png", plot = figure_4a, width = 15,  height = 7)
 ggsave("./plots/figure_4b1.png", plot = figure_4b1, width = 9,  height = 7)
 ggsave("./plots/figure_4b2.png", plot = figure_4b2, width = 9,  height = 7)
+
+# Figure 5: Scatter plot of 1st wave vs 2nd wave magnitude ----------------------------------------------------------
+# Import data for figure 5 (same csv as figure_2c)
+figure_5_data <- read_csv("./data/figure_2c.csv", 
+                          na = c("N/A","NA","#N/A"," ",""))
+figure_5_data$COUNTRYCODE = as.factor(figure_5_data$COUNTRYCODE)
+figure_5_data$COUNTRY = as.factor(figure_5_data$COUNTRY)
+figure_5_data$CLASS = as.factor(figure_5_data$CLASS)
+figure_5_data$CLASS_COARSE = as.factor(figure_5_data$CLASS_COARSE)
+
+# Normalize by population
+figure_5_data$DEAD_FIRST_WAVE_PER_10K <- 10000 * figure_5_data$DEAD_FIRST_WAVE / figure_5_data$POPULATION
+figure_5_data$DEAD_SECOND_WAVE_PER_10K <- 10000 * figure_5_data$DEAD_SECOND_WAVE / figure_5_data$POPULATION
+figure_5_data$DEAD_PEAK_1_PER_10K <- 10000 * figure_5_data$DEAD_PEAK_1 / figure_5_data$POPULATION
+figure_5_data$DEAD_PEAK_2_PER_10K <- 10000 * figure_5_data$DEAD_PEAK_2 / figure_5_data$POPULATION
+
+# Plot figure 5
+figure_5_a <- (ggplot(figure_5_data, aes(x = DEAD_FIRST_WAVE_PER_10K, y = DEAD_SECOND_WAVE_PER_10K)) 
+              + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+              + geom_text(data=figure_5_data,
+                          aes(label=COUNTRY),
+                          hjust=-0.1, vjust=-0.1,
+                          show.legend = FALSE)
+              + theme_light()
+              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.8, 0.2))
+              #+ scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
+              + scale_x_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
+              + scale_y_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
+              + labs(title = "Total Deaths in First Wave Against Second Wave", x = "Total Number of Deaths in First Wave per 10,000 Population", y = "Total Number of Deaths in Second Wave per 10,000 Population"))
+ggsave("./plots/figure_5_a.png", plot = figure_5_a, width = 7,  height = 7)
+
+figure_5_b <- (ggplot(figure_5_data, aes(x = DEAD_PEAK_1_PER_10K, y = DEAD_PEAK_2_PER_10K)) 
+             + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+             + geom_text(data=figure_5_data,
+                         aes(label=COUNTRY),
+                         hjust=-0.1, vjust=-0.1,
+                         show.legend = FALSE)
+             + theme_light()
+             + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.8, 0.2))
+             #+ scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
+             + scale_x_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
+             + scale_y_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
+             + labs(title = "New Deaths per Day in First Wave Against Second Wave", x = "New Deaths per Day at First Peak per 10,000 Population", y = "New Deaths per Day at Second Peak per 10,000 Population"))
+ggsave("./plots/figure_5_b.png", plot = figure_5_b, width = 7,  height = 7)
+
+
+
+# # Robustness check for the sensitivity of T0 to threshold: try generating figure_2 with T0 at 1, 5, 10 deaths
+# figure_2a_agg <- aggregate(figure_2a_data[c("stringency_index")],
+#                            by = list(figure_2a_data$CLASS, figure_2a_data$t_10_dead),
+#                            FUN = mean,
+#                            na.action = na.pass)
+# figure_2a_agg <- plyr::rename(figure_2a_agg, c("Group.1"="CLASS", "Group.2"="t_10_dead","stringency_index"="mean_si"))
+# figure_2a_se <- aggregate(figure_2a_data[c("stringency_index")],
+#                           by = list(figure_2a_data$CLASS, figure_2a_data$t_10_dead),
+#                           FUN = std.error)
+# figure_2a_se <- plyr::rename(figure_2a_se, c("Group.1"="CLASS", "Group.2"="t_10_dead","stringency_index"="se_si"))
+# figure_2a_agg <- merge(figure_2a_agg,figure_2a_se, by=c("CLASS","t_10_dead"))
+# 
+# figure_2a_count <- aggregate(figure_2a_data[c("stringency_index")],
+#                              by = list(figure_2a_data$CLASS, figure_2a_data$t_10_dead),
+#                              FUN = length)
+# figure_2a_count <- plyr::rename(figure_2a_count, c("Group.1"="CLASS", "Group.2"="t_10_dead","stringency_index"="n_present"))
+# figure_2a_count_max <- aggregate(figure_2a_count[c("n_present")],
+#                                  by = list(figure_2a_count$CLASS),
+#                                  FUN = max)
+# figure_2a_count_max <- plyr::rename(figure_2a_count_max, c("Group.1"="CLASS","n_present"="n_total"))
+# figure_2a_count <- merge(figure_2a_count,figure_2a_count_max, by="CLASS")
+# n_threshold = 0.75
+# figure_2a_count <- subset(figure_2a_count, n_present>=n_threshold*n_total)
+# t_min = min(figure_2a_count$t_10_dead)
+# t_max = max(figure_2a_count$t_10_dead)
+# 
+# figure_2a <- (ggplot(figure_2a_agg, aes(x = t_10_dead, y = mean_si, colour = CLASS)) 
+#               + geom_line(size=1,na.rm=TRUE)
+#               + geom_ribbon(aes(ymin=mean_si-se_si, ymax=mean_si+se_si, fill = CLASS), linetype=2, alpha=0.1, show.legend = FALSE)
+#               + theme_light()
+#               + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
+#               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
+#               + scale_x_continuous(breaks=seq(floor(t_min/10)*10,ceiling(t_max/10)*10,10),expand=c(0,0),limits=c(t_min,t_max))
+#               + scale_y_continuous(breaks=seq(0,100,10),expand = c(0,0),limits = c(0, 100))
+#               + labs(title = "Average Stringency Index Over Time", x = "Days Since 10th Recorded Death", y = "Stringency Index"))
+# ggsave("./plots/figure_2a_t_10_dead.png", plot = figure_2a, width = 12,  height = 7)
+# 
+# 
+# figure_2c_data$SI_DAYS_TO_THRESHOLD_5_DEAD <- figure_2c_data$SI_DAYS_TO_THRESHOLD - (figure_2c_data$T0_5_DEAD - figure_2c_data$T0_1_DEAD)
+# figure_2c_data$SI_DAYS_TO_THRESHOLD_10_DEAD <- figure_2c_data$SI_DAYS_TO_THRESHOLD - (figure_2c_data$T0_10_DEAD - figure_2c_data$T0_1_DEAD)
+# 
+# figure_2c <- (ggplot(figure_2c_data, aes(x = SI_DAYS_TO_THRESHOLD_10_DEAD, y = EPI_DEAD_PER_10K, colour = CLASS)) 
+#               + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)              
+#               + geom_text(data=subset(figure_2c_data,
+#                                       (COUNTRYCODE %in% label_countries) |
+#                                         (SI_DAYS_TO_THRESHOLD >= quantile(figure_2c_data$SI_DAYS_TO_THRESHOLD, 0.95,na.rm=TRUE)) |
+#                                         (SI_DAYS_TO_THRESHOLD <= quantile(figure_2c_data$SI_DAYS_TO_THRESHOLD, 0.05,na.rm=TRUE))),
+#                           aes(label=COUNTRY),
+#                           hjust=-0.1, vjust=-0.1,
+#                           show.legend = FALSE)
+#               + theme_light()
+#               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.8, 0.2))
+#               + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
+#               + scale_x_continuous(breaks=seq(-175,175,25),expand = c(0,0),limits = c(-175, 175))
+#               + scale_y_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
+#               + labs(title = "Total Deaths Against Government Response Time", x = "Government Response Time (Days from 10th Death to Stringency Index of 60 or Above)", y = "Total Deaths per 10,000 Population"))
+# ggsave("./plots/figure_2c_t_10_dead.png", plot = figure_2c, width = 9,  height = 7)
+
