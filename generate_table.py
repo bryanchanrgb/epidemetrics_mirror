@@ -20,8 +20,8 @@ warnings.filterwarnings('ignore')
 INTITALISE SCRIPT PARAMETERS
 '''
 
-SAVE_PLOTS = False
-SAVE_CSV = False
+SAVE_PLOTS = True
+SAVE_CSV = True
 PLOT_PATH = './plots/'
 CSV_PATH = './data/'
 SMOOTH = 0.001
@@ -29,7 +29,7 @@ DISTANCE = 21
 PROMINENCE_THRESHOLD = 5            # Absolute prominence threshold (in number of new cases)
 PROMINENCE_THRESHOLD_DEAD = 2     # Absolute prominence threshold (in number of new deaths)
 PROMINENCE_THRESHOLD_TESTS = 10      # Absolute prominence threshold (in number of new tests)
-RELATIVE_PROMINENCE_THRESHOLD = 0.3 # Prominence relative to the max of time series (smoothed)
+RELATIVE_PROMINENCE_THRESHOLD = 0.25 # Prominence relative to the max of time series (smoothed)
 CLASS_1_THRESHOLD = 100             # Threshold in number of new cases per day (smoothed) to be considered entering first wave
 CLASS_1_THRESHOLD_DEAD = 5          # Threshold in number of dead per day (smoothed) to be considered entering first wave for deaths
 CLASS_1_THRESHOLD_TESTS = 200       # Threshold in number of tests per day (smoothed) to be considered entering first wave for tests
@@ -37,7 +37,7 @@ ABSOLUTE_T0_THRESHOLD = 1000
 POP_RELATIVE_T0_THRESHOLD = 5 #per million people
 TEST_LAG = 0 # Lag between test date and test results
 DEATH_LAG = 21 # Lag between confirmed and death. Ideally would be sampled from a random distribution of some sorts
-SI_THRESHOLD = 60
+SI_THRESHOLD = 59
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -1070,52 +1070,64 @@ figure_1 = figure_1.merge(map_data[['countrycode','geometry']], on=['countrycode
 
 if SAVE_CSV:
     figure_1.to_csv(CSV_PATH + 'figure_1.csv', sep=';')
+    
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 4 - FIGURE 2
+'''
+
+figure_2 = epidemiology_series[[
+    'country', 'countrycode', 'date', 'new_per_day', 'new_per_day_smooth',
+    'dead_per_day', 'dead_per_day_smooth', 'new_tests', 'new_tests_smoothed', 'positive_rate']]
+
+if SAVE_CSV:
+    figure_2.to_csv(CSV_PATH + 'figure_2.csv')
+# -------------------------------------------------------------------------------------------------------------------- #
+'''
+PART 5 - FIGURE 3
 '''
 
 data = epidemiology_series[['countrycode','country','date', 'days_since_t0_pop', 'days_since_t0_1_dead', 'days_since_t0_5_dead', 'days_since_t0_10_dead']].merge(
     epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
     government_response_series[['countrycode','date','si']],on=['countrycode','date'],how='left').dropna()
 
-figure_2a = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t_pop','t_1_dead','t_5_dead','t_10_dead''stringency_index'])
-figure_2a['COUNTRYCODE'] = data['countrycode']
-figure_2a['COUNTRY'] = data['country']
-figure_2a['CLASS'] = data['class']
-figure_2a['t_pop'] = data['days_since_t0_pop']
-figure_2a['t_1_dead'] = data['days_since_t0_1_dead']
-figure_2a['t_5_dead'] = data['days_since_t0_5_dead']
-figure_2a['t_10_dead'] = data['days_since_t0_10_dead']
-figure_2a['stringency_index'] = data['si']
+figure_3a = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t_pop','t_1_dead','t_5_dead','t_10_dead''stringency_index'])
+figure_3a['COUNTRYCODE'] = data['countrycode']
+figure_3a['COUNTRY'] = data['country']
+figure_3a['CLASS'] = data['class']
+figure_3a['t_pop'] = data['days_since_t0_pop']
+figure_3a['t_1_dead'] = data['days_since_t0_1_dead']
+figure_3a['t_5_dead'] = data['days_since_t0_5_dead']
+figure_3a['t_10_dead'] = data['days_since_t0_10_dead']
+figure_3a['stringency_index'] = data['si']
 
 if SAVE_CSV:
-    figure_2a.to_csv(CSV_PATH + 'figure_2a.csv')
+    figure_3a.to_csv(CSV_PATH + 'figure_3a.csv')
 
 data = epidemiology_series[['countrycode','country','date','days_since_t0_pop', 'days_since_t0_1_dead', 'days_since_t0_5_dead', 'days_since_t0_10_dead']].merge(
     epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
     mobility_series[['countrycode','date','residential','residential_smooth','workplace','workplace_smooth',
                      'transit_stations','transit_stations_smooth','retail_recreation','retail_recreation_smooth']].dropna(how='all'),on=['countrycode','date'],how='inner')
 
-figure_2b = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','residential','residential_smooth'])
-figure_2b['COUNTRYCODE'] = data['countrycode']
-figure_2b['COUNTRY'] = data['country']
-figure_2b['CLASS'] = data['class']
-figure_2b['t_pop'] = data['days_since_t0_pop']
-figure_2b['t_1_dead'] = data['days_since_t0_1_dead']
-figure_2b['t_5_dead'] = data['days_since_t0_5_dead']
-figure_2b['t_10_dead'] = data['days_since_t0_10_dead']
-figure_2b['residential'] = data['residential']
-figure_2b['residential_smooth'] = data['residential_smooth']
-figure_2b['workplace'] = data['workplace']
-figure_2b['workplace_smooth'] = data['workplace_smooth']
-figure_2b['transit_stations'] = data['transit_stations']
-figure_2b['transit_stations_smooth'] = data['transit_stations_smooth']
-figure_2b['retail_recreation'] = data['retail_recreation']
-figure_2b['retail_recreation_smooth'] = data['retail_recreation_smooth']
+figure_3b = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','residential','residential_smooth'])
+figure_3b['COUNTRYCODE'] = data['countrycode']
+figure_3b['COUNTRY'] = data['country']
+figure_3b['CLASS'] = data['class']
+figure_3b['t_pop'] = data['days_since_t0_pop']
+figure_3b['t_1_dead'] = data['days_since_t0_1_dead']
+figure_3b['t_5_dead'] = data['days_since_t0_5_dead']
+figure_3b['t_10_dead'] = data['days_since_t0_10_dead']
+figure_3b['residential'] = data['residential']
+figure_3b['residential_smooth'] = data['residential_smooth']
+figure_3b['workplace'] = data['workplace']
+figure_3b['workplace_smooth'] = data['workplace_smooth']
+figure_3b['transit_stations'] = data['transit_stations']
+figure_3b['transit_stations_smooth'] = data['transit_stations_smooth']
+figure_3b['retail_recreation'] = data['retail_recreation']
+figure_3b['retail_recreation_smooth'] = data['retail_recreation_smooth']
 
 if SAVE_CSV:
-    figure_2b.to_csv(CSV_PATH + 'figure_2b.csv')
+    figure_3b.to_csv(CSV_PATH + 'figure_3b.csv')
 
 class_coarse = {
     0:np.nan,
@@ -1142,7 +1154,7 @@ data = data.merge(government_response_panel[['countrycode','si_days_to_max_si','
                                             [flag + '_days_above_threshold_first_wave' for flag in flags + ['si']]],
                   how='left', on='countrycode')
 
-figure_2c = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
+figure_3c = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
                                  'CLASS_COARSE', 'POPULATION', 'EPI_CONFIRMED', 'EPI_CONFIRMED_PER_10K',
                                  'EPI_DEAD', 'EPI_DEAD_PER_10K',
                                  'T0_POP','T0_1_DEAD','T0_5_DEAD','T0_10_DEAD',
@@ -1154,46 +1166,35 @@ figure_2c = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FRO
                                  [flag.upper() + '_DAYS_TO_THRESHOLD' for flag in flags + ['si']] +
                                  [flag.upper() + '_DAYS_ABOVE_THRESHOLD_FIRST_WAVE' for flag in flags + ['si']])
 
-figure_2c['COUNTRYCODE'] = data['countrycode']
-figure_2c['COUNTRY'] = data['country']
-figure_2c['GOV_MAX_SI_DAYS_FROM_T0'] = data['si_days_to_max_si']
-figure_2c['CLASS'] = data['class']
-figure_2c['CLASS_COARSE'] = data['class_coarse']
-figure_2c['POPULATION'] = data['population']
-figure_2c['EPI_CONFIRMED'] = data['last_confirmed']
-figure_2c['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
-figure_2c['EPI_DEAD'] = data['last_dead']
-figure_2c['EPI_DEAD_PER_10K'] = data['last_dead_per_10k']
-figure_2c['T0_POP'] = data['t0_relative']
-figure_2c['T0_1_DEAD'] = data['t0_1_dead']
-figure_2c['T0_5_DEAD'] = data['t0_5_dead']
-figure_2c['T0_10_DEAD'] = data['t0_10_dead']
-figure_2c['EPI_DURATION_FIRST_WAVE'] = data['duration_first_wave']
-figure_2c['MAX_SI'] = data['max_si']
-figure_2c['DEAD_FIRST_WAVE'] = data['dead_first_wave']
-figure_2c['DEAD_SECOND_WAVE'] = data['dead_second_wave']
-figure_2c['DEAD_PEAK_1'] = data['dead_peak_1']
-figure_2c['DEAD_PEAK_2'] = data['dead_peak_2']
+figure_3c['COUNTRYCODE'] = data['countrycode']
+figure_3c['COUNTRY'] = data['country']
+figure_3c['GOV_MAX_SI_DAYS_FROM_T0'] = data['si_days_to_max_si']
+figure_3c['CLASS'] = data['class']
+figure_3c['CLASS_COARSE'] = data['class_coarse']
+figure_3c['POPULATION'] = data['population']
+figure_3c['EPI_CONFIRMED'] = data['last_confirmed']
+figure_3c['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
+figure_3c['EPI_DEAD'] = data['last_dead']
+figure_3c['EPI_DEAD_PER_10K'] = data['last_dead_per_10k']
+figure_3c['T0_POP'] = data['t0_relative']
+figure_3c['T0_1_DEAD'] = data['t0_1_dead']
+figure_3c['T0_5_DEAD'] = data['t0_5_dead']
+figure_3c['T0_10_DEAD'] = data['t0_10_dead']
+figure_3c['EPI_DURATION_FIRST_WAVE'] = data['duration_first_wave']
+figure_3c['MAX_SI'] = data['max_si']
+figure_3c['DEAD_FIRST_WAVE'] = data['dead_first_wave']
+figure_3c['DEAD_SECOND_WAVE'] = data['dead_second_wave']
+figure_3c['DEAD_PEAK_1'] = data['dead_peak_1']
+figure_3c['DEAD_PEAK_2'] = data['dead_peak_2']
 for flag in flags + ['si']:
-    figure_2c[flag.upper() + '_AT_T0'] = data[flag + '_at_t0']
-    figure_2c[flag.upper() + '_AT_PEAK_1'] = data[flag + '_at_peak_1']
-    figure_2c[flag.upper() + '_DAYS_TO_THRESHOLD'] = data[flag + '_days_to_threshold']
-    figure_2c[flag.upper() + '_DAYS_ABOVE_THRESHOLD_FIRST_WAVE'] = data[flag + '_days_above_threshold_first_wave']
+    figure_3c[flag.upper() + '_AT_T0'] = data[flag + '_at_t0']
+    figure_3c[flag.upper() + '_AT_PEAK_1'] = data[flag + '_at_peak_1']
+    figure_3c[flag.upper() + '_DAYS_TO_THRESHOLD'] = data[flag + '_days_to_threshold']
+    figure_3c[flag.upper() + '_DAYS_ABOVE_THRESHOLD_FIRST_WAVE'] = data[flag + '_days_above_threshold_first_wave']
 
 if SAVE_CSV:
-    figure_2c.to_csv(CSV_PATH + 'figure_2c.csv')
+    figure_3c.to_csv(CSV_PATH + 'figure_3c.csv')
 
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 5 - FIGURE 3
-'''
-
-figure_3 = epidemiology_series[[
-    'country', 'countrycode', 'date', 'new_per_day', 'new_per_day_smooth',
-    'dead_per_day', 'dead_per_day_smooth', 'new_tests', 'new_tests_smoothed', 'positive_rate']]
-
-if SAVE_CSV:
-    figure_3.to_csv(CSV_PATH + 'figure_3.csv')
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 6 - FIGURE 4
