@@ -4,12 +4,12 @@ import psycopg2
 import pandas as pd
 import geopandas as gpd
 import os
+import shutil
 import warnings
 from tqdm import tqdm
 import datetime
 from skimage.transform import resize
-
-from csaps import csaps
+#from csaps import csaps
 from scipy.signal import find_peaks
 from scipy.stats import kendalltau
 from sklearn.linear_model import LinearRegression
@@ -25,16 +25,17 @@ SAVE_CSV = True
 PLOT_PATH = './plots/'
 CSV_PATH = './data/'
 SMOOTH = 0.001
-DISTANCE = 21
-PROMINENCE_THRESHOLD = 5            # Absolute prominence threshold (in number of new cases)
-PROMINENCE_THRESHOLD_DEAD = 2     # Absolute prominence threshold (in number of new deaths)
-PROMINENCE_THRESHOLD_TESTS = 10      # Absolute prominence threshold (in number of new tests)
-RELATIVE_PROMINENCE_THRESHOLD = 0.25 # Prominence relative to the max of time series (smoothed)
-CLASS_1_THRESHOLD = 100             # Threshold in number of new cases per day (smoothed) to be considered entering first wave
+DISTANCE = 21       # Number of days apart 2 peaks must at least be for both to be considered genuine
+ABS_PROMINENCE_THRESHOLD =  50      # Prominence threshold (in absolute number of new cases)
+POP_PROMINENCE_THRESHOLD = 0.05      # Prominence threshold (in number of new cases per 10k population)
+RELATIVE_PROMINENCE_THRESHOLD = 0.7 # Prominence threshold for each peak, relative to its own magnitude
+ABS_PROMINENCE_THRESHOLD_DEAD =  5      # Prominence threshold (in absolute number of deaths per day)
+POP_PROMINENCE_THRESHOLD_DEAD = 0.0015 # Prominence threshold (in number of deaths per day per 10k population)
+CLASS_1_THRESHOLD = 50             # Threshold in number of new cases per day (smoothed) to be considered entering first wave
 CLASS_1_THRESHOLD_DEAD = 5          # Threshold in number of dead per day (smoothed) to be considered entering first wave for deaths
-CLASS_1_THRESHOLD_TESTS = 200       # Threshold in number of tests per day (smoothed) to be considered entering first wave for tests
-ABSOLUTE_T0_THRESHOLD = 1000
-POP_RELATIVE_T0_THRESHOLD = 5 #per million people
+# Currently T0 is defined as the date of the 1st death (alternatively t0_5_dead or t0_10_dead for the 5th and 10th death)
+ABSOLUTE_T0_THRESHOLD = 1000    # Define an alternative T0 as the date reaching this threshold in total cases
+POP_RELATIVE_T0_THRESHOLD = 0.05 # T0 threshold in cumulative cases per 10k population
 TEST_LAG = 0 # Lag between test date and test results
 DEATH_LAG = 21 # Lag between confirmed and death. Ideally would be sampled from a random distribution of some sorts
 SI_THRESHOLD = 59
@@ -49,7 +50,7 @@ cur = conn.cursor()
 
 # GET RAW EPIDEMIOLOGY TABLE
 source = "WRD_ECDC"
-exclude = ['Other continent', 'Asia', 'Europe', 'America', 'Africa', 'Oceania']
+exclude = ['Other continent', 'Asia', 'Europe', 'America', 'Africa', 'Oceania','World']
 cols = 'countrycode, country, date, confirmed, dead'
 sql_command = """SELECT """ + cols + """ FROM epidemiology WHERE adm_area_1 IS NULL AND source = %(source)s"""
 raw_epidemiology = pd.read_sql(sql_command, conn, params={'source':source})
@@ -188,7 +189,7 @@ for country in tqdm(countries, desc='Pre-processing Government Response Data'):
 # TESTING PROCESSING
 countries = [country for country in raw_testing_data['countrycode'].unique()
              if not(pd.isnull(country)) and (len(country) == 3)] #remove some odd values in the countrycode column
-testing = pd.DataFrame(columns=['countrycode','date', 'total_tests', 'new_tests', 'new_tests_smoothed', 'positive_rate'])
+testing = pd.DataFrame(columns=['countrycode','date', 'total_tests', 'new_tests', 'new_tests_smooth', 'positive_rate'])
 
 for country in tqdm(countries, desc='Pre-processing Testing Data'):
     data = raw_testing_data[raw_testing_data['countrycode'] == country].reset_index(drop=True)
@@ -223,18 +224,14 @@ epidemiology_series = {
     'new_deaths_per_10k': np.empty(0),
     'tests': np.empty(0),
     'new_tests': np.empty(0),
-    'new_tests_smoothed': np.empty(0),
+    'new_tests_smooth': np.empty(0),
     'positive_rate': np.empty(0),
+    'positive_rate_smooth': np.empty(0),
     'days_since_t0_pop':np.empty(0),
     'days_since_t0_1_dead':np.empty(0),
     'days_since_t0_5_dead':np.empty(0),
     'days_since_t0_10_dead':np.empty(0)
 }
-
-if SAVE_PLOTS:
-    for i in range(0,6):
-        os.makedirs(PLOT_PATH + 'epidemiological/class_' + str(i) + '/', exist_ok=True)
-
 
 # INITIALISE MOBILITY TIME SERIES
 mobility_series = {
@@ -278,35 +275,41 @@ for country in tqdm(countries, desc='Processing Epidemiological Time Series Data
 
     tests = np.repeat(np.nan, len(data))
     new_tests = np.repeat(np.nan, len(data))
-    new_tests_smoothed = np.repeat(np.nan, len(data))
+    new_tests_smooth = np.repeat(np.nan, len(data))
     positive_rate = np.repeat(np.nan, len(data))
+    positive_rate_smooth = np.repeat(np.nan, len(data))
 
-    x = np.arange(len(data['date']))
-    y = data['new_per_day'].values
-    ys = csaps(x, y, x, smooth=SMOOTH)
-    z = data['dead_per_day'].values
-    zs = csaps(x, z, x, smooth=SMOOTH)
+    #x = np.arange(len(data['date']))
+    #y = data['new_per_day'].values
+    #ys = csaps(x, y, x, smooth=SMOOTH)
+    ys = data[['new_per_day','date']].rolling(window=7, on='date').mean()['new_per_day']
+    #z = data['dead_per_day'].values
+    #zs = csaps(x, z, x, smooth=SMOOTH)
+    zs = data[['dead_per_day','date']].rolling(window=7, on='date').mean()['dead_per_day']
 
     if len(testing_data) > 1:
         tests = data[['date']].merge(
             testing_data[['date','total_tests']],how='left',on='date')['total_tests'].values
+        new_tests_date = data[['date']].merge(
+            testing_data[['date','new_tests']],how='left',on='date')
         new_tests = data[['date']].merge(
             testing_data[['date','new_tests']],how='left',on='date')['new_tests'].values
-
-        x_testing = np.arange(len(new_tests[~np.isnan(new_tests)]))
-        y_testing = new_tests[~np.isnan(new_tests)]
-        ys_testing = csaps(x_testing, y_testing, x_testing, smooth=SMOOTH)
-
-        new_tests_smoothed[np.where(~np.isnan(new_tests))] = ys_testing
-        positive_rate[np.where(~np.isnan(new_tests))] = ys[np.where(~np.isnan(new_tests))] / ys_testing
+        new_tests_smooth = new_tests_date[['new_tests','date']].rolling(window=7, on='date').mean()['new_tests']
+        
+        positive_rate[~np.isnan(new_tests)] = data['new_per_day'][~np.isnan(new_tests)] / new_tests[~np.isnan(new_tests)]
         positive_rate[positive_rate > 1] = np.nan
+        positive_rate_smooth = np.array(pd.Series(positive_rate).rolling(window=7).mean())
+
+        #x_testing = np.arange(len(new_tests[~np.isnan(new_tests)]))
+        #y_testing = new_tests[~np.isnan(new_tests)]
+        #ys_testing = csaps(x_testing, y_testing, x_testing, smooth=SMOOTH)
 
     population = np.nan if len(wb_statistics[wb_statistics['countrycode']==country]['value'])==0 else \
         wb_statistics[wb_statistics['countrycode']==country]['value'].iloc[0]
     t0 = np.nan if len(data[data['confirmed']>=ABSOLUTE_T0_THRESHOLD]['date']) == 0 else \
         data[data['confirmed']>=ABSOLUTE_T0_THRESHOLD]['date'].iloc[0]
-    t0_relative = np.nan if len(data[((data['confirmed']/population)*1000000) >= POP_RELATIVE_T0_THRESHOLD]) == 0 else \
-        data[((data['confirmed']/population)*1000000) >= POP_RELATIVE_T0_THRESHOLD]['date'].iloc[0]
+    t0_relative = np.nan if len(data[((data['confirmed']/population)*10000) >= POP_RELATIVE_T0_THRESHOLD]) == 0 else \
+        data[((data['confirmed']/population)*10000) >= POP_RELATIVE_T0_THRESHOLD]['date'].iloc[0]
     t0_1_dead = np.nan if len(data[data['dead']>=1]['date']) == 0 else \
         data[data['dead']>=1]['date'].iloc[0]
     t0_5_dead = np.nan if len(data[data['dead']>=5]['date']) == 0 else \
@@ -356,10 +359,12 @@ for country in tqdm(countries, desc='Processing Epidemiological Time Series Data
         (epidemiology_series['tests'], tests))
     epidemiology_series['new_tests'] = np.concatenate(
         (epidemiology_series['new_tests'], new_tests))
-    epidemiology_series['new_tests_smoothed'] = np.concatenate(
-        (epidemiology_series['new_tests_smoothed'], new_tests_smoothed))
+    epidemiology_series['new_tests_smooth'] = np.concatenate(
+        (epidemiology_series['new_tests_smooth'], new_tests_smooth))
     epidemiology_series['positive_rate'] = np.concatenate(
         (epidemiology_series['positive_rate'], positive_rate))
+    epidemiology_series['positive_rate_smooth'] = np.concatenate(
+        (epidemiology_series['positive_rate_smooth'], positive_rate_smooth))
     epidemiology_series['days_since_t0_pop'] = np.concatenate(
         (epidemiology_series['days_since_t0_pop'], days_since_t0_relative))
     epidemiology_series['days_since_t0_1_dead'] = np.concatenate(
@@ -386,9 +391,10 @@ for country in tqdm(countries, desc='Processing Mobility Time Series Data'):
         (mobility_series['date'], data['date'].values))
 
     for mobility_type in mobilities:
-        x = np.arange(len(data['date']))
-        y = data[mobility_type].values
-        ys = csaps(x, y, x, smooth=SMOOTH)
+        #x = np.arange(len(data['date']))
+        #y = data[mobility_type].values
+        #ys = csaps(x, y, x, smooth=SMOOTH)
+        ys = data[[mobility_type,'date']].rolling(window=7, on='date').mean()[mobility_type]
 
         mobility_series[mobility_type] = np.concatenate((
             mobility_series[mobility_type], data[mobility_type].values))
@@ -470,7 +476,7 @@ FLAG_RASIED_AGAIN - DATE FLAG RAISED AGAIN FOR EACH FLAG IN L66 √
 FLAG RESPONSE TIME - T0_POP TO MAX FLAG FOR EACH FLAG IN L66√
 FLAG TOTAL DAYS √
 '''
-
+#%%
 epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'population', 't0', 't0_relative',
                                            't0_1_dead','t0_5_dead','t0_10_dead',
                                            'peak_1', 'peak_2', 'date_peak_1', 'date_peak_2', 'first_wave_start',
@@ -480,6 +486,19 @@ epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'p
                                            'tau_dead','tau_p_dead','tau_tests','tau_p_tests',
                                            'confirmed_30d_avg_before_first_peak','dead_30d_avg_before_first_peak','tests_30d_avg_before_first_peak',
                                            'confirmed_30d_avg_before_second_peak','dead_30d_avg_before_second_peak','tests_30d_avg_before_second_peak'])
+
+if SAVE_PLOTS: # Create directories for saving plots, remove any existing plots
+    if os.path.isdir(PLOT_PATH + 'epidemiological/'):
+            shutil.rmtree(PLOT_PATH + 'epidemiological/')
+    for i in range(0,7):
+        os.makedirs(PLOT_PATH + 'epidemiological/class_' + str(i) + '/', exist_ok=True)
+    os.makedirs(PLOT_PATH + 'epidemiological/class_other' + '/', exist_ok=True)
+
+# There are some countries with poor data quality in the ECDC data, insufficient for a clear classification
+# They are manually labelled from visual inspection, and are defined here.
+exclude_countries = ['CMR','COG','GNQ','BWA','ESH']
+# Some countries also have poor data quality, but the overall shape of the wave is still visible:
+# KGZ, CHL, NIC, KAZ, ECU, CHN
 
 countries = epidemiology['countrycode'].unique()
 for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
@@ -499,7 +518,6 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['second_wave_end'] = np.nan
     data['peak_1_cfr'] = np.nan
     data['peak_2_cfr'] = np.nan
-    data['tests_class'] = np.nan
     data['tau_dead'] = np.nan
     data['tau_p_dead'] = np.nan
     data['tau_tests'] = np.nan
@@ -512,15 +530,18 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['tests_30d_avg_before_second_peak'] = np.nan
     
     data['countrycode'] = country
-    country_series = epidemiology_series[epidemiology_series['countrycode'] == country]
+    country_series = epidemiology_series[epidemiology_series['countrycode'] == country].reset_index(drop=True)
+    if len(country_series) < DISTANCE: # If the time series does not have sufficient length, skip the country
+        continue
+    
     data['country'] = country_series['country'].iloc[0]
     data['population'] = np.nan if len(wb_statistics[wb_statistics['countrycode'] == country]) == 0 else \
         wb_statistics[wb_statistics['countrycode'] == country]['value'].values[0]
     data['t0'] = np.nan if len(country_series[country_series['confirmed']>=ABSOLUTE_T0_THRESHOLD]['date']) == 0 else \
         country_series[country_series['confirmed']>=ABSOLUTE_T0_THRESHOLD]['date'].iloc[0]
-    data['t0_relative'] = np.nan if len(country_series[(country_series['confirmed'] / data['population'] * 1000000
+    data['t0_relative'] = np.nan if len(country_series[(country_series['confirmed'] / data['population'] * 10000
                                       >= POP_RELATIVE_T0_THRESHOLD)]['date']) == 0 else \
-        country_series[(country_series['confirmed'] / data['population'] * 1000000
+        country_series[(country_series['confirmed'] / data['population'] * 10000
                                       >= POP_RELATIVE_T0_THRESHOLD)]['date'].iloc[0]
     data['t0_1_dead'] = np.nan if len(country_series[country_series['dead']>=1]['date']) == 0 else \
         country_series[country_series['dead']>=1]['date'].iloc[0]
@@ -529,24 +550,32 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['t0_10_dead'] = np.nan if len(country_series[country_series['dead']>=10]['date']) == 0 else \
         country_series[country_series['dead']>=10]['date'].iloc[0]
 
-    cases_prominence_threshold = max(PROMINENCE_THRESHOLD, 
-                                     RELATIVE_PROMINENCE_THRESHOLD*np.nanmax(country_series['new_per_day_smooth']))
+    cases_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD, POP_PROMINENCE_THRESHOLD * data['population'] / 10000)
     peak_characteristics = find_peaks(country_series['new_per_day_smooth'].values,
                                       prominence=cases_prominence_threshold, distance=DISTANCE)
-    genuine_peaks = peak_characteristics[0]
+    peak_locations = peak_characteristics[0]
+    peak_prominences = peak_characteristics[1]['prominences']
+    genuine_peaks = [p for i,p in enumerate(peak_locations) 
+                     if peak_prominences[i] >= RELATIVE_PROMINENCE_THRESHOLD * country_series['new_per_day_smooth'].values[p]]
+    
     # Label country wave status
-    data['class'] = 2*len(genuine_peaks)
+    if country in exclude_countries:
+        data['class'] = 0
+        genuine_peaks = []
+    else:
+        data['class'] = 2*len(genuine_peaks)
     # Increase the class by 1 if the country is entering a new peak
     if data['class'] > 0 and genuine_peaks[-1]<len(country_series):
-        # Entering a new peak iff: after the minima following the last genuine peak, there is a value >=f% of the smallest peak value
+        # Entering a new peak if the end of the time series can meet the criteria to be defined as a peak itself without any further increase
         last_peak_date = country_series['date'].values[genuine_peaks[-1]]
-        trough_value = min(country_series.loc[country_series["date"]>last_peak_date,"new_per_day_smooth"])
-        trough_date = country_series.loc[country_series["new_per_day_smooth"]==trough_value,"date"].values[0]
-        max_after_trough = np.nanmax(country_series.loc[country_series["date"]>=trough_date,"new_per_day_smooth"])
-        if max_after_trough-trough_value >= RELATIVE_PROMINENCE_THRESHOLD*np.nanmax(country_series['new_per_day_smooth']):
+        trough_value = min(country_series.loc[country_series['date']>last_peak_date,'new_per_day_smooth'])
+        trough_date = country_series['date'][np.argmin(country_series.loc[country_series['date']>last_peak_date,'new_per_day_smooth'])]
+        max_after_trough = np.nanmax(country_series.loc[country_series['date']>=trough_date,'new_per_day_smooth'])
+        if max_after_trough-trough_value >= cases_prominence_threshold \
+        and max_after_trough-trough_value >= RELATIVE_PROMINENCE_THRESHOLD * max_after_trough:
             data['class'] = data['class'] + 1
-    elif data['class'] == 0:
-        if np.nanmax(country_series["new_per_day_smooth"]) >= CLASS_1_THRESHOLD:
+    elif data['class'] == 0 and country not in exclude_countries:
+        if np.nanmax(country_series['new_per_day_smooth']) >= CLASS_1_THRESHOLD:
             data['class'] = data['class'] + 1
     
     if len(genuine_peaks) >= 1:
@@ -598,53 +627,46 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['testing_available'] = True if len(country_series['new_tests'].dropna()) > 0 else False
 
     # Classify wave status for deaths
-    dead_prominence_threshold = max(PROMINENCE_THRESHOLD_DEAD, 
-                                    RELATIVE_PROMINENCE_THRESHOLD*np.nanmax(country_series['dead_per_day_smooth']))
+    dead_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD_DEAD, POP_PROMINENCE_THRESHOLD_DEAD * data['population'] / 10000)
     dead_peak_characteristics = find_peaks(country_series['dead_per_day_smooth'].values,
-                                           prominence=dead_prominence_threshold, distance=DISTANCE)
-    genuine_peaks = dead_peak_characteristics[0]
-    data['dead_class'] = 2*len(genuine_peaks)
-    if data['dead_class'] > 0 and genuine_peaks[-1]<len(country_series):
-        last_peak_date = country_series['date'].values[genuine_peaks[-1]]
-        trough_value = min(country_series.loc[country_series["date"]>last_peak_date,"dead_per_day_smooth"])
-        trough_date = country_series.loc[country_series["dead_per_day_smooth"]==trough_value,"date"].values[0]
-        max_after_trough = np.nanmax(country_series.loc[country_series["date"]>=trough_date,"dead_per_day_smooth"])
-        if max_after_trough-trough_value >= RELATIVE_PROMINENCE_THRESHOLD*np.nanmax(country_series['dead_per_day_smooth']):
+                                      prominence=dead_prominence_threshold, distance=DISTANCE)
+    peak_locations = dead_peak_characteristics[0]
+    peak_prominences = dead_peak_characteristics[1]['prominences']
+    dead_genuine_peaks = [p for i,p in enumerate(peak_locations) 
+                     if peak_prominences[i] >= RELATIVE_PROMINENCE_THRESHOLD * country_series['dead_per_day_smooth'].values[p]]
+
+    # Label class for deaths
+    if country in exclude_countries:
+        data['dead_class'] = 0
+        dead_genuine_peaks = []
+    else:
+        data['dead_class'] = 2*len(dead_genuine_peaks)
+    
+    if data['dead_class'] > 0 and dead_genuine_peaks[-1]<len(country_series):
+        last_peak_date = country_series['date'].values[dead_genuine_peaks[-1]]
+        trough_value = min(country_series.loc[country_series['date']>last_peak_date,'dead_per_day_smooth'])
+        trough_date = country_series['date'][np.argmin(country_series.loc[country_series['date']>last_peak_date,'dead_per_day_smooth'])]
+        max_after_trough = np.nanmax(country_series.loc[country_series['date']>=trough_date,'dead_per_day_smooth'])
+        if max_after_trough-trough_value >= dead_prominence_threshold \
+        and max_after_trough-trough_value >= RELATIVE_PROMINENCE_THRESHOLD * max_after_trough:
             data['dead_class'] = data['dead_class'] + 1
-    elif data['dead_class'] == 0:
-        if np.nanmax(country_series["dead_per_day_smooth"]) >= CLASS_1_THRESHOLD_DEAD:
+    elif data['dead_class'] == 0 and country not in exclude_countries:
+        if np.nanmax(country_series['dead_per_day_smooth']) >= CLASS_1_THRESHOLD_DEAD:
             data['dead_class'] = data['dead_class'] + 1
     
-    if len(genuine_peaks) >= 1:
-        data['date_dead_peak_1'] = country_series['date'].values[genuine_peaks[0]]
+    if len(dead_genuine_peaks) >= 1:
+        data['date_dead_peak_1'] = country_series['date'].values[dead_genuine_peaks[0]]
         bases = np.append(dead_peak_characteristics[1]['left_bases'],dead_peak_characteristics[1]['right_bases'])
-        data['dead_first_wave_start'] = min(data['t0_1_dead'],country_series['date'].values[max([b for b in bases if b<genuine_peaks[0]])]) \
+        data['dead_first_wave_start'] = min(data['t0_1_dead'],country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[0]])]) \
                                         if not pd.isnull(data['t0_1_dead']) \
-                                        else country_series['date'].values[max([b for b in bases if b<genuine_peaks[0]])]
-        data['dead_first_wave_end'] = country_series['date'].values[min([b for b in bases if b>genuine_peaks[0]])]
-    if len(genuine_peaks) >= 2:
-        data['date_dead_peak_2'] = country_series['date'].values[genuine_peaks[1]]
-        data['dead_second_wave_start'] = country_series['date'].values[max([b for b in bases if b<genuine_peaks[1]])]
-        data['dead_second_wave_end'] = country_series['date'].values[min([b for b in bases if b>genuine_peaks[1]])]
+                                        else country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[0]])]
+        data['dead_first_wave_end'] = country_series['date'].values[min([b for b in bases if b>dead_genuine_peaks[0]])]
+    if len(dead_genuine_peaks) >= 2:
+        data['date_dead_peak_2'] = country_series['date'].values[dead_genuine_peaks[1]]
+        data['dead_second_wave_start'] = country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[1]])]
+        data['dead_second_wave_end'] = country_series['date'].values[min([b for b in bases if b>dead_genuine_peaks[1]])]
     # Classify wave status for tests
     if data['testing_available']:
-        tests_prominence_threshold = max(PROMINENCE_THRESHOLD_TESTS, 
-                                        RELATIVE_PROMINENCE_THRESHOLD*np.nanmax(country_series['new_tests_smoothed']))
-        tests_peak_characteristics = find_peaks(country_series['new_tests_smoothed'].values,
-                                                prominence=tests_prominence_threshold, distance=DISTANCE)
-        genuine_peaks = tests_peak_characteristics[0]
-        data['tests_class'] = 2*len(genuine_peaks)
-        if data['tests_class'] > 0 and genuine_peaks[-1]<len(country_series):
-            last_peak_date = country_series['date'].values[genuine_peaks[-1]]
-            trough_value = min(country_series.loc[country_series["date"]>last_peak_date,"new_tests_smoothed"])
-            trough_date = country_series.loc[country_series["new_tests_smoothed"]==trough_value,"date"].values[0]
-            max_after_trough = np.nanmax(country_series.loc[country_series["date"]>=trough_date,"new_tests_smoothed"])
-            if max_after_trough-trough_value >= RELATIVE_PROMINENCE_THRESHOLD*np.nanmax(country_series['new_tests_smoothed']):
-                data['tests_class'] = data['tests_class'] + 1
-        elif data['tests_class'] == 0:
-            if np.nanmax(country_series["new_tests_smoothed"]) >= CLASS_1_THRESHOLD_TESTS:
-                data['tests_class'] = data['tests_class'] + 1
-            
         # Get kendall's correlation tau: Confirmed on Deaths (forward 14 days), vs. Confirmed on Tests. If tests explains more of the variance, may indicate 2nd wave is test driven.
         X = country_series['dead_per_day']
         y = country_series['new_per_day']
@@ -706,110 +728,82 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                  label='New Cases per Day')
         axes[0].plot(country_series['date'].values,
                  country_series['new_per_day_smooth'].values,
-                 label='New Cases per Day Spline')
+                 label='New Cases per Day 7 Day Moving Average')
         axes[0].plot([country_series['date'].values[i]
-                  for i in peak_characteristics[0]],
+                  for i in genuine_peaks],
                  [country_series['new_per_day_smooth'].values[i]
-                  for i in peak_characteristics[0]], "X", ms=20, color='red')
-        if data['class']>=2:
-            axes[0].plot(data['first_wave_start'],country_series.loc[country_series['date']==data['first_wave_start'],'new_per_day_smooth'].values[0],
-                         "X", ms=20, color='orange')
-            axes[0].text(data['first_wave_start'],country_series.loc[country_series['date']==data['first_wave_start'],'new_per_day_smooth'].values[0], 'First Wave Start')
-            axes[0].plot(data['first_wave_end'],country_series.loc[country_series['date']==data['first_wave_end'],'new_per_day_smooth'].values[0],
-                         "X", ms=20, color='orange')
-            axes[0].text(data['first_wave_end'],country_series.loc[country_series['date']==data['first_wave_end'],'new_per_day_smooth'].values[0], 'First Wave End')
-        if data['class']>=4:
-            axes[0].plot(data['second_wave_start'],country_series.loc[country_series['date']==data['second_wave_start'],'new_per_day_smooth'].values[0],
-                         "X", ms=20, color='orange')
-            axes[0].text(data['second_wave_start'],country_series.loc[country_series['date']==data['second_wave_start'],'new_per_day_smooth'].values[0], 'Second Wave Start')
-            axes[0].plot(data['second_wave_end'],country_series.loc[country_series['date']==data['second_wave_end'],'new_per_day_smooth'].values[0],
-                         "X", ms=20, color='orange')
-            axes[0].text(data['second_wave_end'],country_series.loc[country_series['date']==data['second_wave_end'],'new_per_day_smooth'].values[0], 'Second Wave End')
+                  for i in genuine_peaks], "X", ms=20, color='red')
         axes[1].plot(country_series['date'].values,
                  country_series['dead_per_day'].values,
                  label='Deaths per Day')
         axes[1].plot(country_series['date'].values,
                  country_series['dead_per_day_smooth'].values,
-                 label='Deaths per Day Spline')
+                 label='Deaths per Day 7 Day Moving Average')
         axes[1].plot([country_series['date'].values[i]
-                  for i in dead_peak_characteristics[0]],
+                  for i in dead_genuine_peaks],
                  [country_series['dead_per_day_smooth'].values[i]
-                  for i in dead_peak_characteristics[0]], "X", ms=20, color='red')
-        if data['dead_class']>=2:
-            axes[1].plot(data['dead_first_wave_start'],country_series.loc[country_series['date']==data['dead_first_wave_start'],'dead_per_day_smooth'].values[0],
-                         "X", ms=20, color='orange')
-            axes[1].text(data['dead_first_wave_start'],country_series.loc[country_series['date']==data['dead_first_wave_start'],'dead_per_day_smooth'].values[0], 'Deaths First Wave Start')
-            axes[1].plot(data['dead_first_wave_end'],country_series.loc[country_series['date']==data['dead_first_wave_end'],'dead_per_day_smooth'].values[0],
-                         "X", ms=20, color='orange')
-            axes[1].text(data['dead_first_wave_end'],country_series.loc[country_series['date']==data['dead_first_wave_end'],'dead_per_day_smooth'].values[0], 'Deaths First Wave End')
-        if data['dead_class']>=4:
-            axes[1].plot(data['dead_second_wave_start'],country_series.loc[country_series['date']==data['dead_second_wave_start'],'dead_per_day_smooth'].values[0],
-                         "X", ms=20, color='orange')
-            axes[1].text(data['dead_second_wave_start'],country_series.loc[country_series['date']==data['dead_second_wave_start'],'dead_per_day_smooth'].values[0], 'Deaths Second Wave Start')
-            axes[1].plot(data['dead_second_wave_end'],country_series.loc[country_series['date']==data['dead_second_wave_end'],'dead_per_day_smooth'].values[0],
-                         "X", ms=20, color='orange')
-            axes[1].text(data['dead_second_wave_end'],country_series.loc[country_series['date']==data['dead_second_wave_end'],'dead_per_day_smooth'].values[0], 'Deaths Second Wave End')
+                  for i in dead_genuine_peaks], "X", ms=20, color='red')
         if data['testing_available']:
             axes[2].plot(country_series['date'].values,
                      country_series['new_tests'].values,
                      label='Tests per Day')
             axes[2].plot(country_series['date'].values,
-                     country_series['new_tests_smoothed'].values,
-                     label='Tests per Day Spline')
-            axes[2].plot([country_series['date'].values[i]
-                      for i in tests_peak_characteristics[0]],
-                     [country_series['new_tests_smoothed'].values[i]
-                      for i in tests_peak_characteristics[0]], "X", ms=20, color='red')
+                     country_series['new_tests_smooth'].values,
+                     label='Tests per Day 7 Day Moving Average')
         axes[0].set_title('New Cases per Day')
         axes[0].set_ylabel('New Cases per Day')
         axes[1].set_title('Deaths per Day')
         axes[1].set_ylabel('Deaths per Day')
         axes[2].set_title('Tests per Day')
         axes[2].set_ylabel('Tests per Day')
-        f.suptitle('Cases, Deaths and Tests per Day for ' + country)
-        plt.savefig(PLOT_PATH + 'epidemiological/class_' +str(data['class']) +'/' + country + '.png')
+        f.suptitle('Cases, Deaths and Tests per Day for ' + data['country'])
+        if data['class'] <= 6:
+            plt.savefig(PLOT_PATH + 'epidemiological/class_' +str(data['class']) +'/' + data['country'] + '.png')
+        else:
+            plt.savefig(PLOT_PATH + 'epidemiological/class_other' + '/' + data['country'] + '.png')
         plt.close('all')    
     
     epidemiology_panel = epidemiology_panel.append(data,ignore_index=True)
 
+
+#%%
 if SAVE_CSV:
     epidemiology_panel.to_csv(CSV_PATH + 'epidemiology_panel.csv')
-
 
 mobility_panel = pd.DataFrame(columns=['countrycode','country'] +
                                       [mobility_type + '_max' for mobility_type in mobilities] +
                                       [mobility_type + '_max_date' for mobility_type in mobilities] +
-                                      [mobility_type + '_quarantine_fatigue' for mobility_type in mobilities])
+                                      [mobility_type + '_quarantine_fatigue' for mobility_type in mobilities] + 
+                                      [mobility_type + '_integral' for mobility_type in mobilities])
 
 countries = mobility['countrycode'].unique()
 for country in tqdm(countries, desc='Processing Mobility Panel Data'):
     data = dict()
     data['countrycode'] = country
-    data['country'] = mobility_series[mobility_series['countrycode']==country]['country'].iloc[0]
+    country_series = mobility_series[mobility_series['countrycode']==country].reset_index(drop=True)
+    data['country'] = country_series['country'].iloc[0]
     for mobility_type in mobilities:
-        data[mobility_type + '_max'] = mobility_series[
-            mobility_series['countrycode']==country][mobility_type + '_smooth'].max()
-        data[mobility_type + '_max_date'] = mobility_series[
-            mobility_series['countrycode'] == country].iloc[
-            mobility_series[mobility_series['countrycode'] == country][mobility_type + '_smooth'].argmax()]['date']
-        data[mobility_type + '_quarantine_fatigue'] = np.nan
+        if sum(~np.isnan(country_series[mobility_type])) > 1:
+            data[mobility_type + '_max'] = country_series[mobility_type + '_smooth'].max()
+            data[mobility_type + '_max_date'] = country_series.iloc[country_series[mobility_type + '_smooth'].argmax()]['date']
+            data[mobility_type + '_quarantine_fatigue'] = np.nan
+            data[mobility_type + '_integral'] = np.trapz(y=country_series[mobility_type].dropna(), 
+                                                         x=[(a-country_series['date'].values[0]).days for a in country_series['date'][~np.isnan(country_series[mobility_type])]])
 
-        mob_data_to_fit = mobility_series[
-                        mobility_series['countrycode']==country][mobility_type + '_smooth'].iloc[
-                        mobility_series[mobility_series['countrycode']==country][mobility_type + '_smooth'].argmax()::]
-        mob_data_to_fit = mob_data_to_fit.dropna()
-        if len(mob_data_to_fit) != 0:
-            data[mobility_type + '_quarantine_fatigue'] = LinearRegression().fit(
-                np.arange(len(mob_data_to_fit)).reshape(-1,1),mob_data_to_fit.values).coef_[0]
+            mob_data_to_fit = country_series[mobility_type + '_smooth'].iloc[country_series[mobility_type + '_smooth'].argmax()::]
+            mob_data_to_fit = mob_data_to_fit.dropna()
+            if len(mob_data_to_fit) != 0:
+                data[mobility_type + '_quarantine_fatigue'] = LinearRegression().fit(
+                    np.arange(len(mob_data_to_fit)).reshape(-1,1),mob_data_to_fit.values).coef_[0]
 
     mobility_panel = mobility_panel.append(data, ignore_index=True)
-    continue
 
     
 government_response_panel = pd.DataFrame(columns=['countrycode', 'country', 'max_si','date_max_si',
                                                   'si_days_to_max_si', 'si_at_t0','si_at_peak_1',
                                                   'si_days_to_threshold',
-                                                  'si_days_above_threshold','si_days_above_threshold_first_wave'] +
+                                                  'si_days_above_threshold','si_days_above_threshold_first_wave',
+                                                  'si_integral'] +
                                                  [flag + '_at_t0' for flag in flags] +
                                                  [flag + '_at_peak_1' for flag in flags] +
                                                  [flag + '_days_to_threshold' for flag in flags] +
@@ -835,6 +829,8 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
         else epidemiology_panel[epidemiology_panel['countrycode']==country]['t0_1_dead'].iloc[0]
     data['si_days_to_max_si'] = np.nan if pd.isnull(t0) else (data['date_max_si'] - t0).days
     data['si_days_above_threshold'] = sum(country_series['si']>=SI_THRESHOLD)
+    data['si_integral'] = np.trapz(y=country_series['si'].dropna(), 
+                                   x=[(a-country_series['date'].values[0]).days for a in country_series['date'][~np.isnan(country_series['si'])]])
     # Initialize columns as nan first for potential missing values
     data['si_days_above_threshold_first_wave'] = np.nan
     data['si_at_t0'] = np.nan
@@ -891,165 +887,6 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
     government_response_panel = government_response_panel.append(data,ignore_index=True) 
 
 
-
-# -------------------------------------------------------------------------------------------------------------------- #
-"""
-DEPRECATED FIGURES
-'''
-PART 3 - SAVING FIGURE 1a
-Chloropleth of days to t0 per country
-'''
-start_date = epidemiology_series['date'].min()
-figure_1a = pd.DataFrame(columns=['countrycode','country','days_to_t0','days_to_t0_pop'])
-figure_1a['countrycode'] = epidemiology_panel['countrycode'].values
-figure_1a['country'] = epidemiology_panel['country'].values
-figure_1a['days_to_t0'] = (epidemiology_panel['t0']-start_date).apply(lambda x: x.days)
-figure_1a['days_to_t0_pop'] = (epidemiology_panel['t0_relative']-start_date).apply(lambda x: x.days)
-# It looks like pandas cannot correctly serialise the geometry column so this
-# is being commented out. Possibly this merge could be done at plot time, or
-# the data could be pickled instead of written to a flat CSV. Since it is just
-# a left merge with the country code this should be feasible.
-figure_1a = figure_1a.merge(map_data[['countrycode']],on='countrycode',how = 'left').dropna()
-figure_1a = figure_1a.merge(map_data[['countrycode','geometry']],on='countrycode',how = 'left').dropna()
-if SAVE_CSV:
-    # Asserts have been added because there was a wierd bug encountered in
-    # saving figure_1a to CSV and they were introduced to help track it down.
-    assert isinstance(figure_1a, pd.core.frame.DataFrame), "figure_1a is not a pandas dataframe..."
-    assert hasattr(figure_1a, "to_csv"), "figure_1a does not have a to_csv method..."
-    figure_1a.to_csv(CSV_PATH + 'figure_1a.csv', sep=';')
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 3 - SAVING FIGURE 1b
-Chloropleth of wave status per country
-'''
-figure_1b = epidemiology_panel[['countrycode','country','class']].dropna()
-# It looks like pandas cannot correctly serialise the geometry column so this
-# is being commented out. Possibly this merge could be done at plot time, or
-# the data could be pickled instead of written to a flat CSV. Since it is just
-# a left merge with the country code this should be feasible.
-figure_1b = figure_1b.merge(map_data[['countrycode']],on='countrycode',how = 'left').dropna()
-figure_1b = figure_1b.merge(map_data[['countrycode','geometry']],on='countrycode',how = 'left').dropna()
-if SAVE_CSV:
-    figure_1b.to_csv(CSV_PATH + 'figure_1b.csv',sep=';')
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 4 - SAVING FIGURE 2a
-Time series of stringency index
-'''
-data = epidemiology_series[['countrycode','country','date','days_since_t0','days_since_t0_pop']].merge(
-    epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
-    government_response_series[['countrycode','date','si']],on=['countrycode','date'],how='left').dropna()
-figure_2a = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','stringency_index'])
-figure_2a['COUNTRYCODE'] = data['countrycode']
-figure_2a['COUNTRY'] = data['country']
-figure_2a['CLASS'] = data['class']
-figure_2a['t'] = data['days_since_t0']
-figure_2a['t_pop'] = data['days_since_t0_pop']
-figure_2a['stringency_index'] = data['si']
-if SAVE_CSV:
-    figure_2a.to_csv(CSV_PATH + 'figure_2a.csv')
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 5 - SAVING FIGURE 2b
-Time series of mobility
-'''
-data = epidemiology_series[['countrycode','country','date','days_since_t0','days_since_t0_pop']].merge(
-    epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
-    mobility_series[['countrycode','date','residential_smooth']],on=['countrycode','date'],how='left').dropna()
-figure_2b = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','residential_smooth'])
-figure_2b['COUNTRYCODE'] = data['countrycode']
-figure_2b['COUNTRY'] = data['country']
-figure_2b['CLASS'] = data['class']
-figure_2b['t'] = data['days_since_t0']
-figure_2b['t_pop'] = data['days_since_t0_pop']
-figure_2b['residential_smooth'] = data['residential_smooth']
-if SAVE_CSV:
-    figure_2b.to_csv(CSV_PATH + 'figure_2b.csv')
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 6 - SAVING FIGURE 2c
-Scatterplot of response time against cases
-'''
-class_coarse = {
-    0:np.nan,
-    1:'EPI_FIRST_WAVE',
-    2:'EPI_FIRST_WAVE',
-    3:'EPI_SECOND_WAVE',
-    4:'EPI_SECOND_WAVE'
-}
-data = epidemiology_panel[['countrycode', 'country', 'class' , 'population', 'last_confirmed']]
-data['class_coarse'] = data['class'].apply(lambda x:class_coarse[x])
-data['last_confirmed_per_10k'] = 10000 * epidemiology_panel['last_confirmed'] / epidemiology_panel['population']
-data['class_coarse'] = data['class'].apply(lambda x: class_coarse[x])
-data = data.merge(government_response_panel[['countrycode', 'response_time','response_time_pop']],
-                  how='left', on='countrycode').dropna()
-figure_2c = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
-                                 'CLASS_COARSE', 'POPULATION', 'EPI_CONFIRMED', 'EPI_CONFIRMED_PER_10K'])
-figure_2c['COUNTRYCODE'] = data['countrycode']
-figure_2c['COUNTRY'] = data['country']
-figure_2c['GOV_MAX_SI_DAYS_FROM_T0'] = data['response_time']
-figure_2c['GOV_MAX_SI_DAYS_FROM_T0_POP'] = data['response_time_pop']
-figure_2c['CLASS'] = data['class']
-figure_2c['CLASS_COARSE'] = data['class_coarse']
-figure_2c['POPULATION'] = data['population']
-figure_2c['EPI_CONFIRMED'] = data['last_confirmed']
-figure_2c['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
-if SAVE_CSV:
-    figure_2c.to_csv(CSV_PATH + 'figure_2c.csv')
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 7 - SAVING FIGURE 3
-3x3 time series subplots of cases, deaths and testing
-'''
-figure_3 = epidemiology_series[[
-    'country', 'countrycode', 'date', 'new_per_day', 'new_per_day_smooth',
-    'dead_per_day', 'dead_per_day_smooth', 'new_tests', 'new_tests_smoothed', 'positive_rate']]
-if SAVE_CSV:
-    figure_3.to_csv(CSV_PATH + 'figure_3.csv')
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 8 - SAVING FIGURE 4
-Time series of cases, stringency and mobility for second wave countries
-'''
-# noinspection PyRedeclaration
-class_coarse = {
-    0:'EPI_OTHER',
-    1:'EPI_FIRST_WAVE',
-    2:'EPI_FIRST_WAVE',
-    3:'EPI_SECOND_WAVE',
-    4:'EPI_SECOND_WAVE'
-}
-data = epidemiology_series[['countrycode','country','date','confirmed','new_cases_per_10k','days_since_t0',
-                            'days_since_t0_pop']].merge(
-    government_response_series[['countrycode','date','si']],on=['countrycode','date'],how='inner').merge(
-    mobility_series[['countrycode','date','residential_smooth']],on=['countrycode','date'],how='inner').merge(
-    epidemiology_panel[['countrycode','class','t0','t0_relative']],on=['countrycode'],how='left').merge(
-    government_response_panel[['countrycode','c6_stay_at_home_requirements_raised',
-                               'c6_stay_at_home_requirements_lowered',
-                               'c6_stay_at_home_requirements_raised_again']],on='countrycode',how='left')
-data['class_coarse'] = data['class'].apply(lambda x:class_coarse[x])
-figure_4 = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'T0', 'T0_POP', 'date', 'stringency_index', 'CLASS',
-                                 'CLASS_COARSE', 'GOV_C6_RAISED_DATE', 'GOV_C6_LOWERED_DATE','GOV_C6_RAISED_AGAIN_DATE',
-                                 'residential_smooth', 't', 'confirmed', 'new_per_day_smooth_per10k'])
-figure_4['COUNTRYCODE'] = data['countrycode']
-figure_4['COUNTRY'] = data['country']
-figure_4['T0'] = data['t0']
-figure_4['T0_POP'] = data['t0_relative']
-figure_4['date'] = data['date']
-figure_4['stringency_index'] = data['si']
-figure_4['CLASS'] = data['class']
-figure_4['CLASS_COARSE'] = data['class_coarse']
-figure_4['GOV_C6_RAISED_DATE'] = data['c6_stay_at_home_requirements_raised']
-figure_4['GOV_C6_LOWERED_DATE'] = data['c6_stay_at_home_requirements_lowered']
-figure_4['GOV_C6_RAISED_AGAIN_DATE'] = data['c6_stay_at_home_requirements_raised_again']
-figure_4['residential_smooth'] = data['residential_smooth']
-figure_4['t'] = data['days_since_t0']
-figure_4['t_pop'] = data['days_since_t0_pop']
-figure_4['confirmed'] = data['confirmed']
-figure_4['new_per_day_smooth_per10k'] = data['new_cases_per_10k']
-if SAVE_CSV:
-    figure_4.to_csv(CSV_PATH + 'figure_4.csv')
-"""
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 3 - FIGURE 1
@@ -1078,7 +915,7 @@ PART 4 - FIGURE 2
 
 figure_2 = epidemiology_series[[
     'country', 'countrycode', 'date', 'new_per_day', 'new_per_day_smooth',
-    'dead_per_day', 'dead_per_day_smooth', 'new_tests', 'new_tests_smoothed', 'positive_rate']]
+    'dead_per_day', 'dead_per_day_smooth', 'new_tests', 'new_tests_smooth', 'positive_rate','positive_rate_smooth']]
 
 if SAVE_CSV:
     figure_2.to_csv(CSV_PATH + 'figure_2.csv')
@@ -1086,51 +923,8 @@ if SAVE_CSV:
 '''
 PART 5 - FIGURE 3
 '''
-
-data = epidemiology_series[['countrycode','country','date', 'days_since_t0_pop', 'days_since_t0_1_dead', 'days_since_t0_5_dead', 'days_since_t0_10_dead']].merge(
-    epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
-    government_response_series[['countrycode','date','si']],on=['countrycode','date'],how='left').dropna()
-
-figure_3a = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t_pop','t_1_dead','t_5_dead','t_10_dead''stringency_index'])
-figure_3a['COUNTRYCODE'] = data['countrycode']
-figure_3a['COUNTRY'] = data['country']
-figure_3a['CLASS'] = data['class']
-figure_3a['t_pop'] = data['days_since_t0_pop']
-figure_3a['t_1_dead'] = data['days_since_t0_1_dead']
-figure_3a['t_5_dead'] = data['days_since_t0_5_dead']
-figure_3a['t_10_dead'] = data['days_since_t0_10_dead']
-figure_3a['stringency_index'] = data['si']
-
-if SAVE_CSV:
-    figure_3a.to_csv(CSV_PATH + 'figure_3a.csv')
-
-data = epidemiology_series[['countrycode','country','date','days_since_t0_pop', 'days_since_t0_1_dead', 'days_since_t0_5_dead', 'days_since_t0_10_dead']].merge(
-    epidemiology_panel[['countrycode','class']], on='countrycode',how='left').merge(
-    mobility_series[['countrycode','date','residential','residential_smooth','workplace','workplace_smooth',
-                     'transit_stations','transit_stations_smooth','retail_recreation','retail_recreation_smooth']].dropna(how='all'),on=['countrycode','date'],how='inner')
-
-figure_3b = pd.DataFrame(columns=['COUNTRYCODE','COUNTRY','CLASS','t','residential','residential_smooth'])
-figure_3b['COUNTRYCODE'] = data['countrycode']
-figure_3b['COUNTRY'] = data['country']
-figure_3b['CLASS'] = data['class']
-figure_3b['t_pop'] = data['days_since_t0_pop']
-figure_3b['t_1_dead'] = data['days_since_t0_1_dead']
-figure_3b['t_5_dead'] = data['days_since_t0_5_dead']
-figure_3b['t_10_dead'] = data['days_since_t0_10_dead']
-figure_3b['residential'] = data['residential']
-figure_3b['residential_smooth'] = data['residential_smooth']
-figure_3b['workplace'] = data['workplace']
-figure_3b['workplace_smooth'] = data['workplace_smooth']
-figure_3b['transit_stations'] = data['transit_stations']
-figure_3b['transit_stations_smooth'] = data['transit_stations_smooth']
-figure_3b['retail_recreation'] = data['retail_recreation']
-figure_3b['retail_recreation_smooth'] = data['retail_recreation_smooth']
-
-if SAVE_CSV:
-    figure_3b.to_csv(CSV_PATH + 'figure_3b.csv')
-
 class_coarse = {
-    0:np.nan,
+    0:'EPI_OTHER',
     1:'EPI_FIRST_WAVE',
     2:'EPI_FIRST_WAVE',
     3:'EPI_SECOND_WAVE',
@@ -1139,12 +933,25 @@ class_coarse = {
     6:'EPI_THIRD_WAVE'
 }
 
+# Figure 3a: Scatterplot of cumulative deaths per 10k population (integral of deaths curve) against integral of SI curve
+data = epidemiology_panel[['countrycode','country','class','last_confirmed','last_dead']].merge(
+            government_response_panel[['countrycode','si_integral']],on='countrycode',how='left').merge(
+                mobility_panel[['countrycode'] + [mobility_type+'_integral' for mobility_type in mobilities]],on='countrycode',how='left')
+data['class_coarse'] = [class_coarse[x] if x in class_coarse.keys() else 'EPI_OTHER' for x in data['class'].values]
+data['last_confirmed_per_10k'] = 10000 * epidemiology_panel['last_confirmed'] / epidemiology_panel['population']
+data['last_dead_per_10k'] = 10000 * epidemiology_panel['last_dead'] / epidemiology_panel['population']
+
+figure_3a = data
+
+if SAVE_CSV:
+    figure_3a.to_csv(CSV_PATH + 'figure_3a.csv')
+
+# Figure 3b: Scatterplot of cumulative deaths per 10k population against  government response time
 data = epidemiology_panel[['countrycode', 'country', 'class' , 'population', 'last_confirmed','last_dead',
                            't0_relative','t0_1_dead','t0_5_dead','t0_10_dead',
-                           'first_wave_start','first_wave_end','duration_first_wave',
-                           'dead_first_wave', 'dead_second_wave',
-                           'dead_peak_1','dead_peak_2']]
-data['class_coarse'] = data['class'].apply(lambda x:class_coarse[x])
+                           'duration_first_wave','duration_second_wave',
+                           'dead_first_wave', 'dead_second_wave']]
+data['class_coarse'] = [class_coarse[x] if x in class_coarse.keys() else 'EPI_OTHER' for x in data['class'].values]
 data['last_confirmed_per_10k'] = 10000 * epidemiology_panel['last_confirmed'] / epidemiology_panel['population']
 data['last_dead_per_10k'] = 10000 * epidemiology_panel['last_dead'] / epidemiology_panel['population']
 data = data.merge(government_response_panel[['countrycode','si_days_to_max_si','max_si'] +
@@ -1154,46 +961,44 @@ data = data.merge(government_response_panel[['countrycode','si_days_to_max_si','
                                             [flag + '_days_above_threshold_first_wave' for flag in flags + ['si']]],
                   how='left', on='countrycode')
 
-figure_3c = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
+figure_3b = pd.DataFrame(columns=['COUNTRYCODE', 'COUNTRY', 'GOV_MAX_SI_DAYS_FROM_T0',
                                  'CLASS_COARSE', 'POPULATION', 'EPI_CONFIRMED', 'EPI_CONFIRMED_PER_10K',
-                                 'EPI_DEAD', 'EPI_DEAD_PER_10K',
+                                 'EPI_DEAD', 'EPI_DEAD_PER_10K','MAX_SI',
                                  'T0_POP','T0_1_DEAD','T0_5_DEAD','T0_10_DEAD',
-                                 'EPI_DURATION_FIRST_WAVE','MAX_SI',
-                                 'DEAD_FIRST_WAVE', 'DEAD_SECOND_WAVE',
-                                 'DEAD_PEAK_1','DEAD_PEAK_2'] +
+                                 'EPI_DURATION_FIRST_WAVE','EPI_DURATION_SECOND_WAVE',
+                                 'DEAD_FIRST_WAVE', 'DEAD_SECOND_WAVE'] +
                                  [flag.upper() + '_AT_T0' for flag in flags + ['si']] +
                                  [flag.upper() + '_AT_PEAK_1' for flag in flags + ['si']] +
                                  [flag.upper() + '_DAYS_TO_THRESHOLD' for flag in flags + ['si']] +
                                  [flag.upper() + '_DAYS_ABOVE_THRESHOLD_FIRST_WAVE' for flag in flags + ['si']])
 
-figure_3c['COUNTRYCODE'] = data['countrycode']
-figure_3c['COUNTRY'] = data['country']
-figure_3c['GOV_MAX_SI_DAYS_FROM_T0'] = data['si_days_to_max_si']
-figure_3c['CLASS'] = data['class']
-figure_3c['CLASS_COARSE'] = data['class_coarse']
-figure_3c['POPULATION'] = data['population']
-figure_3c['EPI_CONFIRMED'] = data['last_confirmed']
-figure_3c['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
-figure_3c['EPI_DEAD'] = data['last_dead']
-figure_3c['EPI_DEAD_PER_10K'] = data['last_dead_per_10k']
-figure_3c['T0_POP'] = data['t0_relative']
-figure_3c['T0_1_DEAD'] = data['t0_1_dead']
-figure_3c['T0_5_DEAD'] = data['t0_5_dead']
-figure_3c['T0_10_DEAD'] = data['t0_10_dead']
-figure_3c['EPI_DURATION_FIRST_WAVE'] = data['duration_first_wave']
-figure_3c['MAX_SI'] = data['max_si']
-figure_3c['DEAD_FIRST_WAVE'] = data['dead_first_wave']
-figure_3c['DEAD_SECOND_WAVE'] = data['dead_second_wave']
-figure_3c['DEAD_PEAK_1'] = data['dead_peak_1']
-figure_3c['DEAD_PEAK_2'] = data['dead_peak_2']
+figure_3b['COUNTRYCODE'] = data['countrycode']
+figure_3b['COUNTRY'] = data['country']
+figure_3b['GOV_MAX_SI_DAYS_FROM_T0'] = data['si_days_to_max_si']
+figure_3b['CLASS'] = data['class']
+figure_3b['CLASS_COARSE'] = data['class_coarse']
+figure_3b['POPULATION'] = data['population']
+figure_3b['EPI_CONFIRMED'] = data['last_confirmed']
+figure_3b['EPI_CONFIRMED_PER_10K'] = data['last_confirmed_per_10k']
+figure_3b['EPI_DEAD'] = data['last_dead']
+figure_3b['EPI_DEAD_PER_10K'] = data['last_dead_per_10k']
+figure_3b['MAX_SI'] = data['max_si']
+figure_3b['T0_POP'] = data['t0_relative']
+figure_3b['T0_1_DEAD'] = data['t0_1_dead']
+figure_3b['T0_5_DEAD'] = data['t0_5_dead']
+figure_3b['T0_10_DEAD'] = data['t0_10_dead']
+figure_3b['EPI_DURATION_FIRST_WAVE'] = data['duration_first_wave']
+figure_3b['EPI_DURATION_SECOND_WAVE'] = data['duration_second_wave']
+figure_3b['DEAD_FIRST_WAVE'] = data['dead_first_wave']
+figure_3b['DEAD_SECOND_WAVE'] = data['dead_second_wave']
 for flag in flags + ['si']:
-    figure_3c[flag.upper() + '_AT_T0'] = data[flag + '_at_t0']
-    figure_3c[flag.upper() + '_AT_PEAK_1'] = data[flag + '_at_peak_1']
-    figure_3c[flag.upper() + '_DAYS_TO_THRESHOLD'] = data[flag + '_days_to_threshold']
-    figure_3c[flag.upper() + '_DAYS_ABOVE_THRESHOLD_FIRST_WAVE'] = data[flag + '_days_above_threshold_first_wave']
+    figure_3b[flag.upper() + '_AT_T0'] = data[flag + '_at_t0']
+    figure_3b[flag.upper() + '_AT_PEAK_1'] = data[flag + '_at_peak_1']
+    figure_3b[flag.upper() + '_DAYS_TO_THRESHOLD'] = data[flag + '_days_to_threshold']
+    figure_3b[flag.upper() + '_DAYS_ABOVE_THRESHOLD_FIRST_WAVE'] = data[flag + '_days_above_threshold_first_wave']
 
 if SAVE_CSV:
-    figure_3c.to_csv(CSV_PATH + 'figure_3c.csv')
+    figure_3b.to_csv(CSV_PATH + 'figure_3b.csv')
 
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
@@ -1245,9 +1050,10 @@ for state in tqdm(states, desc='Processing USA Epidemiological Data'):
     data['new_per_day'].iloc[np.array(data[data['new_per_day'] < 0].index)] = \
         data['new_per_day'].iloc[np.array(data[data['new_per_day'] < 0].index) - 1]
     data['new_per_day'] = data['new_per_day'].fillna(method='bfill')
-    x = np.arange(len(data['date']))
-    y = data['new_per_day'].values
-    ys = csaps(x, y, x, smooth=SMOOTH)
+    #x = np.arange(len(data['date']))
+    #y = data['new_per_day'].values
+    #ys = csaps(x, y, x, smooth=SMOOTH)
+    ys = data[['new_per_day','date']].rolling(window=7, on='date').mean()['new_per_day']
     data['new_per_day_smooth'] = ys
     figure_4a = pd.concat((figure_4a, data)).reset_index(drop=True)
     continue
