@@ -25,7 +25,6 @@ figure_3a_data <- read_csv("./data/figure_3a.csv",
 figure_3a_data$countrycode = as.factor(figure_3a_data$countrycode)
 figure_3a_data$country = as.factor(figure_3a_data$country)
 figure_3a_data$class = as.factor(figure_3a_data$class)
-figure_3a_data$class_coarse = as.factor(figure_3a_data$class_coarse)
 
 # Import csv file for Figure 3b
 figure_3b_data <- read_csv("./data/figure_3b.csv", 
@@ -34,6 +33,15 @@ figure_3b_data$COUNTRYCODE = as.factor(figure_3b_data$COUNTRYCODE)
 figure_3b_data$COUNTRY = as.factor(figure_3b_data$COUNTRY)
 figure_3b_data$CLASS = as.factor(figure_3b_data$CLASS)
 figure_3b_data$CLASS_COARSE = as.factor(figure_3b_data$CLASS_COARSE)
+
+# Import csv file for Figure 3b at the wave level
+figure_3b_wave_data <- read_csv("./data/figure_3b_wave_level.csv", 
+                           na = c("N/A","NA","#N/A"," ",""))
+figure_3b_wave_data$countrycode = as.factor(figure_3b_wave_data$countrycode)
+figure_3b_wave_data$country = as.factor(figure_3b_wave_data$country)
+figure_3b_wave_data$class = as.factor(figure_3b_wave_data$class)
+figure_3b_wave_data$wave = as.factor(figure_3b_wave_data$wave)
+
 
 # Import csv file for Figure 2
 figure_2_data <- read_csv("./data/figure_2.csv", 
@@ -76,6 +84,8 @@ for (flag in flags){
 }
 
 
+figure_3b_wave_data$dead_during_wave_per_10k <- figure_3b_wave_data$dead_during_wave * 10000 / figure_3b_wave_data$population
+
 # Plot Figure 3a ------------------------------------------------------------
 corr <- cor.test(figure_3a_data$si_integral, figure_3a_data$last_dead_per_10k,
          method = "kendall")
@@ -83,7 +93,7 @@ corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",corr$estimate," 
 
 
 # Figure 3: Scatter plot of government response time against number of cases for each country
-figure_3a <- (ggplot(figure_3a_data, aes(x = si_integral, y = last_dead_per_10k, colour = class_coarse)) 
+figure_3a <- (ggplot(figure_3a_data, aes(x = si_integral, y = last_dead_per_10k)) 
               + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
               + geom_text(data=subset(figure_3a_data,
                                       (countrycode %in% label_countries) |
@@ -106,31 +116,59 @@ ggsave("./plots/figure_3aa.png", plot = figure_3a, width = 9,  height = 7)
 
 # Plot Figure 3b ------------------------------------------------------------
 
-# Set up colour palette
-my_palette_1 <- brewer.pal(name="PuOr",n=5)[c(1,2,4,5)]
-my_palette_2 <- brewer.pal(name="Oranges",n=4)[4]
+
+figure_3b_wave_1_data <- subset(figure_3b_wave_data,wave==1)
+figure_3b_wave_1_data <- subset(figure_3b_wave_1_data,country!="Qatar") 
+figure_3b_wave_1_data$response_time_alt <- difftime(figure_3b_wave_1_data$first_date_si_above_threshold, figure_3b_wave_1_data$t0_10_dead, units = "days")
+figure_3b_wave_1_data$response_time_alt = as.numeric(figure_3b_wave_1_data$response_time_alt)
+figure_3b_wave_1_data <- subset(figure_3b_wave_1_data,first_date_si_above_threshold<wave_end)
+
+corr <- cor.test(figure_3b_wave_1_data$dead_during_wave_per_10k, figure_3b_wave_1_data$response_time_alt,
+                 method = "kendall")
+corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",corr$estimate," \np-value: ",corr$p.value,sep="")
+
 
 # Figure 3: Scatter plot of government response time against number of cases for each country
-figure_3b <- (ggplot(figure_3b_data, aes(x = SI_DAYS_TO_THRESHOLD, y = EPI_DEAD_PER_10K, colour = CLASS)) 
+figure_3b_wave_1 <- (ggplot(figure_3b_wave_1_data, aes(x = response_time_alt, y = dead_during_wave_per_10k)) 
               + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
-              #+ geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
-              #+ annotate("text",x=2,y=490,hjust=0,label="T0",color=my_palette_2)
-              # Label countries that have high number of deaths, or early/late government response times
-              + geom_text(data=subset(figure_3b_data,
-                                      (COUNTRYCODE %in% label_countries) |
-                                        #(EPI_DEAD_PER_10K >= quantile(figure_3b_data$EPI_DEAD_PER_10K, 0.95,na.rm=TRUE)) |
-                                        (SI_DAYS_TO_THRESHOLD >= quantile(figure_3b_data$SI_DAYS_TO_THRESHOLD, 0.95,na.rm=TRUE)) |
-                                        (SI_DAYS_TO_THRESHOLD <= quantile(figure_3b_data$SI_DAYS_TO_THRESHOLD, 0.05,na.rm=TRUE))),
-                          aes(label=COUNTRY),
+              + geom_text(data=subset(figure_3b_wave_1_data,
+                                      (countrycode %in% label_countries) |
+                                      (response_time_alt >= quantile(figure_3b_wave_1_data$response_time_alt, 0.8,na.rm=TRUE)) |
+                                      (response_time_alt <= quantile(figure_3b_wave_1_data$response_time_alt, 0.05,na.rm=TRUE))),
+                          aes(label=country),
                           hjust=-0.1, vjust=-0.1,
                           show.legend = FALSE)
+              + geom_text(aes(x=1,y=0.01,hjust=0,label=corr_text),size=4, hjust=0, color='black')
               + theme_light()
               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
-              + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
-              + scale_x_continuous(trans=pseudolog10_trans, breaks=c(-200,-100,-30,-10,-3,-1,0,1,3,10,30,100,200), expand=expand_scale(mult=c(0.05,0.2)))
-              + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10), labels=c(0.001,0.01,0.1,1,10))
-              + labs(title = "Total Deaths Against Government Response Time", x = "Government Response Time (Days from First Death to Stringency Index of 59 or Above)", y = "Total Deaths per 10,000 Population"))
-ggsave("./plots/figure_3b.png", plot = figure_3b, width = 9,  height = 7)
+              #+ scale_color_manual(values = my_palette_1, name = "Wave", labels = c("First Wave", "Second Wave"))
+              + scale_x_continuous(trans=pseudolog10_trans, breaks=c(-200,-100,-30,-10,-3,-1,0,1,3,10,30))#, expand=expand_scale(mult=c(0.05,0.2)))
+              + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10))
+              + labs(title = "Total Deaths During First Wave Against Government Response Time", x = "Government Response Time (Days from 10th Death to Stringency Index of 59 or Above)", y = "Total Deaths During First Wave per 10,000 Population"))
+ggsave("./plots/figure_3b_wave_1.png", plot = figure_3b_wave_1, width = 9,  height = 7)
+
+
+corr <- cor.test(figure_3b_wave_data$dead_during_wave_per_10k, figure_3b_wave_data$si_at_t0_10_dead,
+                 method = "kendall")
+corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",corr$estimate," \np-value: ",corr$p.value,sep="")
+figure_3b_wave <- (ggplot(figure_3b_wave_data, aes(x = si_at_t0_10_dead, y = dead_during_wave_per_10k, color=wave)) 
+                     + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+                     + geom_text(data=subset(figure_3b_wave_data,
+                                             (countrycode %in% label_countries) |
+                                             (si_at_t0_10_dead <= quantile(figure_3b_wave_data$si_at_t0_10_dead, 0.1,na.rm=TRUE)) |
+                                             (si_at_t0_10_dead >= quantile(figure_3b_wave_data$si_at_t0_10_dead, 0.95,na.rm=TRUE))),
+                                 aes(label=country),
+                                 hjust=-0.1, vjust=-0.1,
+                                 show.legend = FALSE)
+                     + geom_text(aes(x=5,y=0.01,hjust=0,label=corr_text),size=4, hjust=0, color='black')
+                     + theme_light()
+                     + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
+                     #+ scale_x_continuous(trans=pseudolog10_trans)
+                     + scale_y_continuous(trans='log10')
+                     + labs(title = "Total Deaths During Each Wave Against Stringency at T0", x = "Stringency Index at T0 (Date of 10th Death)", y = "Total Deaths During Wave per 10,000 Population"))
+figure_3b_wave
+ggsave("./plots/figure_3b_wave_test_2.png", plot = figure_3b_wave, width = 9,  height = 7)
+
 
 
 # Kendall's rank correlation test: p-value of 0.002569
@@ -568,7 +606,27 @@ ggsave("./plots/figure_4b2.png", plot = figure_4b2, width = 9,  height = 7)
 # t_min = min(figure_3a_count$t_1_dead, figure_3b_count$t_1_dead)
 # t_max = max(figure_3a_count$t_1_dead, figure_3b_count$t_1_dead)
 
-
+# Figure 3: Scatter plot of government response time against number of cases for each country
+# figure_3b <- (ggplot(figure_3b_data, aes(x = SI_DAYS_TO_THRESHOLD, y = EPI_DEAD_PER_10K, colour = CLASS)) 
+#               + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+#               #+ geom_vline(xintercept=0,linetype="dashed", color=my_palette_2, size=1)
+#               #+ annotate("text",x=2,y=490,hjust=0,label="T0",color=my_palette_2)
+#               # Label countries that have high number of deaths, or early/late government response times
+#               + geom_text(data=subset(figure_3b_data,
+#                                       (COUNTRYCODE %in% label_countries) |
+#                                         #(EPI_DEAD_PER_10K >= quantile(figure_3b_data$EPI_DEAD_PER_10K, 0.95,na.rm=TRUE)) |
+#                                         (SI_DAYS_TO_THRESHOLD >= quantile(figure_3b_data$SI_DAYS_TO_THRESHOLD, 0.95,na.rm=TRUE)) |
+#                                         (SI_DAYS_TO_THRESHOLD <= quantile(figure_3b_data$SI_DAYS_TO_THRESHOLD, 0.05,na.rm=TRUE))),
+#                           aes(label=COUNTRY),
+#                           hjust=-0.1, vjust=-0.1,
+#                           show.legend = FALSE)
+#               + theme_light()
+#               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
+#               + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave"))
+#               + scale_x_continuous(trans=pseudolog10_trans, breaks=c(-200,-100,-30,-10,-3,-1,0,1,3,10,30,100,200), expand=expand_scale(mult=c(0.05,0.2)))
+#               + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10), labels=c(0.001,0.01,0.1,1,10))
+#               + labs(title = "Total Deaths Against Government Response Time", x = "Government Response Time (Days from First Death to Stringency Index of 59 or Above)", y = "Total Deaths per 10,000 Population"))
+# ggsave("./plots/figure_3b.png", plot = figure_3b, width = 9,  height = 7)
 
 # # # Figure 3: Line plot of stringency index over time for each country class
 # # figure_3a_loess <- (ggplot(figure_3a_data, aes(x = t_1_dead, y = stringency_index, colour = CLASS)) 
