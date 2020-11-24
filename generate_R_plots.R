@@ -117,7 +117,8 @@ for (flag in flags){
 # Figure 3: Scatter plot of government response time against number of cases for each country
 corr <- cor.test(figure_3a_data$si_integral, figure_3a_data$last_dead_per_10k,
          method = "kendall")
-corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",corr$estimate," \np-value: ",corr$p.value,sep="")
+p_value_str = if (corr$p.value<0.0001) {"<0.0001"} else if (corr$p.value<0.001) {"<0.001"} else {signif(corr$p.value,3)}
+corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",signif(corr$estimate,3)," \np-value: ",p_value_str,sep="")
 
 figure_3a <- (ggplot(figure_3a_data, aes(x = si_integral, y = last_dead_per_10k)) 
               + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
@@ -140,12 +141,12 @@ figure_3a
 ggsave("./plots/figure_3a.png", plot = figure_3a, width = 9,  height = 7)
 
 
-
 # Plot Figure 3b ------------------------------------------------------------
 
 corr <- cor.test(figure_3b_wave_1_data$dead_during_wave_per_10k, figure_3b_wave_1_data$response_time,
                  method = "kendall")
-corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",corr$estimate," \np-value: ",corr$p.value,sep="")
+p_value_str = if (corr$p.value<0.0001) {"<0.0001"} else if (corr$p.value<0.001) {"<0.001"} else {signif(corr$p.value,3)}
+corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",signif(corr$estimate,3)," \np-value: ",p_value_str,sep="")
 
 # Plot Figure 3: Scatter plot of government response time against number of cases for each country
 figure_3b_wave_1 <- (ggplot(figure_3b_wave_1_data, aes(x = response_time, y = dead_during_wave_per_10k)) 
@@ -229,7 +230,8 @@ for (lag in seq(-50,100,by=1)){
   plot_data <- subset(plot_data, date<wave_end) # Remove if lagged date is after the end of the first wave
   corr <- cor.test(plot_data$dead_during_wave_per_10k, plot_data$tests_per_10k,
                    method = "kendall")
-  corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",corr$estimate," \np-value: ",corr$p.value,sep="")
+  p_value_str = if (corr$p.value<0.0001) {"<0.0001"} else if (corr$p.value<0.001) {"<0.001"} else {signif(corr$p.value,3)}
+  corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",signif(corr$estimate,3)," \np-value: ",p_value_str,sep="")
   my_list <- list(lag = lag, tau_estimate = corr$estimate, p_value=corr$p.value)
   lags <- bind_rows(lags, my_list)
   
@@ -248,7 +250,7 @@ for (lag in seq(-50,100,by=1)){
                        + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
                        + scale_x_continuous(trans='log10')#, breaks=c(-200,-100,-30,-10,-3,-1,0,1,3,10,30))#, expand=expand_scale(mult=c(0.05,0.2)))
                        + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10))
-                       + labs(title = paste("Total Deaths During First Wave Against  Early Testing (Tests Done Up Until the Date of the 10th Death",plus_minus,abs(lag),"Days",sep=" "), 
+                       + labs(title = paste("Deaths During First Wave Against  Early Testing (To the Date of the 10th Death",plus_minus,abs(lag),"Days",sep=" "), 
                               x = paste("Total Tests Up Until the Date of the 10th Death",plus_minus,abs(lag),"Days, per 10,000 Population",sep=" "),
                               y = "Total Deaths During First Wave, per 10,000 Population"))
   figure_3c
@@ -294,80 +296,6 @@ figure_3a_data <- merge(figure_3a_data, figure_3b_wave_1_data[c('countrycode','f
 
 
 #-----------------------------------------------------------------------------------------
-
-# Figure 3: Testing other variables for scatter plot ----------------------------------------
-# Create directories. y variables: duration of first wave, or cumulative deaths per 10k.
-dir.create('./plots/figure_3b/y_duration/x_days_to_threshold')
-dir.create('./plots/figure_3b/y_dead/x_days_to_threshold')
-dir.create('./plots/figure_3b/y_duration/x_proportion_first_wave')
-dir.create('./plots/figure_3b/y_dead/x_proportion_first_wave')
-
-# Define explanatory variables
-x_vars = c("GOV_MAX_SI_DAYS_FROM_T0",
-           "MAX_SI",
-           "SI_AT_PEAK_1",
-           "SI_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "C1_SCHOOL_CLOSING_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "C2_WORKPLACE_CLOSING_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "C3_CANCEL_PUBLIC_EVENTS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "C4_RESTRICTIONS_ON_GATHERINGS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "C5_CLOSE_PUBLIC_TRANSPORT_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "C6_STAY_AT_HOME_REQUIREMENTS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "C8_INTERNATIONAL_TRAVEL_CONTROLS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "H2_TESTING_POLICY_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "H3_CONTACT_TRACING_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
-           "SI_DAYS_TO_THRESHOLD",
-           "C1_SCHOOL_CLOSING_DAYS_TO_THRESHOLD",
-           "C2_WORKPLACE_CLOSING_DAYS_TO_THRESHOLD",
-           "C3_CANCEL_PUBLIC_EVENTS_DAYS_TO_THRESHOLD",
-           "C4_RESTRICTIONS_ON_GATHERINGS_DAYS_TO_THRESHOLD",
-           "C5_CLOSE_PUBLIC_TRANSPORT_DAYS_TO_THRESHOLD",
-           "C6_STAY_AT_HOME_REQUIREMENTS_DAYS_TO_THRESHOLD",
-           "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT_DAYS_TO_THRESHOLD",
-           "C8_INTERNATIONAL_TRAVEL_CONTROLS_DAYS_TO_THRESHOLD",
-           "H2_TESTING_POLICY_DAYS_TO_THRESHOLD",
-           "H3_CONTACT_TRACING_DAYS_TO_THRESHOLD")
-
-for (x in x_vars) {
-  y = "EPI_DEAD_PER_10K" # with log axis
-  figure_3b_loop <- (ggplot(figure_3b_data, aes_string(x = x, y = y, colour = "CLASS")) 
-                     + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
-                     + geom_text(data=subset(figure_3b_data,
-                                             (COUNTRYCODE %in% label_countries)),
-                                 aes(label=COUNTRY),
-                                 hjust=-0.1, vjust=-0.1,
-                                 show.legend = FALSE)
-                     + theme_light()
-                     + scale_y_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
-                     + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
-                     + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave")))
-  if (grepl('DAYS_TO_THRESHOLD', x, fixed=TRUE)){
-    ggsave(paste("./plots/figure_3b/y_dead/x_days_to_threshold/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
-  } else if (grepl('DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION', x, fixed=TRUE)){
-    ggsave(paste("./plots/figure_3b/y_dead/x_proportion_first_wave/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
-  } else {
-    ggsave(paste("./plots/figure_3b/y_dead/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
-  }
-  y = "EPI_DURATION_FIRST_WAVE"  # with linear axis
-  figure_3b_loop <- (ggplot(figure_3b_data, aes_string(x = x, y = y, colour = "CLASS")) 
-                     + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
-                     + geom_text(data=subset(figure_3b_data,
-                                             (COUNTRYCODE %in% label_countries)),
-                                 aes(label=COUNTRY),
-                                 hjust=-0.1, vjust=-0.1,
-                                 show.legend = FALSE)
-                     + theme_light()
-                     + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
-                     + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave")))
-  if (grepl('DAYS_TO_THRESHOLD', x, fixed=TRUE)){
-    ggsave(paste("./plots/figure_3b/y_duration/x_days_to_threshold/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
-  } else if (grepl('DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION', x, fixed=TRUE)){
-    ggsave(paste("./plots/figure_3b/y_duration/x_proportion_first_wave/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
-  } else {
-    ggsave(paste("./plots/figure_3b/y_duration/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
-  }
-}
 
 #-----------------------------------------------------------------------------------
 
@@ -619,7 +547,9 @@ figure_4a <-  (ggplot(data=figure_4a_agg, aes(x=date,y=new_per_day_smooth,fill=S
                + scale_y_continuous(expand=c(0,0), limits=c(0, NA))
                + theme_light()
                + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7)
-                       ,plot.margin=unit(c(0,0,0,0),"pt"), legend.position = c(0.07, 0.75)))
+                       ,plot.margin=unit(c(0,0,0,0),"pt"), legend.position = c(0.09, 0.6),
+                       legend.title = element_text(size = 12),legend.text = element_text(size = 11)))
+figure_4a
 ggsave("./plots/figure_4a.png", plot = figure_4a, width = 15,  height = 7)
 
 # Figure 4b: Choropleth of US counties at USA peak dates
@@ -656,7 +586,84 @@ figure_4b3 <- (ggplot(data = figure_4b3_data)
                + theme(plot.title = element_text(hjust = 0.5), panel.grid.major=element_line(colour = "transparent"),legend.position="bottom"))
 ggsave("./plots/figure_4b3.png", plot = figure_4b3, width = 9,  height = 7)
 
+
+
 # Deprecated Code -----------------------------------------------------------------------
+
+
+# # Figure 3: Testing other variables for scatter plot ----------------------------------------
+# # Create directories. y variables: duration of first wave, or cumulative deaths per 10k.
+# dir.create('./plots/figure_3b/y_duration/x_days_to_threshold')
+# dir.create('./plots/figure_3b/y_dead/x_days_to_threshold')
+# dir.create('./plots/figure_3b/y_duration/x_proportion_first_wave')
+# dir.create('./plots/figure_3b/y_dead/x_proportion_first_wave')
+# 
+# # Define explanatory variables
+# x_vars = c("GOV_MAX_SI_DAYS_FROM_T0",
+#            "MAX_SI",
+#            "SI_AT_PEAK_1",
+#            "SI_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "C1_SCHOOL_CLOSING_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "C2_WORKPLACE_CLOSING_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "C3_CANCEL_PUBLIC_EVENTS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "C4_RESTRICTIONS_ON_GATHERINGS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "C5_CLOSE_PUBLIC_TRANSPORT_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "C6_STAY_AT_HOME_REQUIREMENTS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "C8_INTERNATIONAL_TRAVEL_CONTROLS_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "H2_TESTING_POLICY_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "H3_CONTACT_TRACING_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",
+#            "SI_DAYS_TO_THRESHOLD",
+#            "C1_SCHOOL_CLOSING_DAYS_TO_THRESHOLD",
+#            "C2_WORKPLACE_CLOSING_DAYS_TO_THRESHOLD",
+#            "C3_CANCEL_PUBLIC_EVENTS_DAYS_TO_THRESHOLD",
+#            "C4_RESTRICTIONS_ON_GATHERINGS_DAYS_TO_THRESHOLD",
+#            "C5_CLOSE_PUBLIC_TRANSPORT_DAYS_TO_THRESHOLD",
+#            "C6_STAY_AT_HOME_REQUIREMENTS_DAYS_TO_THRESHOLD",
+#            "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT_DAYS_TO_THRESHOLD",
+#            "C8_INTERNATIONAL_TRAVEL_CONTROLS_DAYS_TO_THRESHOLD",
+#            "H2_TESTING_POLICY_DAYS_TO_THRESHOLD",
+#            "H3_CONTACT_TRACING_DAYS_TO_THRESHOLD")
+# 
+# for (x in x_vars) {
+#   y = "EPI_DEAD_PER_10K" # with log axis
+#   figure_3b_loop <- (ggplot(figure_3b_data, aes_string(x = x, y = y, colour = "CLASS")) 
+#                      + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+#                      + geom_text(data=subset(figure_3b_data,
+#                                              (COUNTRYCODE %in% label_countries)),
+#                                  aes(label=COUNTRY),
+#                                  hjust=-0.1, vjust=-0.1,
+#                                  show.legend = FALSE)
+#                      + theme_light()
+#                      + scale_y_continuous(trans='log10', breaks = log_breaks(n=10,base=10))
+#                      + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
+#                      + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave")))
+#   if (grepl('DAYS_TO_THRESHOLD', x, fixed=TRUE)){
+#     ggsave(paste("./plots/figure_3b/y_dead/x_days_to_threshold/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
+#   } else if (grepl('DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION', x, fixed=TRUE)){
+#     ggsave(paste("./plots/figure_3b/y_dead/x_proportion_first_wave/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
+#   } else {
+#     ggsave(paste("./plots/figure_3b/y_dead/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
+#   }
+#   y = "EPI_DURATION_FIRST_WAVE"  # with linear axis
+#   figure_3b_loop <- (ggplot(figure_3b_data, aes_string(x = x, y = y, colour = "CLASS")) 
+#                      + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+#                      + geom_text(data=subset(figure_3b_data,
+#                                              (COUNTRYCODE %in% label_countries)),
+#                                  aes(label=COUNTRY),
+#                                  hjust=-0.1, vjust=-0.1,
+#                                  show.legend = FALSE)
+#                      + theme_light()
+#                      + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7))
+#                      + scale_color_manual(values = my_palette_1, name = "Epidemic Wave State", labels = c("Entering First Wave", "Past First Wave", "Entering Second Wave","Past Second Wave")))
+#   if (grepl('DAYS_TO_THRESHOLD', x, fixed=TRUE)){
+#     ggsave(paste("./plots/figure_3b/y_duration/x_days_to_threshold/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
+#   } else if (grepl('DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION', x, fixed=TRUE)){
+#     ggsave(paste("./plots/figure_3b/y_duration/x_proportion_first_wave/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
+#   } else {
+#     ggsave(paste("./plots/figure_3b/y_duration/figure_3b_",x,"_",y,".png",sep=''), plot = figure_3b_loop, width = 9,  height = 7)
+#   }
+# }
 
 # # Import csv file for Figure 3a
 # figure_3a_data <- readr::read_csv("./data/figure_3a.csv", 
