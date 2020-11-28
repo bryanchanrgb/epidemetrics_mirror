@@ -92,41 +92,21 @@ figure_3b_wave_data$dead_during_wave_per_10k <- figure_3b_wave_data$dead_during_
 figure_3b_wave_1_data$dead_during_wave_per_10k <- figure_3b_wave_1_data$dead_during_wave * 10000 / figure_3b_wave_1_data$population
 
 
-# Define list of mobility variables
-mobilities = c("workplace", "transit_stations", "retail_recreation", "residential")
-
-# Calculate duration flags raised in first wave for Figure 3
-flags = c("SI",
-          "C1_SCHOOL_CLOSING",
-          "C2_WORKPLACE_CLOSING",
-          "C3_CANCEL_PUBLIC_EVENTS",
-          "C4_RESTRICTIONS_ON_GATHERINGS",
-          "C5_CLOSE_PUBLIC_TRANSPORT",
-          "C6_STAY_AT_HOME_REQUIREMENTS",
-          "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT",
-          "C8_INTERNATIONAL_TRAVEL_CONTROLS",
-          "H2_TESTING_POLICY",
-          "H3_CONTACT_TRACING")
-
-for (flag in flags){
-  figure_3b_data[,paste(flag,"_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",sep="")] <- figure_3b_data[,paste(flag,"_DAYS_ABOVE_THRESHOLD_FIRST_WAVE",sep="")]/figure_3b_data[,"EPI_DURATION_FIRST_WAVE"]
-}
-
-
 # Plot Figure 3a ------------------------------------------------------------
 # Figure 3: Scatter plot of government response time against number of cases for each country
 corr <- cor.test(figure_3a_data$si_integral, figure_3a_data$last_dead_per_10k,
          method = "kendall")
-p_value_str = if (corr$p.value<0.0001) {"<0.0001"} else if (corr$p.value<0.001) {"<0.001"} else {signif(corr$p.value,3)}
-corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",signif(corr$estimate,3)," \np-value: ",p_value_str,sep="")
-
+p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString(signif(corr$p.value,2)))}
+estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
+corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
 figure_3a <- (ggplot(figure_3a_data, aes(x = si_integral, y = last_dead_per_10k)) 
-              + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+              + geom_point(size=2,alpha=0.9, na.rm=TRUE)
               + geom_text(data=subset(figure_3a_data,
-                                      (countrycode %in% label_countries) |
+                                      ((countrycode %in% label_countries) |
                                         #(last_dead_per_10k >= quantile(figure_3a_data$last_dead_per_10k, 0.95,na.rm=TRUE)) |
                                         (si_integral >= quantile(figure_3a_data$si_integral, 0.95,na.rm=TRUE)) |
-                                        (si_integral <= quantile(figure_3a_data$si_integral, 0.05,na.rm=TRUE))),
+                                        (si_integral <= quantile(figure_3a_data$si_integral, 0.05,na.rm=TRUE))) &
+                                        (!country %in% c('Eritrea','Cayman Islands','United Kingdom','United States','Brazil','Bolivia','South Africa'))),
                           aes(label=country),
                           hjust=-0.1, vjust=-0.1,
                           show.legend = FALSE)
@@ -134,27 +114,29 @@ figure_3a <- (ggplot(figure_3a_data, aes(x = si_integral, y = last_dead_per_10k)
               + theme_light()
               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.85, 0.15))
               #+ scale_color_discrete(name = "Wave Status", labels = c("First Wave", "Second Wave","Third Wave","Other"))
-              + scale_x_continuous(expand=expand_scale(mult=c(0.05,0.1)))
-              + scale_y_continuous(trans='log10', breaks=c(0.001,0.003,0.01,0.03,0.1,0.3,1,3,10), labels=c(0.001,0.003,0.01,0.03,0.1,0.3,1,3,10))
-              + labs(title = "Total Deaths Against Integral of Stringency Index", x = "Integral Under Stringency Index Curve to Date", y = "Total Deaths to Date per 10,000 Population"))
+              + scale_x_continuous(expand=expand_scale(mult=c(0.05,0.12)))
+              + scale_y_continuous(trans='log10', breaks=c(0.001,0.003,0.01,0.03,0.1,0.3,1,3,10), labels=c('0·001','0·003','0·01','0·03','0·1','0·3','1','3','10'))
+              + labs(title = "Total Deaths Against Total Government Stringency", x = "Integral Under Stringency Index Curve", y = "Total Deaths per 10000 Population"))
 figure_3a
 ggsave("./plots/figure_3a.png", plot = figure_3a, width = 9,  height = 7)
+ggsave("./plots/figure_3a.pdf", plot = figure_3a, width = 9,  height = 7)
 
 
 # Plot Figure 3b ------------------------------------------------------------
 
 corr <- cor.test(figure_3b_wave_1_data$dead_during_wave_per_10k, figure_3b_wave_1_data$response_time,
                  method = "kendall")
-p_value_str = if (corr$p.value<0.0001) {"<0.0001"} else if (corr$p.value<0.001) {"<0.001"} else {signif(corr$p.value,3)}
-corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",signif(corr$estimate,3)," \np-value: ",p_value_str,sep="")
-
+p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString(signif(corr$p.value,2)))}
+estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
+corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
 # Plot Figure 3: Scatter plot of government response time against number of cases for each country
 figure_3b_wave_1 <- (ggplot(figure_3b_wave_1_data, aes(x = response_time, y = dead_during_wave_per_10k)) 
-              + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+              + geom_point(size=2,alpha=0.9, na.rm=TRUE)
               + geom_text(data=subset(figure_3b_wave_1_data,
-                                      (countrycode %in% label_countries) |
+                                      ((countrycode %in% label_countries) |
                                       (response_time >= quantile(figure_3b_wave_1_data$response_time, 0.8,na.rm=TRUE)) |
-                                      (response_time <= quantile(figure_3b_wave_1_data$response_time, 0.02,na.rm=TRUE))),
+                                      (response_time <= quantile(figure_3b_wave_1_data$response_time, 0.02,na.rm=TRUE))) &
+                                      !country %in% c('Philippines','Iran','India','Hungary','Turkey','Dominican Republic')),
                           aes(label=country),
                           hjust=-0.1, vjust=-0.1,
                           show.legend = FALSE)
@@ -163,36 +145,11 @@ figure_3b_wave_1 <- (ggplot(figure_3b_wave_1_data, aes(x = response_time, y = de
               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
               #+ scale_color_manual(values = my_palette_1, name = "Wave", labels = c("First Wave", "Second Wave"))
               + scale_x_continuous(trans=pseudolog10_trans, breaks=c(-200,-100,-30,-10,-3,-1,0,1,3,10,30), expand=expand_scale(mult=c(0.05,0.2)))
-              + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10))
-              + labs(title = "Total Deaths During First Wave Against Government Response Time", x = "Government Response Time (Days from 10th Death to Schools Closing)", y = "Total Deaths During First Wave per 10,000 Population"))
+              + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10),labels=c('0·001','0·01','0·1','1','10'))
+              + labs(title = "Total Deaths During First Wave Against Government Response Time", x = "Government Response Time (Days from 10th Death to Schools Closing)", y = "Total Deaths During First Wave per 10000 Population"))
 figure_3b_wave_1
 ggsave("./plots/figure_3b_wave_1.png", plot = figure_3b_wave_1, width = 9,  height = 7)
-
-
-figure_3b_wave <- (ggplot(figure_3b_wave_data, aes(x = si_at_t0_10_dead, y = dead_during_wave_per_10k, color=wave)) 
-                     + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
-                     + geom_text(data=subset(figure_3b_wave_data,
-                                             (countrycode %in% label_countries) |
-                                             (si_at_t0_10_dead <= quantile(figure_3b_wave_data$si_at_t0_10_dead, 0.1,na.rm=TRUE)) |
-                                             (si_at_t0_10_dead >= quantile(figure_3b_wave_data$si_at_t0_10_dead, 0.95,na.rm=TRUE))),
-                                 aes(label=country),
-                                 hjust=-0.1, vjust=-0.1,
-                                 show.legend = FALSE)
-                     + theme_light()
-                     + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
-                     #+ scale_x_continuous(trans=pseudolog10_trans)
-                     + scale_y_continuous(trans='log10')
-                     + labs(title = "Total Deaths During Each Wave Against Stringency at the Date of 10th Death", x = "Stringency Index at the Date of 10th Death", y = "Total Deaths During Wave per 10,000 Population"))
-figure_3b_wave
-ggsave("./plots/figure_3b_wave_test_2.png", plot = figure_3b_wave, width = 9,  height = 7)
-
-
-
-# Kendall's rank correlation test: p-value of 0.002569
-# Spearman's rank correlation test: p-value of 0.003223
-cor.test(figure_3b_data$SI_DAYS_TO_THRESHOLD, figure_3b_data$EPI_DEAD_PER_10K,
-         alternative = "greater",
-         method = "kendall")
+ggsave("./plots/figure_3b_wave_1.pdf", plot = figure_3b_wave_1, width = 9,  height = 7)
 
 
 # Combine figure_3a, 3b
@@ -224,20 +181,21 @@ figure_3c_2_data$tests_per_10k <- figure_3c_2_data$tests * 10000 / figure_3c_2_d
 
 lags <- data.frame(lag=NULL,tau_estimate=NULL,p_value=NULL)
 for (lag in seq(-50,100,by=1)){
-  if (lag < 0){plus_minus='Minus'} else {plus_minus='Plus'}
+  if (lag < 0){plus_minus='Before'} else {plus_minus='After'}
   figure_3c_wave_1_data$date <- figure_3c_wave_1_data$t0_10_dead + lag
   plot_data <- merge(figure_3c_wave_1_data, figure_3c_2_data, by=c("countrycode","date"))
   plot_data <- subset(plot_data, date<wave_end) # Remove if lagged date is after the end of the first wave
   corr <- cor.test(plot_data$dead_during_wave_per_10k, plot_data$tests_per_10k,
                    method = "kendall")
-  p_value_str = if (corr$p.value<0.0001) {"<0.0001"} else if (corr$p.value<0.001) {"<0.001"} else {signif(corr$p.value,3)}
-  corr_text = paste("Kendall's Rank Correlation \nTau Estimate: ",signif(corr$estimate,3)," \np-value: ",p_value_str,sep="")
+  p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString(signif(corr$p.value,2)))}
+  estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
+  corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
   my_list <- list(lag = lag, tau_estimate = corr$estimate, p_value=corr$p.value)
   lags <- bind_rows(lags, my_list)
   
   # Plot Figure 3c: Scatter plot of tests against number of cases for each country
   figure_3c <- (ggplot(plot_data, aes(x = tests_per_10k, y = dead_during_wave_per_10k)) 
-                       + geom_point(size=1.5,shape=1,alpha=0.9,stroke=1.5, na.rm=TRUE)
+                       + geom_point(size=2,alpha=0.9, na.rm=TRUE)
                        + geom_text(data=subset(plot_data,
                                                (countrycode %in% label_countries) |
                                                  (tests_per_10k >= quantile(plot_data$tests_per_10k, 0.85,na.rm=TRUE)) |
@@ -248,14 +206,82 @@ for (lag in seq(-50,100,by=1)){
                        + geom_text(aes(x=0.02,y=0.02,hjust=0,label=corr_text),size=4, hjust=0, color='black')
                        + theme_light()
                        + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
-                       + scale_x_continuous(trans='log10')#, breaks=c(-200,-100,-30,-10,-3,-1,0,1,3,10,30))#, expand=expand_scale(mult=c(0.05,0.2)))
-                       + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10))
-                       + labs(title = paste("Deaths During First Wave Against  Early Testing (To the Date of the 10th Death",plus_minus,abs(lag),"Days",sep=" "), 
-                              x = paste("Total Tests Up Until the Date of the 10th Death",plus_minus,abs(lag),"Days, per 10,000 Population",sep=" "),
-                              y = "Total Deaths During First Wave, per 10,000 Population"))
-  figure_3c
-  ggsave(paste("./plots/figure_3c_test_lags/figure_3c_",plus_minus,abs(lag),".png",sep=""), plot = figure_3c, width = 9,  height = 7)
+                       + scale_x_continuous(trans='log10', breaks=c(0.0001,0.001,0.01,0.1,1,10,100,1000),labels=c('0·0001','0·001','0·01','0·1','1','10','100','1000'), expand=expand_scale(mult=c(0.05,0.05)))
+                       + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10),labels=c('0·001','0·01','0·1','1','10'), expand=expand_scale(mult=c(0.05,0.05)))
+                       + labs(title = "Deaths During First Wave Against Early Testing", 
+                              x = paste("Total Tests per 10000 Population Up Until",abs(lag),"Days",plus_minus,"the 10th Death",sep=" "),
+                              y = "Total Deaths During First Wave per 10000 Population"))
+  #figure_3c
+  ggsave(paste("./plots/figure_3c_test_lags/figure_3c_",lag,".png",sep=""), plot = figure_3c, width = 9,  height = 7)
 }
+
+# Plot Figure 3c: -21 day lag
+lag = -21
+if (lag < 0){plus_minus='Before'} else {plus_minus='After'}
+figure_3c_wave_1_data$date <- figure_3c_wave_1_data$t0_10_dead + lag
+plot_data <- merge(figure_3c_wave_1_data, figure_3c_2_data, by=c("countrycode","date"))
+plot_data <- subset(plot_data, date<wave_end) # Remove if lagged date is after the end of the first wave
+corr <- cor.test(plot_data$dead_during_wave_per_10k, plot_data$tests_per_10k,
+                 method = "kendall")
+p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString(signif(corr$p.value,2)))}
+estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
+corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
+figure_3c <- (ggplot(plot_data, aes(x = tests_per_10k, y = dead_during_wave_per_10k)) 
+              + geom_point(size=2,alpha=0.9, na.rm=TRUE)
+              + geom_text(data=subset(plot_data,
+                                      ((countrycode %in% label_countries) |
+                                        (tests_per_10k >= quantile(plot_data$tests_per_10k, 0.85,na.rm=TRUE)) |
+                                        (tests_per_10k <= quantile(plot_data$tests_per_10k, 0.15,na.rm=TRUE))) &
+                                        !country %in% c('Uganda','Peru')),
+                          aes(label=country),
+                          hjust=-0.1, vjust=-0.1,
+                          show.legend = FALSE)
+              + geom_text(aes(x=0.02,y=0.02,hjust=0,label=corr_text),size=4, hjust=0, color='black')
+              + theme_light()
+              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
+              + scale_x_continuous(trans='log10', breaks=c(0.0001,0.001,0.01,0.1,1,10,100,1000),labels=c('0·0001','0·001','0·01','0·1','1','10','100','1000'), expand=expand_scale(mult=c(0.05,0.2)))
+              + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10),labels=c('0·001','0·01','0·1','1','10'), expand=expand_scale(mult=c(0.05,0.05)))
+              + labs(title = "Deaths During First Wave Against Early Testing", 
+                     x = paste("Total Tests per 10000 Population Up Until",abs(lag),"Days",plus_minus,"the 10th Death",sep=" "),
+                     y = "Total Deaths During First Wave per 10000 Population"))
+figure_3c
+ggsave(paste("./plots/figure_3c_",lag,".png",sep=""), plot = figure_3c, width = 9,  height = 7)
+ggsave(paste("./plots/figure_3c_",lag,".pdf",sep=""), plot = figure_3c, width = 9,  height = 7)
+
+
+# Plot Figure 3c: +70 days
+lag = 70
+if (lag < 0){plus_minus='Before'} else {plus_minus='After'}
+figure_3c_wave_1_data$date <- figure_3c_wave_1_data$t0_10_dead + lag
+plot_data <- merge(figure_3c_wave_1_data, figure_3c_2_data, by=c("countrycode","date"))
+plot_data <- subset(plot_data, date<wave_end) # Remove if lagged date is after the end of the first wave
+corr <- cor.test(plot_data$dead_during_wave_per_10k, plot_data$tests_per_10k,
+                 method = "kendall")
+p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString(signif(corr$p.value,2)))}
+estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
+corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
+figure_3c <- (ggplot(plot_data, aes(x = tests_per_10k, y = dead_during_wave_per_10k)) 
+              + geom_point(size=2,alpha=0.9, na.rm=TRUE)
+              + geom_text(data=subset(plot_data,
+                                      ((countrycode %in% label_countries) |
+                                         (tests_per_10k >= quantile(plot_data$tests_per_10k, 0.85,na.rm=TRUE)) |
+                                         (tests_per_10k <= quantile(plot_data$tests_per_10k, 0.15,na.rm=TRUE))) &
+                                        !country %in% c('Madagascar','Kenya','Lithuania','United States','United Arab Emirates','Mexico')),
+                          aes(label=country),
+                          hjust=-0.1, vjust=-0.1,
+                          show.legend = FALSE)
+              + geom_text(aes(x=0.02,y=0.02,hjust=0,label=corr_text),size=4, hjust=0, color='black')
+              + theme_light()
+              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
+              + scale_x_continuous(trans='log10', breaks=c(0.0001,0.001,0.01,0.1,1,10,100,1000),labels=c('0·0001','0·001','0·01','0·1','1','10','100','1000'), expand=expand_scale(mult=c(0.05,0.2)))
+              + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10),labels=c('0·001','0·01','0·1','1','10'), expand=expand_scale(mult=c(0.05,0.05)))
+              + labs(title = "Deaths During First Wave Against Late Testing", 
+                     x = paste("Total Tests per 10000 Population Up Until",abs(lag),"Days",plus_minus,"the 10th Death",sep=" "),
+                     y = "Total Deaths During First Wave per 10000 Population"))
+figure_3c
+ggsave(paste("./plots/figure_3c_",lag,".png",sep=""), plot = figure_3c, width = 9,  height = 7)
+ggsave(paste("./plots/figure_3c_",lag,".pdf",sep=""), plot = figure_3c, width = 9,  height = 7)
+
 
 # Plot Figure 3c correlation over time as the lag changes
 figure_3c_corr_tau <- (ggplot(lags, aes(x = lag, y = tau_estimate)) 
@@ -341,7 +367,9 @@ figure_2_a_3 <- (ggplot(subset(figure_2_data,country==country_a))
                  + geom_line(aes(x = date, y = positive_rate_smooth*(max_tests_a/max_positive_rate_a)),color=my_palette_3,na.rm=TRUE)
                  + scale_y_continuous(name = "Tests per Day", 
                                       expand = c(0,0),limits = c(0, NA),
-                                      sec.axis = sec_axis(~./(max_tests_a/max_positive_rate_a), name = element_blank()))
+                                      sec.axis = sec_axis(~./(max_tests_a/max_positive_rate_a), name = element_blank(),
+                                                          breaks=c(0,0.002,0.004,0.006,0.008,0.010),
+                                                          labels=c('0','0·002','0·004','0·006','0·008','0·010')))
                  + labs(x="Date")
                  + theme_light()
                  + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt"),
@@ -368,7 +396,9 @@ figure_2_b_3 <- (ggplot(subset(figure_2_data,country==country_b))
                  + geom_line(aes(x = date, y = positive_rate_smooth*(max_tests_b/max_positive_rate_b)),color=my_palette_3,na.rm=TRUE)
                  + scale_y_continuous(name = element_blank(),
                                       expand = c(0,0),limits = c(0, NA),
-                                      sec.axis = sec_axis(~./(max_tests_b/max_positive_rate_b), name = element_blank()))
+                                      sec.axis = sec_axis(~./(max_tests_b/max_positive_rate_b), name = element_blank(),
+                                                          breaks=c(0,0.05,0.10,0.15,0.20,0.25,0.30),
+                                                          labels=c('0','0·05','0·10','0·15','0·20','0·25','0·30')))
                  + labs(x="Date")
                  + theme_light()
                  + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt"),
@@ -395,7 +425,9 @@ figure_2_c_3 <- (ggplot(subset(figure_2_data,country==country_c))
                  + geom_line(aes(x = date, y = positive_rate_smooth*(max_tests_c/max_positive_rate_c)),color=my_palette_3,na.rm=TRUE)
                  + scale_y_continuous(name = element_blank(), 
                                       expand = c(0,0),limits = c(0, NA),
-                                      sec.axis = sec_axis(~./(max_tests_c/max_positive_rate_c), name = element_blank()))
+                                      sec.axis = sec_axis(~./(max_tests_c/max_positive_rate_c), name = element_blank(),
+                                                          breaks=c(0,0.05,0.10,0.15,0.20),
+                                                          labels=c('0','0·05','0·10','0·15','0·20')))
                  + labs(x="Date")
                  + theme_light()
                  + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt"),
@@ -423,7 +455,9 @@ figure_2_d_3 <- (ggplot(subset(figure_2_data,country==country_d))
                  + geom_line(aes(x = date, y = positive_rate_smooth*(max_tests_d/max_positive_rate_d)),color=my_palette_3,na.rm=TRUE)
                  + scale_y_continuous(name = element_blank(), 
                                       expand = c(0,0),limits = c(0, NA),
-                                      sec.axis = sec_axis(~./(max_tests_d/max_positive_rate_d), name = "Positive Rate"))
+                                      sec.axis = sec_axis(~./(max_tests_d/max_positive_rate_d), name = "Positive Rate",
+                                                          breaks=c(0,0.05,0.10,0.15,0.20,0.25,0.30),
+                                                          labels=c('0','0·05','0·10','0·15','0·20','0·25','0·30')))
                  + labs(x="Date")
                  + theme_light()
                  + theme(plot.title = element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7),plot.margin=unit(c(0,0,0,0),"pt"),
@@ -439,7 +473,7 @@ figure_2_all <- annotate_figure(figure_2_all,
                                 top = text_grob("Figure 2: Cases, Deaths and Testing Over Time", size = 14))
 
 ggsave("./plots/figure_2.png", plot = figure_2_all, width = 16,  height = 8)
-
+ggsave("./plots/figure_2.pdf", plot = figure_2_all, width = 16,  height = 8)
 
 # Plot figure 4: USA Choropleth ---------------------------------------------------------------
 
@@ -497,7 +531,7 @@ figure_4b_data$new_cases_per_10k <- 10000*figure_4b_data$new_cases/figure_4b_dat
 # Define which dates to plot in choropleth
 date_1 <- as.Date("2020-04-14")
 date_2 <- as.Date("2020-07-21")
-date_3 <- as.Date("2020-11-15")
+date_3 <- as.Date("2020-11-20")
 
 # Subset for the two dates select
 figure_4b1_data <- subset(figure_4b_data,date==date_1)
@@ -551,6 +585,7 @@ figure_4a <-  (ggplot(data=figure_4a_agg, aes(x=date,y=new_per_day_smooth,fill=S
                        legend.title = element_text(size = 12),legend.text = element_text(size = 11)))
 figure_4a
 ggsave("./plots/figure_4a.png", plot = figure_4a, width = 15,  height = 7)
+ggsave("./plots/figure_4a.pdf", plot = figure_4a, width = 15,  height = 7)
 
 # Figure 4b: Choropleth of US counties at USA peak dates
 figure_4b1 <- (ggplot(data = figure_4b1_data) 
@@ -563,6 +598,7 @@ figure_4b1 <- (ggplot(data = figure_4b1_data)
                + guides(fill = guide_colourbar(barwidth = 30, barheight = 0.6, reverse=T))
                + theme(plot.title = element_text(hjust = 0.5), panel.grid.major=element_line(colour = "transparent"),legend.position="bottom"))
 ggsave("./plots/figure_4b1.png", plot = figure_4b1, width = 9,  height = 7)
+ggsave("./plots/figure_4b1.pdf", plot = figure_4b1, width = 9,  height = 7)
 
 figure_4b2 <- (ggplot(data = figure_4b2_data) 
                + geom_sf(aes(fill=new_cases_censored), lwd=0, color=NA)
@@ -574,6 +610,7 @@ figure_4b2 <- (ggplot(data = figure_4b2_data)
                + guides(fill = guide_colourbar(barwidth = 30, barheight = 0.6, reverse=T))
                + theme(plot.title = element_text(hjust = 0.5), panel.grid.major=element_line(colour = "transparent"),legend.position="bottom"))
 ggsave("./plots/figure_4b2.png", plot = figure_4b2, width = 9,  height = 7)
+ggsave("./plots/figure_4b2.pdf", plot = figure_4b2, width = 9,  height = 7)
 
 figure_4b3 <- (ggplot(data = figure_4b3_data) 
                + geom_sf(aes(fill=new_cases_censored), lwd=0, color=NA)
@@ -585,11 +622,55 @@ figure_4b3 <- (ggplot(data = figure_4b3_data)
                + guides(fill = guide_colourbar(barwidth = 30, barheight = 0.6, reverse=T))
                + theme(plot.title = element_text(hjust = 0.5), panel.grid.major=element_line(colour = "transparent"),legend.position="bottom"))
 ggsave("./plots/figure_4b3.png", plot = figure_4b3, width = 9,  height = 7)
+ggsave("./plots/figure_4b3.pdf", plot = figure_4b3, width = 9,  height = 7)
 
 
 
 # Deprecated Code -----------------------------------------------------------------------
 
+
+# figure_3b_wave <- (ggplot(figure_3b_wave_data, aes(x = si_at_t0_10_dead, y = dead_during_wave_per_10k, color=wave)) 
+#                    + geom_point(size=1.5,alpha=0.9,stroke=1.5, na.rm=TRUE)
+#                    + geom_text(data=subset(figure_3b_wave_data,
+#                                            (countrycode %in% label_countries) |
+#                                              (si_at_t0_10_dead <= quantile(figure_3b_wave_data$si_at_t0_10_dead, 0.1,na.rm=TRUE)) |
+#                                              (si_at_t0_10_dead >= quantile(figure_3b_wave_data$si_at_t0_10_dead, 0.95,na.rm=TRUE))),
+#                                aes(label=country),
+#                                hjust=-0.1, vjust=-0.1,
+#                                show.legend = FALSE)
+#                    + theme_light()
+#                    + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
+#                    #+ scale_x_continuous(trans=pseudolog10_trans)
+#                    + scale_y_continuous(trans='log10')
+#                    + labs(title = "Total Deaths During Each Wave Against Stringency at the Date of 10th Death", x = "Stringency Index at the Date of 10th Death", y = "Total Deaths During Wave per 10,000 Population"))
+# figure_3b_wave
+# ggsave("./plots/figure_3b_wave_test_2.png", plot = figure_3b_wave, width = 9,  height = 7)
+# 
+# # Kendall's rank correlation test: p-value of 0.002569
+# # Spearman's rank correlation test: p-value of 0.003223
+# cor.test(figure_3b_data$SI_DAYS_TO_THRESHOLD, figure_3b_data$EPI_DEAD_PER_10K,
+#          alternative = "greater",
+#          method = "kendall")
+
+# # Define list of mobility variables
+# mobilities = c("workplace", "transit_stations", "retail_recreation", "residential")
+# 
+# # Calculate duration flags raised in first wave for Figure 3
+# flags = c("SI",
+#           "C1_SCHOOL_CLOSING",
+#           "C2_WORKPLACE_CLOSING",
+#           "C3_CANCEL_PUBLIC_EVENTS",
+#           "C4_RESTRICTIONS_ON_GATHERINGS",
+#           "C5_CLOSE_PUBLIC_TRANSPORT",
+#           "C6_STAY_AT_HOME_REQUIREMENTS",
+#           "C7_RESTRICTIONS_ON_INTERNAL_MOVEMENT",
+#           "C8_INTERNATIONAL_TRAVEL_CONTROLS",
+#           "H2_TESTING_POLICY",
+#           "H3_CONTACT_TRACING")
+# 
+# for (flag in flags){
+#   figure_3b_data[,paste(flag,"_DAYS_ABOVE_THRESHOLD_FIRST_WAVE_PROPORTION",sep="")] <- figure_3b_data[,paste(flag,"_DAYS_ABOVE_THRESHOLD_FIRST_WAVE",sep="")]/figure_3b_data[,"EPI_DURATION_FIRST_WAVE"]
+# }
 
 # # Figure 3: Testing other variables for scatter plot ----------------------------------------
 # # Create directories. y variables: duration of first wave, or cumulative deaths per 10k.

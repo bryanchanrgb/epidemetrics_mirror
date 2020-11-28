@@ -20,7 +20,7 @@ warnings.filterwarnings('ignore')
 INTITALISE SCRIPT PARAMETERS
 '''
 
-SAVE_PLOTS = True
+SAVE_PLOTS = False
 SAVE_CSV = True
 PLOT_PATH = './plots/'
 CSV_PATH = './data/'
@@ -291,18 +291,22 @@ for country in tqdm(countries, desc='Processing Epidemiological Time Series Data
     if len(testing_data) > 1:
         tests = data[['date']].merge(
             testing_data[['date','total_tests']],how='left',on='date')['total_tests'].values
-        
+
         if sum(~pd.isnull(testing_data['new_tests_smoothed'])) > 0: # if testing data has new_tests_smoothed, use this
             new_tests_smooth = data[['date']].merge(
                 testing_data[['date','new_tests_smoothed']],how='left',on='date')['new_tests_smoothed'].values
-            if sum(~pd.isnull(testing_data['new_tests'])) == 0:
-                new_tests = new_tests_smooth
-        else: # if there is no data in new_tests_smoothed, compute 7 day moving average
-            new_tests_date = data[['date']].merge(
-                testing_data[['date','new_tests']],how='left',on='date')
-            new_tests = new_tests_date['new_tests'].values
-            new_tests_smooth = new_tests_date[['new_tests','date']].rolling(window=7, on='date').mean()['new_tests']
-
+        
+        if sum(~pd.isnull(testing_data['new_tests'])) > 0:
+            new_tests = data[['date']].merge(
+                testing_data[['date','new_tests']],how='left',on='date')['new_tests'].values
+        else:
+            new_tests = new_tests_smooth
+        
+        if sum(~pd.isnull(testing_data['new_tests_smoothed'])) == 0 and \
+            sum(~pd.isnull(testing_data['new_tests'])) > 0: # if there is no data in new_tests_smoothed, compute 7 day moving average
+            new_tests_smooth = data[['date']].merge(
+                testing_data[['date','new_tests']],how='left',on='date')[['new_tests','date']].rolling(window=7, on='date').mean()['new_tests']
+                
         positive_rate[~np.isnan(new_tests)] = data['new_per_day'][~np.isnan(new_tests)] / new_tests[~np.isnan(new_tests)]
         positive_rate[positive_rate > 1] = np.nan
         positive_rate_smooth = np.array(pd.Series(positive_rate).rolling(window=7).mean())
@@ -782,8 +786,6 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     
     epidemiology_panel = epidemiology_panel.append(data,ignore_index=True)
 
-if SAVE_CSV:
-    epidemiology_panel.to_csv(CSV_PATH + 'epidemiology_panel.csv')
 
 mobility_panel = pd.DataFrame(columns=['countrycode','country'] +
                                       [mobility_type + '_max' for mobility_type in mobilities] +
