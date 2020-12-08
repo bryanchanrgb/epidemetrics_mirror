@@ -81,7 +81,7 @@ figure_3a_data$class_coarse <- factor(figure_3a_data$class_coarse, levels=c("EPI
 figure_3b_wave_1_data <- subset(figure_3b_wave_data,wave==1)
 figure_3b_wave_1_data <- subset(figure_3b_wave_1_data,country!="Qatar") # Qatar is badly classified
 # Calculate response time as date to reach threshold - date of T0
-figure_3b_wave_1_data$response_time <- figure_3b_wave_1_data$first_date_c1_above_threshold - figure_3b_wave_1_data$t0_10_dead
+figure_3b_wave_1_data$response_time <- figure_3b_wave_1_data$first_date_c3_above_threshold - figure_3b_wave_1_data$t0_10_dead
 figure_3b_wave_1_data$response_time = as.numeric(figure_3b_wave_1_data$response_time)
 # Remove any where the date SI reaches threshold is no longer during the first wave
 figure_3b_wave_1_data <- subset(figure_3b_wave_1_data,first_date_si_above_threshold<wave_end)
@@ -91,29 +91,46 @@ figure_3b_wave_1_data <- subset(figure_3b_wave_1_data,population>=2500000)
 figure_3b_wave_data$dead_during_wave_per_10k <- figure_3b_wave_data$dead_during_wave * 10000 / figure_3b_wave_data$population
 figure_3b_wave_1_data$dead_during_wave_per_10k <- figure_3b_wave_1_data$dead_during_wave * 10000 / figure_3b_wave_1_data$population
 
+# Highlight some countries
+highlight_countries = c('Australia','Belgium','United States')
+figure_3a_data$country_highlight = ''
+for (c in highlight_countries){
+figure_3a_data[figure_3a_data$country==c,'country_highlight'] <- c
+}
+figure_3a_data$country_highlight <- factor(figure_3a_data$country_highlight, levels=c('Australia','Belgium','United States',''))
+
+figure_3b_wave_1_data$country_highlight = ''
+for (c in highlight_countries){
+  figure_3b_wave_1_data[figure_3b_wave_1_data$country==c,'country_highlight'] <- c
+}
+figure_3b_wave_1_data$country_highlight <- factor(figure_3b_wave_1_data$country_highlight, levels=c('Australia','Belgium','United States',''))
+
 
 # Plot Figure 3a ------------------------------------------------------------
+my_palette_1 <- brewer.pal(name="Set1",n=4)
+my_palette_1[4] <- '#000000'
 # Figure 3: Scatter plot of government response time against number of cases for each country
 corr <- cor.test(figure_3a_data$si_integral, figure_3a_data$last_dead_per_10k,
          method = "kendall")
 p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString(signif(corr$p.value,2)))}
 estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
 corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
-figure_3a <- (ggplot(figure_3a_data, aes(x = si_integral, y = last_dead_per_10k)) 
-              + geom_point(size=2,alpha=0.9, na.rm=TRUE)
+figure_3a <- (ggplot(figure_3a_data, aes(x = si_integral, y = last_dead_per_10k, color=country_highlight)) 
+              + geom_point(size=2,alpha=0.9, na.rm=TRUE, show.legend = FALSE)
               + geom_text(data=subset(figure_3a_data,
                                       ((countrycode %in% label_countries) |
+                                        (countrycode %in% highlight_countries) |
                                         #(last_dead_per_10k >= quantile(figure_3a_data$last_dead_per_10k, 0.95,na.rm=TRUE)) |
                                         (si_integral >= quantile(figure_3a_data$si_integral, 0.95,na.rm=TRUE)) |
                                         (si_integral <= quantile(figure_3a_data$si_integral, 0.05,na.rm=TRUE))) &
-                                        (!country %in% c('Eritrea','Cayman Islands','United Kingdom','United States','Brazil','Bolivia','South Africa'))),
+                                        (!country %in% c('United Kingdom','Spain','Eritrea','Cayman Islands','Brazil','Bolivia','South Africa'))),
                           aes(label=country),
                           hjust=-0.1, vjust=-0.1,
                           show.legend = FALSE)
               + geom_text(aes(x=3000,y=10,hjust=0,label=corr_text),size=4, hjust=0, color='black')
               + theme_light()
               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.85, 0.15))
-              #+ scale_color_discrete(name = "Wave Status", labels = c("First Wave", "Second Wave","Third Wave","Other"))
+              + scale_color_manual(values = my_palette_1, name = "Country")
               + scale_x_continuous(expand=expand_scale(mult=c(0.05,0.12)))
               + scale_y_continuous(trans='log10', breaks=c(0.001,0.003,0.01,0.03,0.1,0.3,1,3,10), labels=c('0·001','0·003','0·01','0·03','0·1','0·3','1','3','10'))
               + labs(title = "Total Deaths Against Total Government Stringency", x = "Integral Under Stringency Index Curve", y = "Total Deaths per 10000 Population"))
@@ -130,23 +147,24 @@ p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString
 estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
 corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
 # Plot Figure 3: Scatter plot of government response time against number of cases for each country
-figure_3b_wave_1 <- (ggplot(figure_3b_wave_1_data, aes(x = response_time, y = dead_during_wave_per_10k)) 
-              + geom_point(size=2,alpha=0.9, na.rm=TRUE)
+figure_3b_wave_1 <- (ggplot(figure_3b_wave_1_data, aes(x = response_time, y = dead_during_wave_per_10k, color=country_highlight)) 
+              + geom_point(size=2,alpha=0.9, na.rm=TRUE, show.legend=FALSE)
               + geom_text(data=subset(figure_3b_wave_1_data,
                                       ((countrycode %in% label_countries) |
+                                      (countrycode %in% highlight_countries) |
                                       (response_time >= quantile(figure_3b_wave_1_data$response_time, 0.8,na.rm=TRUE)) |
                                       (response_time <= quantile(figure_3b_wave_1_data$response_time, 0.02,na.rm=TRUE))) &
-                                      !country %in% c('Philippines','Iran','India','Hungary','Turkey','Dominican Republic')),
+                                      !country %in% c('Iran','Sweden','Malaysia')),
                           aes(label=country),
                           hjust=-0.1, vjust=-0.1,
                           show.legend = FALSE)
               + geom_text(aes(x=1,y=0.01,hjust=0,label=corr_text),size=4, hjust=0, color='black')
               + theme_light()
               + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
-              #+ scale_color_manual(values = my_palette_1, name = "Wave", labels = c("First Wave", "Second Wave"))
+              + scale_color_manual(values = my_palette_1, name = "Country")
               + scale_x_continuous(trans=pseudolog10_trans, breaks=c(-200,-100,-30,-10,-3,-1,0,1,3,10,30), expand=expand_scale(mult=c(0.05,0.2)))
               + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10),labels=c('0·001','0·01','0·1','1','10'))
-              + labs(title = "Total Deaths During First Wave Against Government Response Time", x = "Government Response Time (Days from 10th Death to Schools Closing)", y = "Total Deaths During First Wave per 10000 Population"))
+              + labs(title = "Total Deaths During First Wave Against Government Response Time", x = "Government Response Time (Days from 10th Death to Cancelling Public Events)", y = "Total Deaths During First Wave per 10000 Population"))
 figure_3b_wave_1
 ggsave("./plots/figure_3b_wave_1.png", plot = figure_3b_wave_1, width = 9,  height = 7)
 ggsave("./plots/figure_3b_wave_1.pdf", plot = figure_3b_wave_1, width = 9,  height = 7)
@@ -173,10 +191,101 @@ figure_3c_wave_1_data <- subset(figure_3c_wave_1_data,country!="Qatar") # Qatar 
 figure_3c_wave_1_data <- subset(figure_3c_wave_1_data,population>=2500000)
 
 # Add column for tests per population
-figure_3c_2_data <- merge(figure_3c_2_data, figure_3c_wave_1_data[c('countrycode','population')], by='countrycode')
+figure_3c_2_data <- merge(figure_3c_2_data, figure_3c_wave_1_data[c('countrycode','population','wave_end','t0_10_dead')], by='countrycode')
 # Get per population values
 figure_3c_wave_1_data$dead_during_wave_per_10k <- figure_3c_wave_1_data$dead_during_wave * 10000 / figure_3c_wave_1_data$population
 figure_3c_2_data$tests_per_10k <- figure_3c_2_data$tests * 10000 / figure_3c_2_data$population
+
+# Aggregate to get the total tests in first wave
+figure_3c_2_total <- subset(figure_3c_2_data, (date<=wave_end))
+figure_3c_2_total <- aggregate(figure_3c_2_total[c("tests_per_10k")],
+                              by = list(figure_3c_2_total$countrycode),
+                              FUN = max,
+                              na.rm=TRUE)
+figure_3c_2_total <- plyr::rename(figure_3c_2_total, c("Group.1"="countrycode"))
+
+# Aggregate to get the number of days to reach X tests per 10k
+tests_threshold <- 10
+figure_3c_2_days <- subset(figure_3c_2_data, (date<=wave_end)&(tests_per_10k>=tests_threshold))
+figure_3c_2_days <- aggregate(figure_3c_2_days[c("t")],
+                           by = list(figure_3c_2_days$countrycode),
+                           FUN = min,
+                           na.rm=TRUE)
+figure_3c_2_days <- plyr::rename(figure_3c_2_days, c("Group.1"="countrycode"))
+
+# Plot figure 3c: number of days to reach tests threshold against total deaths in first wave
+plot_data <- merge(figure_3c_wave_1_data, figure_3c_2_days, by=c("countrycode"))
+plot_data$t <- as.numeric(plot_data$t)
+plot_data$country_highlight = ''
+for (c in highlight_countries){
+  plot_data[plot_data$country==c,'country_highlight'] <- c}
+plot_data$country_highlight <- factor(plot_data$country_highlight, levels=c('Australia','Belgium','United States',''))
+
+corr <- cor.test(plot_data$dead_during_wave_per_10k, plot_data$t,
+                 method = "kendall")
+p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString(signif(corr$p.value,2)))}
+estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
+corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
+figure_3c_days <- (ggplot(plot_data, aes(x = t, y = dead_during_wave_per_10k, color=country_highlight)) 
+              + geom_point(size=2,alpha=0.9, na.rm=TRUE, show.legend=FALSE)
+              + geom_text(data=subset(plot_data,
+                                      ((countrycode %in% label_countries) |
+                                         (countrycode %in% highlight_countries) |
+                                         (t >= quantile(plot_data$t, 0.9,na.rm=TRUE)) |
+                                         (t <= quantile(plot_data$t, 0.1,na.rm=TRUE))) &
+                                        !country %in% c('Mexico','Iran','New Zealand','United Arab Emirates')),
+                          aes(label=country),
+                          hjust=-0.1, vjust=-0.1,
+                          show.legend = FALSE)
+              + geom_text(aes(x=50,y=0.02,hjust=0,label=corr_text),size=4, hjust=0, color='black')
+              + theme_light()
+              + scale_color_manual(values = my_palette_1, name = "Country")
+              + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
+              + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10),labels=c('0·001','0·01','0·1','1','10'), expand=expand_scale(mult=c(0.05,0.05)))
+              + scale_x_continuous(expand=expand_scale(mult=c(0.05,0.1)))
+              + labs(title = "Deaths During First Wave Against Early Testing", 
+                     x = paste("Days to Reach",tests_threshold,"Tests per 10000 Population (Relative to the Date of the 10th Death)",sep=" "),
+                     y = "Total Deaths During First Wave per 10000 Population"))
+figure_3c_days
+ggsave("./plots/figure_3c_days.png", plot = figure_3c_days, width = 9,  height = 7)
+ggsave("./plots/figure_3c_days.pdf", plot = figure_3c_days, width = 9,  height = 7)
+
+# Plot figure 3c: total tests against total deaths in first wave
+plot_data <- merge(figure_3c_wave_1_data, figure_3c_2_total, by=c("countrycode"))
+plot_data$tests_per_10k <- as.numeric(plot_data$tests_per_10k)
+plot_data$country_highlight = ''
+for (c in highlight_countries){
+  plot_data[plot_data$country==c,'country_highlight'] <- c}
+plot_data$country_highlight <- factor(plot_data$country_highlight, levels=c('Australia','Belgium','United States',''))
+
+corr <- cor.test(plot_data$dead_during_wave_per_10k, plot_data$tests_per_10k,
+                 method = "kendall")
+p_value_str <- if (corr$p.value<0.0001) {"<0·0001"} else {sub('[.]','·',toString(signif(corr$p.value,2)))}
+estimate_str <- sub('[.]','·',toString(signif(corr$estimate,2)))
+corr_text <- paste("Kendall's Rank Correlation \nTau Estimate: ",estimate_str," \np-value: ",p_value_str,sep="")
+figure_3c_total <- (ggplot(plot_data, aes(x = tests_per_10k, y = dead_during_wave_per_10k, color=country_highlight)) 
+                   + geom_point(size=2,alpha=0.9, na.rm=TRUE, show.legend=FALSE)
+                   + geom_text(data=subset(plot_data,
+                                           ((countrycode %in% label_countries) |
+                                              (countrycode %in% highlight_countries) |
+                                              (tests_per_10k >= quantile(plot_data$tests_per_10k, 0.9,na.rm=TRUE)) |
+                                              (tests_per_10k <= quantile(plot_data$tests_per_10k, 0.1,na.rm=TRUE))) &
+                                              !country %in% c('South Africa','Madagascar','Côte d\'Ivoire','Mozambique','Romania')),
+                               aes(label=country),
+                               hjust=-0.1, vjust=-0.1,
+                               show.legend = FALSE)
+                   + geom_text(aes(x=1500,y=0.02,hjust=0,label=corr_text),size=4, hjust=0, color='black')
+                   + theme_light()
+                   + scale_color_manual(values = my_palette_1, name = "Country")
+                   + theme(plot.title=element_text(hjust = 0.5), axis.line=element_line(color="black",size=0.7),axis.ticks=element_line(color="black",size=0.7), legend.position=c(0.6, 0.15))
+                   + scale_x_continuous(trans='log10', breaks=c(10,30,100,300,1000,3000),labels=c('10','30','100','300','1000','3000'), expand=expand_scale(mult=c(0.05,0.15)))
+                   + scale_y_continuous(trans='log10', breaks=c(0.001,0.01,0.1,1,10),labels=c('0·001','0·01','0·1','1','10'), expand=expand_scale(mult=c(0.05,0.05)))
+                   + labs(title = "Deaths During First Wave Against Total Testing", 
+                          x = "Total Tests During First Wave per 10000 Population",
+                          y = "Total Deaths During First Wave per 10000 Population"))
+figure_3c_total
+ggsave("./plots/figure_3c_total.png", plot = figure_3c_total, width = 9,  height = 7)
+ggsave("./plots/figure_3c_total.pdf", plot = figure_3c_total, width = 9,  height = 7)
 
 
 lags <- data.frame(lag=NULL,tau_estimate=NULL,p_value=NULL)
