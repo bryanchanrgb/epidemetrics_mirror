@@ -20,17 +20,19 @@ warnings.filterwarnings('ignore')
 INTITALISE SCRIPT PARAMETERS
 '''
 
-SAVE_PLOTS = False
+SAVE_PLOTS = True
 SAVE_CSV = True
 PLOT_PATH = './plots/'
 CSV_PATH = './data/'
 SMOOTH = 0.001
 DISTANCE = 21       # Number of days apart 2 peaks must at least be for both to be considered genuine
-ABS_PROMINENCE_THRESHOLD =  55      # Prominence threshold (in absolute number of new cases)
+ABS_PROMINENCE_THRESHOLD =  55      # Minumum prominence threshold (in absolute number of new cases)
+ABS_PROMINENCE_THRESHOLD_UPPER =  500      # Prominence threshold (in absolute number of new cases)
 POP_PROMINENCE_THRESHOLD = 0.05      # Prominence threshold (in number of new cases per 10k population)
 RELATIVE_PROMINENCE_THRESHOLD = 0.7 # Prominence threshold for each peak, relative to its own magnitude
-ABS_PROMINENCE_THRESHOLD_DEAD =  5      # Prominence threshold (in absolute number of deaths per day)
+ABS_PROMINENCE_THRESHOLD_DEAD =  5      # Minimum prominence threshold (in absolute number of deaths per day)
 POP_PROMINENCE_THRESHOLD_DEAD = 0.0015 # Prominence threshold (in number of deaths per day per 10k population)
+ABS_PROMINENCE_THRESHOLD_UPPER_DEAD = 50    # Prominence threshold (in absolute number of deaths per day)
 CLASS_1_THRESHOLD = 55             # Threshold in number of new cases per day (smoothed) to be considered entering first wave
 CLASS_1_THRESHOLD_DEAD = 5          # Threshold in number of dead per day (smoothed) to be considered entering first wave for deaths
 # Currently T0 is defined as the date of the 1st death (alternatively t0_5_dead or t0_10_dead for the 5th and 10th death)
@@ -38,7 +40,8 @@ ABSOLUTE_T0_THRESHOLD = 1000    # Define an alternative T0 as the date reaching 
 POP_RELATIVE_T0_THRESHOLD = 0.05 # T0 threshold in cumulative cases per 10k population
 TEST_LAG = 0 # Lag between test date and test results
 DEATH_LAG = 21 # Lag between confirmed and death. Ideally would be sampled from a random distribution of some sorts
-SI_THRESHOLD = 59
+SI_THRESHOLD = 60
+CUTOFF_DATE = datetime.date(2020,11,30)
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -55,7 +58,8 @@ cols = 'countrycode, country, date, confirmed, dead'
 sql_command = """SELECT """ + cols + """ FROM epidemiology WHERE adm_area_1 IS NULL AND source = %(source)s"""
 raw_epidemiology = pd.read_sql(sql_command, conn, params={'source':source})
 raw_epidemiology = raw_epidemiology.sort_values(by=['countrycode', 'date'])
-raw_epidemiology = raw_epidemiology[~raw_epidemiology['country'].isin(exclude)].reset_index(drop=True)
+raw_epidemiology = raw_epidemiology[~raw_epidemiology['country'].isin(exclude)]
+raw_epidemiology = raw_epidemiology[raw_epidemiology['date']<=CUTOFF_DATE].reset_index(drop=True)
 # Check no conflicting values for each country and date
 assert not raw_epidemiology[['countrycode', 'date']].duplicated().any()
 
@@ -66,6 +70,7 @@ cols = 'countrycode, country, date, ' +  ', '.join(mobilities)
 sql_command = """SELECT """ + cols + """ FROM mobility WHERE source = %(source)s AND adm_area_1 is NULL"""
 raw_mobility = pd.read_sql(sql_command, conn, params={'source': source})
 raw_mobility = raw_mobility.sort_values(by=['countrycode', 'date']).reset_index(drop=True)
+raw_mobility = raw_mobility[raw_mobility['date']<=CUTOFF_DATE].reset_index(drop=True)
 # Check no conflicting values for each country and date
 assert not raw_mobility[['countrycode', 'date']].duplicated().any()
 
@@ -92,6 +97,7 @@ raw_government_response = raw_government_response[['countrycode', 'country', 'da
 raw_government_response = raw_government_response.sort_values(by=['country', 'date']) \
     .drop_duplicates(subset=['countrycode', 'date'])  # .dropna(subset=['stringency_index'])
 raw_government_response = raw_government_response.sort_values(by=['countrycode', 'date'])
+raw_government_response = raw_government_response[raw_government_response['date']<=CUTOFF_DATE].reset_index(drop=True)
 # Check no conflicting values for each country and date
 assert not raw_government_response[['countrycode', 'date']].duplicated().any()
 
@@ -132,7 +138,8 @@ raw_testing_data = pd.read_csv('https://raw.githubusercontent.com/owid/covid-19-
                                , parse_dates=['date'])[[
                                 'iso_code', 'date', 'total_tests', 'new_tests', 'new_tests_smoothed', 'positive_rate']].rename(columns={'iso_code':'countrycode'})
 raw_testing_data['date'] = raw_testing_data['date'].apply(lambda x:x.date())
-                                                          
+raw_testing_data = raw_testing_data[raw_testing_data['date']<=CUTOFF_DATE].reset_index(drop=True)
+                                                       
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 0 - PRE-PROCESSING
@@ -561,7 +568,8 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['t0_10_dead'] = np.nan if len(country_series[country_series['dead']>=10]['date']) == 0 else \
         country_series[country_series['dead']>=10]['date'].iloc[0]
 
-    cases_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD, POP_PROMINENCE_THRESHOLD * data['population'] / 10000)
+    cases_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD,min(POP_PROMINENCE_THRESHOLD*data['population']/10000,
+                                                                  ABS_PROMINENCE_THRESHOLD_UPPER))
     peak_characteristics = find_peaks(country_series['new_per_day_smooth'].values,
                                       prominence=cases_prominence_threshold, distance=DISTANCE)
     peak_locations = peak_characteristics[0]
@@ -648,7 +656,8 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['testing_available'] = True if len(country_series['new_tests'].dropna()) > 0 else False
 
     # Classify wave status for deaths
-    dead_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD_DEAD, POP_PROMINENCE_THRESHOLD_DEAD * data['population'] / 10000)
+    dead_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD_DEAD, min(POP_PROMINENCE_THRESHOLD_DEAD * data['population'] / 10000,
+                                                                       ABS_PROMINENCE_THRESHOLD_UPPER_DEAD))
     dead_peak_characteristics = find_peaks(country_series['dead_per_day_smooth'].values,
                                       prominence=dead_prominence_threshold, distance=DISTANCE)
     peak_locations = dead_peak_characteristics[0]
@@ -1269,6 +1278,7 @@ cols = 'countrycode, adm_area_1, date, confirmed'
 sql_command = """SELECT """ + cols + """ FROM epidemiology WHERE countrycode = 'USA' AND source = 'USA_NYT' AND adm_area_1 IS NOT NULL AND adm_area_2 IS NULL"""
 raw_usa = pd.read_sql(sql_command, conn)
 raw_usa = raw_usa.sort_values(by=['adm_area_1', 'date']).reset_index(drop=True)
+raw_usa = raw_usa[raw_usa['date']<=CUTOFF_DATE].reset_index(drop=True)
 
 states = raw_usa['adm_area_1'].unique()
 figure_4a = pd.DataFrame(columns=['countrycode', 'adm_area_1','date','confirmed','new_per_day','new_per_day_smooth'])
@@ -1422,5 +1432,8 @@ SAVING TIMESTAMP
 '''
 
 if SAVE_CSV:
-    np.savetxt(CSV_PATH + 'last_updated.txt', [datetime.datetime.today().date().strftime('%Y-%m-%d')], fmt='%s')
+    np.savetxt(CSV_PATH + 'last_updated.txt', 
+               ['Update date: ' + datetime.datetime.today().date().strftime('%Y-%m-%d') + \
+               '\nCutoff date: ' + CUTOFF_DATE.strftime('%Y-%m-%d')],
+               fmt='%s')
 # -------------------------------------------------------------------------------------------------------------------- #
