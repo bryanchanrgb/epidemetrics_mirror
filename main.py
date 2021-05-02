@@ -29,8 +29,8 @@ class epidemetrics:
             'NY.GNP.PCAP.PP.KD': 'gni_per_capita',
             'SM.POP.NETM': 'net_migration'}
         self.abs_t0_threshold = 1000
-
-
+        self.rel_t0_threshold = 0.05 # cases per rel_to_constant
+        self.rel_to_constant = 10000 # used as population reference for relative t0
 
         '''
         INITIALISE SERVER CONNECTION
@@ -46,7 +46,11 @@ class epidemetrics:
         '''
         PULL/PROCESS DATA 
         '''
-
+        self.epidemiology = self._get_epi_table()
+        self.testing = self._get_tst_table()
+        self.wbi_table = self._get_wbi_table()
+        self.epidemiology_series = self._get_epi_series(
+            epidemiology=self.epidemiology, testing=self.testing, wbi_table=self.wbi_table)
         return
 
     def _get_epi_table(self):
@@ -102,10 +106,10 @@ class epidemetrics:
             'new_per_day_smooth': np.empty(0),
             'dead': np.empty(0),
             'days_since_t0': np.empty(0),
-            'new_cases_per_10k': np.empty(0),
+            'new_cases_per_rel_constant': np.empty(0),
             'dead_per_day': np.empty(0),
             'dead_per_day_smooth': np.empty(0),
-            'new_deaths_per_10k': np.empty(0),
+            'new_deaths_per_rel_constant': np.empty(0),
             'tests': np.empty(0),
             'new_tests': np.empty(0),
             'new_tests_smooth': np.empty(0),
@@ -122,6 +126,7 @@ class epidemetrics:
             epi_data = epidemiology[epidemiology['countrycode'] == country]
             tst_data = testing[testing['countrycode'] == country]
             # we want a master spreadsheet
+            tests = np.repeat(np.nan, len(epi_data))
             new_tests = np.repeat(np.nan, len(epi_data))
             new_tests_smooth = np.repeat(np.nan, len(epi_data))
             positive_rate = np.repeat(np.nan, len(epi_data))
@@ -136,7 +141,6 @@ class epidemetrics:
             else:
                 ys = epi_data[['new_per_day', 'date']].rolling(window=self.ma_window, on='date').mean()['new_per_day']
                 zs = epi_data[['dead_per_day', 'date']].rolling(window=self.ma_window, on='date').mean()['dead_per_day']
-
             if len(tst_data) > 1:
                 tests = epi_data[['date']].merge(
                     tst_data[['date', 'total_tests']], how='left', on='date')['total_tests'].values
@@ -144,7 +148,6 @@ class epidemetrics:
                 if sum(~pd.isnull(tst_data['new_tests_smoothed'])) > 0:
                     new_tests_smooth = epi_data[['date']].merge(
                         tst_data[['date', 'new_tests_smoothed']], how='left', on='date')['new_tests_smoothed'].values
-
                 if sum(~pd.isnull(tst_data['new_tests'])) > 0:
                     new_tests = epi_data[['date']].merge(
                         tst_data[['date', 'new_tests']], how='left', on='date')['new_tests'].values
@@ -156,65 +159,66 @@ class epidemetrics:
                     new_tests_smooth = epi_data[['date']] \
                     .merge(tst_data[['date', 'new_tests']], how='left', on='date')[['new_tests', 'date']] \
                     .rolling(window=7, on='date').mean()['new_tests']
-
                 positive_rate[~np.isnan(new_tests)] = epi_data['new_per_day'][~np.isnan(new_tests)] / new_tests[
                     ~np.isnan(new_tests)]
                 positive_rate[positive_rate > 1] = np.nan
                 positive_rate_smooth = np.array(pd.Series(positive_rate).rolling(window=7).mean())
-
+            # accessing population data from wbi_table
             population = np.nan if len(wbi_table[wbi_table['countrycode'] == country]['value']) == 0 else \
                 wbi_table[wbi_table['countrycode'] == country]['value'].iloc[0]
-            t0 = np.nan if len(data[data['confirmed'] >= ABSOLUTE_T0_THRESHOLD]['date']) == 0 else \
-                data[data['confirmed'] >= ABSOLUTE_T0_THRESHOLD]['date'].iloc[0]
-
+            # two definitions of t0 use where appropriate
+            # t0 absolute ~= 1000 total cases or t0 relative = 0.05 per rel_to_constant
+            t0 = np.nan if len(epi_data[epi_data['confirmed'] >= self.abs_t0_threshold]['date']) == 0 else \
+                epi_data[epi_data['confirmed'] >= self.abs_t0_threshold]['date'].iloc[0]
             t0_relative = np.nan if len(
-                data[((data['confirmed'] / population) * 10000) >= POP_RELATIVE_T0_THRESHOLD]) == 0 else \
-                data[((data['confirmed'] / population) * 10000) >= POP_RELATIVE_T0_THRESHOLD]['date'].iloc[0]
-            t0_1_dead = np.nan if len(data[data['dead'] >= 1]['date']) == 0 else \
-                data[data['dead'] >= 1]['date'].iloc[0]
-            t0_5_dead = np.nan if len(data[data['dead'] >= 5]['date']) == 0 else \
-                data[data['dead'] >= 5]['date'].iloc[0]
-            t0_10_dead = np.nan if len(data[data['dead'] >= 10]['date']) == 0 else \
-                data[data['dead'] >= 10]['date'].iloc[0]
-
-            days_since_t0 = np.repeat(np.nan, len(data)) if pd.isnull(t0) else \
-                np.array([(date - t0).days for date in data['date'].values])
-            days_since_t0_relative = np.repeat(np.nan, len(data)) if pd.isnull(t0_relative) else \
-                np.array([(date - t0_relative).days for date in data['date'].values])
-            days_since_t0_1_dead = np.repeat(np.nan, len(data)) if pd.isnull(t0_1_dead) else \
-                np.array([(date - t0_1_dead).days for date in data['date'].values])
-            days_since_t0_5_dead = np.repeat(np.nan, len(data)) if pd.isnull(t0_5_dead) else \
-                np.array([(date - t0_5_dead).days for date in data['date'].values])
-            days_since_t0_10_dead = np.repeat(np.nan, len(data)) if pd.isnull(t0_10_dead) else \
-                np.array([(date - t0_10_dead).days for date in data['date'].values])
-
-            new_cases_per_10k = 10000 * (ys / population)
-            new_deaths_per_10k = 10000 * (zs / population)
-
+                epi_data[((epi_data['confirmed'] / population) * self.rel_to_constant) >= self.rel_t0_threshold]) == 0 else \
+                epi_data[((epi_data['confirmed'] / population) * self.rel_to_constant) >= self.rel_t0_threshold]['date'].iloc[0]
+            # t0_k_dead represents day first k total dead was reported
+            t0_1_dead = np.nan if len(epi_data[epi_data['dead'] >= 1]['date']) == 0 else \
+                epi_data[epi_data['dead'] >= 1]['date'].iloc[0]
+            t0_5_dead = np.nan if len(epi_data[epi_data['dead'] >= 5]['date']) == 0 else \
+                epi_data[epi_data['dead'] >= 5]['date'].iloc[0]
+            t0_10_dead = np.nan if len(epi_data[epi_data['dead'] >= 10]['date']) == 0 else \
+                epi_data[epi_data['dead'] >= 10]['date'].iloc[0]
+            # index days since absolute t0, relative t0, k deaths
+            days_since_t0 = np.repeat(np.nan, len(epi_data)) if pd.isnull(t0) else \
+                np.array([(date - t0).days for date in epi_data['date'].values])
+            days_since_t0_relative = np.repeat(np.nan, len(epi_data)) if pd.isnull(t0_relative) else \
+                np.array([(date - t0_relative).days for date in epi_data['date'].values])
+            days_since_t0_1_dead = np.repeat(np.nan, len(epi_data)) if pd.isnull(t0_1_dead) else \
+                np.array([(date - t0_1_dead).days for date in epi_data['date'].values])
+            days_since_t0_5_dead = np.repeat(np.nan, len(epi_data)) if pd.isnull(t0_5_dead) else \
+                np.array([(date - t0_5_dead).days for date in epi_data['date'].values])
+            days_since_t0_10_dead = np.repeat(np.nan, len(epi_data)) if pd.isnull(t0_10_dead) else \
+                np.array([(date - t0_10_dead).days for date in epi_data['date'].values])
+            # again rel constant represents a population threhsold - 10,000 in the default case
+            new_cases_per_rel_constant = self.rel_to_constant * (ys / population)
+            new_deaths_per_rel_constant = self.rel_to_constant * (zs / population)
+            # upsert processed data
             epidemiology_series['countrycode'] = np.concatenate((
-                epidemiology_series['countrycode'], data['countrycode'].values))
+                epidemiology_series['countrycode'], epi_data['countrycode'].values))
             epidemiology_series['country'] = np.concatenate(
-                (epidemiology_series['country'], data['country'].values))
+                (epidemiology_series['country'], epi_data['country'].values))
             epidemiology_series['date'] = np.concatenate(
-                (epidemiology_series['date'], data['date'].values))
+                (epidemiology_series['date'], epi_data['date'].values))
             epidemiology_series['confirmed'] = np.concatenate(
-                (epidemiology_series['confirmed'], data['confirmed'].values))
+                (epidemiology_series['confirmed'], epi_data['confirmed'].values))
             epidemiology_series['new_per_day'] = np.concatenate(
-                (epidemiology_series['new_per_day'], data['new_per_day'].values))
+                (epidemiology_series['new_per_day'], epi_data['new_per_day'].values))
             epidemiology_series['new_per_day_smooth'] = np.concatenate(
                 (epidemiology_series['new_per_day_smooth'], ys))
             epidemiology_series['dead'] = np.concatenate(
-                (epidemiology_series['dead'], data['dead'].values))
+                (epidemiology_series['dead'], epi_data['dead'].values))
             epidemiology_series['dead_per_day'] = np.concatenate(
-                (epidemiology_series['dead_per_day'], data['dead_per_day'].values))
+                (epidemiology_series['dead_per_day'], epi_data['dead_per_day'].values))
             epidemiology_series['dead_per_day_smooth'] = np.concatenate(
                 (epidemiology_series['dead_per_day_smooth'], zs))
             epidemiology_series['days_since_t0'] = np.concatenate(
                 (epidemiology_series['days_since_t0'], days_since_t0))
-            epidemiology_series['new_cases_per_10k'] = np.concatenate(
-                (epidemiology_series['new_cases_per_10k'], new_cases_per_10k))
-            epidemiology_series['new_deaths_per_10k'] = np.concatenate(
-                (epidemiology_series['new_deaths_per_10k'], new_deaths_per_10k))
+            epidemiology_series['new_cases_per_rel_constant'] = np.concatenate(
+                (epidemiology_series['new_cases_per_rel_constant'], new_cases_per_rel_constant))
+            epidemiology_series['new_deaths_per_rel_constant'] = np.concatenate(
+                (epidemiology_series['new_deaths_per_rel_constant'], new_deaths_per_rel_constant))
             epidemiology_series['tests'] = np.concatenate(
                 (epidemiology_series['tests'], tests))
             epidemiology_series['new_tests'] = np.concatenate(
@@ -233,9 +237,8 @@ class epidemetrics:
                 (epidemiology_series['days_since_t0_5_dead'], days_since_t0_5_dead))
             epidemiology_series['days_since_t0_10_dead'] = np.concatenate(
                 (epidemiology_series['days_since_t0_10_dead'], days_since_t0_10_dead))
-
             continue
-        return
+        return pd.DataFrame.from_dict(epidemiology_series)
 
     def _get_epi_static(self):
         return
