@@ -9,9 +9,7 @@ import warnings
 from tqdm import tqdm
 import datetime
 from skimage.transform import resize
-#from csaps import csaps
 from scipy.signal import find_peaks
-from scipy.stats import kendalltau
 from sklearn.linear_model import LinearRegression
 
 warnings.filterwarnings('ignore')
@@ -25,6 +23,7 @@ SAVE_CSV = True
 PLOT_PATH = './plots/'
 CSV_PATH = './data/'
 SMOOTH = 0.001
+T_SEP_A = 10.5  # Number of days apart between peak and trough for sub-algorithm A
 DISTANCE = 21       # Number of days apart 2 peaks must at least be for both to be considered genuine
 ABS_PROMINENCE_THRESHOLD =  55      # Minumum prominence threshold (in absolute number of new cases)
 ABS_PROMINENCE_THRESHOLD_UPPER =  500      # Prominence threshold (in absolute number of new cases)
@@ -41,7 +40,8 @@ POP_RELATIVE_T0_THRESHOLD = 0.05 # T0 threshold in cumulative cases per 10k popu
 TEST_LAG = 0 # Lag between test date and test results
 DEATH_LAG = 21 # Lag between confirmed and death. Ideally would be sampled from a random distribution of some sorts
 SI_THRESHOLD = 60
-CUTOFF_DATE = datetime.date(2020,11,30)
+MAX_CLASS = 10 # Any country greater than this class (more waves identified) will be grouped into Others instead
+CUTOFF_DATE = datetime.date(2021,4,30)
 
 conn = psycopg2.connect(
     host='covid19db.org',
@@ -52,7 +52,7 @@ conn = psycopg2.connect(
 cur = conn.cursor()
 
 # GET RAW EPIDEMIOLOGY TABLE
-source = "WRD_ECDC"
+source = "WRD_WHO"
 exclude = ['Other continent', 'Asia', 'Europe', 'America', 'Africa', 'Oceania','World']
 cols = 'countrycode, country, date, confirmed, dead'
 sql_command = """SELECT """ + cols + """ FROM epidemiology WHERE adm_area_1 IS NULL AND source = %(source)s"""
@@ -500,15 +500,12 @@ epidemiology_panel = pd.DataFrame(columns=['countrycode', 'country', 'class', 'p
                                            'peak_1', 'peak_2', 'date_peak_1', 'date_peak_2', 'first_wave_start',
                                            'first_wave_end', 'duration_first_wave', 'second_wave_start', 'second_wave_end','last_confirmed',
                                            'last_dead','testing_available','peak_1_cfr','peak_2_cfr',
-                                           'dead_class','tests_class',
-                                           'tau_dead','tau_p_dead','tau_tests','tau_p_tests',
-                                           'confirmed_30d_avg_before_first_peak','dead_30d_avg_before_first_peak','tests_30d_avg_before_first_peak',
-                                           'confirmed_30d_avg_before_second_peak','dead_30d_avg_before_second_peak','tests_30d_avg_before_second_peak'])
+                                           'dead_class','tests_class'])
 
 if SAVE_PLOTS: # Create directories for saving plots, remove any existing plots
     if os.path.isdir(PLOT_PATH + 'epidemiological/'):
             shutil.rmtree(PLOT_PATH + 'epidemiological/')
-    for i in range(0,7):
+    for i in range(0,MAX_CLASS+1):
         os.makedirs(PLOT_PATH + 'epidemiological/class_' + str(i) + '/', exist_ok=True)
     os.makedirs(PLOT_PATH + 'epidemiological/class_other' + '/', exist_ok=True)
 
@@ -517,6 +514,7 @@ if SAVE_PLOTS: # Create directories for saving plots, remove any existing plots
 exclude_countries = ['CMR','COG','GNQ','BWA','ESH']
 # Some countries also have poor data quality, but the overall shape of the wave is still visible:
 # KGZ, CHL, NIC, KAZ, ECU, CHN
+
 
 countries = epidemiology['countrycode'].unique()
 for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
@@ -536,16 +534,6 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['second_wave_end'] = np.nan
     data['peak_1_cfr'] = np.nan
     data['peak_2_cfr'] = np.nan
-    data['tau_dead'] = np.nan
-    data['tau_p_dead'] = np.nan
-    data['tau_tests'] = np.nan
-    data['tau_p_tests'] = np.nan
-    data['confirmed_30d_avg_before_first_peak'] = np.nan
-    data['dead_30d_avg_before_first_peak'] = np.nan
-    data['tests_30d_avg_before_first_peak'] = np.nan
-    data['confirmed_30d_avg_before_second_peak'] = np.nan
-    data['dead_30d_avg_before_second_peak'] = np.nan
-    data['tests_30d_avg_before_second_peak'] = np.nan
     
     data['countrycode'] = country
     country_series = epidemiology_series[epidemiology_series['countrycode'] == country].reset_index(drop=True)
@@ -570,13 +558,50 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
 
     cases_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD,min(POP_PROMINENCE_THRESHOLD*data['population']/10000,
                                                                   ABS_PROMINENCE_THRESHOLD_UPPER))
-    peak_characteristics = find_peaks(country_series['new_per_day_smooth'].values,
-                                      prominence=cases_prominence_threshold, distance=DISTANCE)
-    peak_locations = peak_characteristics[0]
-    peak_prominences = peak_characteristics[1]['prominences']
-    genuine_peaks = [p for i,p in enumerate(peak_locations) 
-                     if peak_prominences[i] >= RELATIVE_PROMINENCE_THRESHOLD * country_series['new_per_day_smooth'].values[p]]
+
+    peak_characteristics = find_peaks(country_series['new_per_day_smooth'].values, prominence=0, distance=1)
+    trough_characteristics = find_peaks([-x for x in country_series['new_per_day_smooth'].values], prominence=0, distance=1)
+    sub_A = pd.DataFrame(data=np.transpose([np.append(peak_characteristics[0], trough_characteristics[0]),
+                                          np.append(peak_characteristics[1]['prominences'], trough_characteristics[1]['prominences'])]),
+                       columns=['location','prominence'])
+    sub_A = sub_A.sort_values(by='location').reset_index(drop=True)
+    sub_A.loc[0:len(sub_A)-2,'distance'] = np.diff(sub_A['location'])
     
+    if len(sub_A)==0 or max(sub_A['distance'])<T_SEP_A:
+        genuine_peaks=[]
+    else:
+        # repeat until the smallest horizontal separation meets T_SEP_A
+        while min(sub_A['distance'])<T_SEP_A:
+            # sort the peak/trough candidates by prominence, retaining the location index
+            sub_A = sub_A.sort_values(by=['prominence','distance']).reset_index(drop=False)
+            # remove the lowest prominence candidate with horizontal separation < T_SEP_A
+            x=min(sub_A[sub_A['distance']<T_SEP_A].index)
+            i=sub_A.loc[x,'index']
+            sub_A.drop(index=x,inplace=True)
+            # remove whichever adjacent candidate has the lower prominence. If tied, remove the earlier.
+            if i==0:
+                sub_A = sub_A.loc[sub_A['index']!=i+1,['prominence','location']]
+            elif i==len(sub_A):
+                sub_A = sub_A.loc[sub_A['index']!=i-1,['prominence','location']]
+            elif sub_A.loc[sub_A['index']==i+1,'prominence'].values[0] >= sub_A.loc[sub_A['index']==i-1,'prominence'].values[0]:
+                sub_A = sub_A.loc[sub_A['index']!=i-1,['prominence','location']]
+            else:
+                sub_A = sub_A.loc[sub_A['index']!=i+1,['prominence','location']]
+            #re-sort by location and recalculate distace
+            sub_A = sub_A.sort_values(by='location').reset_index(drop=True)
+            sub_A.loc[0:len(sub_A)-2,'distance'] = np.diff(sub_A['location'])
+        # filter out troughs
+        sub_A=sub_A.loc[sub_A.index%2==0,:]
+        
+        # filter by prominence threshold
+        peak_locations=sub_A.loc[sub_A['prominence']>=cases_prominence_threshold,'location']
+        peak_locations=[int(x) for x in peak_locations.values]
+        peak_prominences=sub_A.loc[sub_A['prominence']>=cases_prominence_threshold,'prominence'].values
+        
+        # filter by relative prominence threshold
+        genuine_peaks = [p for i,p in enumerate(peak_locations) 
+                         if peak_prominences[i] >= RELATIVE_PROMINENCE_THRESHOLD * country_series['new_per_day_smooth'].values[p]]
+        
     # Label country wave status
     if country in exclude_countries:
         data['class'] = 0
@@ -695,19 +720,7 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         data['date_dead_peak_2'] = country_series['date'].values[dead_genuine_peaks[1]]
         data['dead_second_wave_start'] = country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[1]])]
         data['dead_second_wave_end'] = country_series['date'].values[min([b for b in bases if b>dead_genuine_peaks[1]])]
-    # Classify wave status for tests
-    if data['testing_available']:
-        # Get kendall's correlation tau: Confirmed on Deaths (forward 14 days), vs. Confirmed on Tests. If tests explains more of the variance, may indicate 2nd wave is test driven.
-        X = country_series['dead_per_day']
-        y = country_series['new_per_day']
-        X = np.array(X.iloc[DEATH_LAG:]).reshape(-1,1)     # X day lag from confirmed to death
-        y = y.iloc[:-DEATH_LAG]
-        data['tau_dead'],data['tau_p_dead'] = kendalltau(X,y)
-        X = country_series[['new_per_day','new_tests']].dropna(how='any')
-        y = X['new_per_day']
-        X = np.array(X['new_tests']).reshape(-1,1)     # assume no lag from test to confirmed
-        data['tau_tests'],data['tau_p_tests'] = kendalltau(X,y)
-        
+
     # Calculate average daily cases, deaths and tests during 30 day period before first and second wave
     if data['testing_available']:
         start_date = min(country_series[['date','confirmed','dead','new_tests']].dropna()['date'])
@@ -728,11 +741,6 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                    (country_series['date']<=data['date_peak_1']) &
                                    (country_series['date']>=data['date_peak_1']-datetime.timedelta(days=30)),
                                    ['date','confirmed','dead','new_tests']]
-    if data['class'] >= 1 and len(first) >= 14:
-        data['confirmed_30d_avg_before_first_peak'] = (first.iloc[-1]['confirmed'] - first.iloc[0]['confirmed']) / len(first)
-        data['dead_30d_avg_before_first_peak'] = (first.iloc[-1]['dead'] - first.iloc[0]['dead']) / len(first)
-        if data['testing_available']:
-            data['tests_30d_avg_before_first_peak'] = np.nanmean(first['new_tests'])
      # For second wave, take the 30 days before the second peak, or if entering second wwave then the last 30 days of time series
     if data['class'] == 3: 
         second = country_series.loc[(country_series['date']>=start_date) &
@@ -745,11 +753,6 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
                                    (country_series['date']<=data['date_peak_2']) &
                                    (country_series['date']>=data['date_peak_2']-datetime.timedelta(days=30)),
                                    ['date','confirmed','dead','new_tests']]
-    if data['class'] >= 3 and len(second) >= 14:
-        data['confirmed_30d_avg_before_second_peak'] = (second.iloc[-1]['confirmed'] - second.iloc[0]['confirmed']) / len(second)
-        data['dead_30d_avg_before_second_peak'] = (second.iloc[-1]['dead'] - second.iloc[0]['dead']) / len(second)
-        if data['testing_available']:
-            data['tests_30d_avg_before_second_peak'] = np.nanmean(second['new_tests'])
     
     if SAVE_PLOTS:
         f, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
@@ -787,7 +790,7 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         axes[2].set_title('Tests per Day')
         axes[2].set_ylabel('Tests per Day')
         f.suptitle('Cases, Deaths and Tests per Day for ' + data['country'])
-        if data['class'] <= 6:
+        if data['class'] <= MAX_CLASS:
             plt.savefig(PLOT_PATH + 'epidemiological/class_' +str(data['class']) +'/' + data['country'] + '.png')
         else:
             plt.savefig(PLOT_PATH + 'epidemiological/class_other' + '/' + data['country'] + '.png')
@@ -882,7 +885,8 @@ for country in tqdm(countries,desc='Processing Gov Response Panel Data'):
                  data[flag + '_at_t0'] = country_series.loc[country_series['date']==t0,flag].values[0]
                  data[flag + '_days_to_threshold'] = (min(country_series.loc[country_series[flag]>=flag_thresholds[flag],'date']) - t0).days \
                                                       if sum(country_series[flag]>=flag_thresholds[flag]) > 0 else np.nan
-        if not (pd.isnull(date_peak_1) or pd.isnull(first_wave_start) or pd.isnull(first_wave_end)):
+        if not (pd.isnull(date_peak_1) or pd.isnull(first_wave_start) or pd.isnull(first_wave_end)) \
+        and date_peak_1 in country_series['date']:
             # SI value at peak date
             data['si_at_peak_1'] = country_series.loc[country_series['date']==date_peak_1,'si'].values[0]
             # number of days SI above the threshold during the first wave
@@ -1308,58 +1312,6 @@ if SAVE_CSV:
     figure_4a.to_csv(CSV_PATH + 'figure_4a.csv', sep=',')
 
 
-# -------------------------------------------------------------------------------------------------------------------- #
-'''
-PART 7 - FIGURE 4b LASAGNA PLOT
-'''
-usa_t0 = epidemiology_panel[epidemiology_panel['countrycode'] == 'USA']['t0_relative'].iloc[0]
-map_discrete_step = 5
-figure_4b = usa_cases.merge(translation_csv[['input_adm_area_1', 'input_adm_area_2', 'gid']],
-            left_on=['state', 'county'], right_on=['input_adm_area_1', 'input_adm_area_2'], how='left').merge(
-            usa_populations[['FIPS', 'Lat', 'Long_']], left_on=['fips'], right_on=['FIPS'], how='left')
-
-figure_4b = figure_4b[['fips', 'Long_', 'date', 'cases']]
-figure_4b['date'] = (figure_4b['date'].apply(
-    lambda x: datetime.datetime.strptime(x, '%Y-%m-%d').date())-usa_t0).apply(lambda x:x.days)
-figure_4b = figure_4b.sort_values\
-    (by=['Long_', 'date', 'fips'], ascending=[True, True, True]).dropna(subset=['fips', 'Long_'])
-
-figure_4b['long_discrete'] = figure_4b['Long_'].apply(lambda x: map_discrete_step * round(x / map_discrete_step))
-figure_4b = figure_4b[figure_4b['long_discrete'] >= -125]
-
-figure_4b = figure_4b.set_index(['fips','date'])
-figure_4b = figure_4b.sort_index()
-figure_4b['new_cases_per_day'] = np.nan
-for idx in figure_4b.index.levels[0]:
-    figure_4b['new_cases_per_day'][idx] = figure_4b['cases'][idx].diff()
-figure_4b = figure_4b.reset_index()[['date', 'long_discrete', 'new_cases_per_day', 'fips']]
-figure_4b['new_cases_per_day'] = figure_4b['new_cases_per_day'].clip(lower=0, upper=None)
-
-heatmap = figure_4b[['date', 'long_discrete', 'new_cases_per_day']].groupby(
-    by=['date', 'long_discrete'], as_index=False).sum()
-heatmap = heatmap[heatmap['date'] >= 0]
-bins = np.arange(heatmap['long_discrete'].min(),
-                 heatmap['long_discrete'].max() + map_discrete_step, step=map_discrete_step)
-
-emptyframe = pd.DataFrame(columns=['date', 'long_discrete', 'new_cases_per_day'])
-emptyframe['date'] = np.repeat(np.unique(heatmap['date']), len(bins))
-emptyframe['long_discrete'] = np.tile(bins, len(np.unique(heatmap['date'])))
-emptyframe['new_cases_per_day'] = np.zeros(len(emptyframe['long_discrete']))
-figure_4b = emptyframe.merge(
-    heatmap, on=['date', 'long_discrete'], how='left', suffixes=['_', '']).fillna(0)[
-    ['date', 'long_discrete', 'new_cases_per_day']]
-
-figure_4b = pd.pivot_table(figure_4b,index=['date'],columns=['long_discrete'],values=['new_cases_per_day'])
-figure_4b = figure_4b.reindex(index=figure_4b.index[::-1]).values.astype(int)
-figure_4b = resize(figure_4b, (150, 150))
-
-plt.figure(figsize=(10,10))
-plt.imshow(figure_4b, cmap='plasma', interpolation='nearest')
-plt.ylabel('Days Since T0')
-plt.xlabel('Longitude')
-plt.xticks([0, 75, 150], [-125, -95, -65])
-plt.yticks([0, 75, 150], [186, 93, 0])
-plt.savefig(PLOT_PATH + 'lasgna.png')
 # -------------------------------------------------------------------------------------------------------------------- #
 '''
 PART 8 - SAVING TABLE 1
