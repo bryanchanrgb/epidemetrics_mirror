@@ -4,11 +4,11 @@ import psycopg2
 import pandas as pd
 import geopandas as gpd
 import os
+from math import floor
 import shutil
 import warnings
 from tqdm import tqdm
 import datetime
-from skimage.transform import resize
 from scipy.signal import find_peaks
 from sklearn.linear_model import LinearRegression
 
@@ -23,7 +23,8 @@ SAVE_CSV = True
 PLOT_PATH = './plots/'
 CSV_PATH = './data/'
 SMOOTH = 0.001
-T_SEP_A = 10.5  # Number of days apart between peak and trough for sub-algorithm A
+T_SEP = 21  # Minimum number of days apart between peaks for sub-algorithm A
+V_SEP = 0  # Minimum vertical distance for sub-algorithm B
 DISTANCE = 21       # Number of days apart 2 peaks must at least be for both to be considered genuine
 ABS_PROMINENCE_THRESHOLD =  55      # Minumum prominence threshold (in absolute number of new cases)
 ABS_PROMINENCE_THRESHOLD_UPPER =  500      # Prominence threshold (in absolute number of new cases)
@@ -514,8 +515,93 @@ if SAVE_PLOTS: # Create directories for saving plots, remove any existing plots
 exclude_countries = ['CMR','COG','GNQ','BWA','ESH']
 # Some countries also have poor data quality, but the overall shape of the wave is still visible:
 # KGZ, CHL, NIC, KAZ, ECU, CHN
+#%%
+def sub_algo_A(time_series, T_SEP):
+    """Sub algorithm A finds peaks in a time series and filters out any peaks and troughs that are less than a minimum duration (distance between a peak and the next peak), prioritising to keep those with highest prominence.
+    \nInputs:
+    \ntime_series=time_series=time series of observations with location indices to find peaks on.
+    \nT_SEP=minimum duration required for any peak or trough to not be filtered out.
+    \nReturns: Dataframe of remaining peaks and troughs after filtering, with locations, prominences and durations."""
+    peak_characteristics = find_peaks(time_series.values, prominence=0, distance=1)
+    trough_characteristics = find_peaks([-x for x in time_series.values], prominence=0, distance=1)
+    locations = np.append(time_series.index[peak_characteristics[0]], time_series.index[trough_characteristics[0]])
+    prominences = np.append(peak_characteristics[1]['prominences'], trough_characteristics[1]['prominences'])
+    df = pd.DataFrame(data=np.transpose([locations,prominences]),
+                      columns=['location','prominence'])
+    df['peak_trough_ind']=np.append(['peak']*len(peak_characteristics[0]),['trough']*len(trough_characteristics[0]))
+    df = df.sort_values(by='location').reset_index(drop=True)
+    # if there are fewer than 3 points, the algorithm cannot be run, return nothing
+    if len(df)<3:
+        remaining_extrema=pd.DataFrame(columns=['location','prominence','duration','index','peak_trough_ind'])
+    else:
+        # calculate the duration of extrema i as the distance between the extrema to the left and to the right of i
+        for i in range(1,len(df)-1):
+            df.loc[i,'duration'] = df.loc[i+1,'location'] - df.loc[i-1,'location']
+        # remove peaks and troughs until the smallest duration meets T_SEP
+        while np.nanmin(df['duration'])<T_SEP and len(df)>=3:
+            # sort the peak/trough candidates by prominence, retaining the location index
+            df = df.sort_values(by=['prominence','duration']).reset_index(drop=False)
+            # remove the lowest prominence candidate with duraction < T_SEP
+            x=min(df[df['duration']<T_SEP].index)
+            i=df.loc[x,'index']
+            df.drop(index=x,inplace=True)
+            # remove whichever adjacent candidate has the lower prominence. If tied, remove the earlier.
+            if df.loc[df['index']==i+1,'prominence'].values[0] >= df.loc[df['index']==i-1,'prominence'].values[0]:
+                df = df.loc[df['index']!=i-1,['prominence','location','peak_trough_ind']]
+            else:
+                df = df.loc[df['index']!=i+1,['prominence','location','peak_trough_ind']]
+            # re-sort by location and recalculate duration
+            df = df.sort_values(by='location').reset_index(drop=True)
+            if len(df)>=3:
+                for i in range(1,len(df)-1):
+                    df.loc[i,'duration'] = df.loc[i+1,'location'] - df.loc[i-1,'location']
+            else:
+                df['duration']=[np.nan]*len(df)
+        remaining_extrema=df
+    return remaining_extrema
 
-
+def sub_algo_B(sub_A_output, time_series, T_SEP, V_SEP):
+    """Sub algorithm B filters out any peak-trough pairs that are less than a minimum distance apart, prioritising to keep pairs with highest vertical distance between them.
+    \nInputs:
+    \nsub_A_output=dataframe returned by sub_algo_A containing peak candidate locations to be passed to sub_algo_B.
+    \ntime_series=original time series of observations, with location indices.
+    \nT_SEP=minimum distance required between an adjacent peak and trough.
+    \nV_SEP=minimum vertical separation between a peak and trough to filter them out.
+    \nReturns: Dataframe of remaining peaks and troughs after filtering, with locations, prominences and durations."""
+    # pass the peak candidates after filtering by sub A to sub B. Loop until all >=V_SEP and <T_SEP/2 are filtered out.
+    sub_B_continue = True
+    remaining_extrema = sub_A_output
+    og_dict=dict()
+    while sub_B_continue == True:
+        remaining_extrema.loc[0:len(remaining_extrema)-2,'separation'] = np.diff(remaining_extrema['location'])
+        remaining_extrema.loc[:,'y_position'] = time_series[remaining_extrema['location']].values
+        remaining_extrema.loc[0:len(remaining_extrema)-2,'y_distance'] = [abs(x) for x in np.diff(remaining_extrema['y_position'])]
+        remaining_extrema = remaining_extrema.sort_values(by='y_distance').reset_index(drop=False)
+        sub_B_continue = False
+        for x in remaining_extrema.index:
+            if remaining_extrema.loc[x,'y_distance']>=V_SEP and remaining_extrema.loc[x,'separation']<T_SEP/2:
+                sub_B_continue = True
+                i=remaining_extrema.loc[x,'index']
+                og_0 = remaining_extrema.loc[remaining_extrema['index']==i,'location'].values[0]
+                og_1 = remaining_extrema.loc[remaining_extrema['index']==i+1,'location'].values[0]
+                t_0 = floor((og_0 + og_1 - T_SEP)/2)
+                t_1 = floor((og_0 + og_1 + T_SEP)/2)
+                # store the original locations to restore them at the end
+                og_dict[len(og_dict)]=[og_0,t_0,og_1,t_1]
+                remaining_extrema.loc[remaining_extrema['index']==i,'location'] = t_0
+                remaining_extrema.loc[remaining_extrema['index']==i+1,'location'] = t_1
+                # run the indices list (adding start and end of the time series to the list) through find_peaks again
+                locations = np.sort(np.append(remaining_extrema['location'],
+                                              [min(time_series[~np.isnan(time_series)].index),
+                                               max(time_series[~np.isnan(time_series)].index)]))
+                # run the resulting peaks through sub algorithm A again
+                remaining_extrema = sub_algo_A(time_series[locations], T_SEP)
+                break
+    for g in sorted(og_dict,reverse=True):
+        remaining_extrema.loc[remaining_extrema['location']==og_dict[g][1],'location']=og_dict[g][0]
+        remaining_extrema.loc[remaining_extrema['location']==og_dict[g][3],'location']=og_dict[g][2]
+    return remaining_extrema
+#%%
 countries = epidemiology['countrycode'].unique()
 for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data = dict()
@@ -539,7 +625,6 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     country_series = epidemiology_series[epidemiology_series['countrycode'] == country].reset_index(drop=True)
     if len(country_series) < DISTANCE: # If the time series does not have sufficient length, skip the country
         continue
-    
     data['country'] = country_series['country'].iloc[0]
     data['population'] = np.nan if len(wb_statistics[wb_statistics['countrycode'] == country]) == 0 else \
         wb_statistics[wb_statistics['countrycode'] == country]['value'].values[0]
@@ -555,53 +640,28 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         country_series[country_series['dead']>=5]['date'].iloc[0]
     data['t0_10_dead'] = np.nan if len(country_series[country_series['dead']>=10]['date']) == 0 else \
         country_series[country_series['dead']>=10]['date'].iloc[0]
+    data['last_confirmed'] = country_series['confirmed'].iloc[-1]
+    data['last_dead'] = country_series['dead'].iloc[-1]
+    data['testing_available'] = True if len(country_series['new_tests'].dropna()) > 0 else False
 
+    # define the prominence thresholds to be used for the country
     cases_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD,min(POP_PROMINENCE_THRESHOLD*data['population']/10000,
                                                                   ABS_PROMINENCE_THRESHOLD_UPPER))
+    time_series = country_series['new_per_day_smooth']
+    # run the peak candidates through sub algorithm A and sub algorithm B
+    remaining_extrema = sub_algo_A(time_series, T_SEP)
+    remaining_extrema = sub_algo_B(remaining_extrema, time_series, T_SEP, V_SEP)
+    # filter out troughs
+    remaining_extrema = remaining_extrema.sort_values(by='location').reset_index(drop=True)
+    remaining_peaks=remaining_extrema.loc[remaining_extrema['peak_trough_ind']=='peak',]
+    # filter by prominence threshold
+    locations=remaining_peaks.loc[remaining_peaks['prominence']>=cases_prominence_threshold,'location']
+    locations=[int(x) for x in locations.values]
+    prominences=remaining_peaks.loc[remaining_peaks['prominence']>=cases_prominence_threshold,'prominence'].values
+    # filter by relative prominence threshold
+    genuine_peaks = [p for i,p in enumerate(locations) 
+                        if prominences[i] >= RELATIVE_PROMINENCE_THRESHOLD * country_series['new_per_day_smooth'].values[p]]
 
-    peak_characteristics = find_peaks(country_series['new_per_day_smooth'].values, prominence=0, distance=1)
-    trough_characteristics = find_peaks([-x for x in country_series['new_per_day_smooth'].values], prominence=0, distance=1)
-    sub_A = pd.DataFrame(data=np.transpose([np.append(peak_characteristics[0], trough_characteristics[0]),
-                                          np.append(peak_characteristics[1]['prominences'], trough_characteristics[1]['prominences'])]),
-                       columns=['location','prominence'])
-    sub_A = sub_A.sort_values(by='location').reset_index(drop=True)
-    sub_A.loc[0:len(sub_A)-2,'distance'] = np.diff(sub_A['location'])
-    
-    if len(sub_A)==0 or max(sub_A['distance'])<T_SEP_A:
-        genuine_peaks=[]
-    else:
-        # repeat until the smallest horizontal separation meets T_SEP_A
-        while min(sub_A['distance'])<T_SEP_A:
-            # sort the peak/trough candidates by prominence, retaining the location index
-            sub_A = sub_A.sort_values(by=['prominence','distance']).reset_index(drop=False)
-            # remove the lowest prominence candidate with horizontal separation < T_SEP_A
-            x=min(sub_A[sub_A['distance']<T_SEP_A].index)
-            i=sub_A.loc[x,'index']
-            sub_A.drop(index=x,inplace=True)
-            # remove whichever adjacent candidate has the lower prominence. If tied, remove the earlier.
-            if i==0:
-                sub_A = sub_A.loc[sub_A['index']!=i+1,['prominence','location']]
-            elif i==len(sub_A):
-                sub_A = sub_A.loc[sub_A['index']!=i-1,['prominence','location']]
-            elif sub_A.loc[sub_A['index']==i+1,'prominence'].values[0] >= sub_A.loc[sub_A['index']==i-1,'prominence'].values[0]:
-                sub_A = sub_A.loc[sub_A['index']!=i-1,['prominence','location']]
-            else:
-                sub_A = sub_A.loc[sub_A['index']!=i+1,['prominence','location']]
-            #re-sort by location and recalculate distace
-            sub_A = sub_A.sort_values(by='location').reset_index(drop=True)
-            sub_A.loc[0:len(sub_A)-2,'distance'] = np.diff(sub_A['location'])
-        # filter out troughs
-        sub_A=sub_A.loc[sub_A.index%2==0,:]
-        
-        # filter by prominence threshold
-        peak_locations=sub_A.loc[sub_A['prominence']>=cases_prominence_threshold,'location']
-        peak_locations=[int(x) for x in peak_locations.values]
-        peak_prominences=sub_A.loc[sub_A['prominence']>=cases_prominence_threshold,'prominence'].values
-        
-        # filter by relative prominence threshold
-        genuine_peaks = [p for i,p in enumerate(peak_locations) 
-                         if peak_prominences[i] >= RELATIVE_PROMINENCE_THRESHOLD * country_series['new_per_day_smooth'].values[p]]
-        
     # Label country wave status
     if country in exclude_countries:
         data['class'] = 0
@@ -632,29 +692,43 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         # peak_1_dead_per_10k is at the peak date of cases, whereas dead_peak_1_per_10k is at the peak date of deaths
         data['peak_1_dead_per_10k'] = country_series['new_deaths_per_10k'].values[genuine_peaks[0]]
         data['date_peak_1'] = country_series['date'].values[genuine_peaks[0]]
-        bases = np.append(peak_characteristics[1]['left_bases'],peak_characteristics[1]['right_bases'])
+        # run find_peaks again to get left and right bases
+        peak_characteristics = find_peaks(time_series, prominence=cases_prominence_threshold)
+        bases=np.append([peak_characteristics[1]['left_bases'][i] for i in range(0,len(peak_characteristics[0])) if peak_characteristics[0][i] in genuine_peaks],
+                        [peak_characteristics[1]['right_bases'][i] for i in range(0,len(peak_characteristics[0])) if peak_characteristics[0][i] in genuine_peaks])
+        
         # for first wave left base, take the min of: T0, or the closest base to the left
-        data['first_wave_start'] = min(data['t0_1_dead'],country_series['date'].values[max([b for b in bases if b<genuine_peaks[0]])]) \
-                                    if not pd.isnull(data['t0_1_dead']) \
-                                    else country_series['date'].values[max([b for b in bases if b<genuine_peaks[0]])]
-        # for first wave right base, take the closest base to the right
-        data['first_wave_end'] = country_series['date'].values[min([b for b in bases if b>genuine_peaks[0]])]
-        data['duration_first_wave'] = (data['first_wave_end'] - data['first_wave_start']).days
-        data['peak_1_cfr'] = country_series[
-                                 (country_series['date'] >= data['first_wave_start'] +
-                                  datetime.timedelta(days=DEATH_LAG)) &
-                                 (country_series['date'] <= data['first_wave_end'] +
-                                  datetime.timedelta(days=DEATH_LAG))]['dead_per_day_smooth'].sum()/\
-                             country_series[
-                                 (country_series['date'] >= data['first_wave_start']) &
-                                 (country_series['date'] <= data['first_wave_end'])]['new_per_day_smooth'].sum()
-        data['dead_first_wave'] = country_series.loc[country_series['date']==data['first_wave_end'],'dead'].values[0] \
-                                  - country_series.loc[country_series['date']==data['first_wave_start'],'dead'].values[0]
-
-        data['dead_peak_1'] = country_series['dead_per_day_smooth'].values[genuine_peaks[0]]
+        try:
+            data['first_wave_start'] = min(data['t0_1_dead'],country_series['date'].values[max([b for b in bases if b<genuine_peaks[0]])]) \
+                                        if not pd.isnull(data['t0_1_dead']) \
+                                        else country_series['date'].values[max([b for b in bases if b<genuine_peaks[0]])]
+            # for first wave right base, take the closest base to the right
+            data['first_wave_end'] = country_series['date'].values[min([b for b in bases if b>genuine_peaks[0]])]
+            data['duration_first_wave'] = (data['first_wave_end'] - data['first_wave_start']).days
+            data['peak_1_cfr'] = country_series[
+                                     (country_series['date'] >= data['first_wave_start'] +
+                                      datetime.timedelta(days=DEATH_LAG)) &
+                                     (country_series['date'] <= data['first_wave_end'] +
+                                      datetime.timedelta(days=DEATH_LAG))]['dead_per_day_smooth'].sum()/\
+                                 country_series[
+                                     (country_series['date'] >= data['first_wave_start']) &
+                                     (country_series['date'] <= data['first_wave_end'])]['new_per_day_smooth'].sum()
+            data['dead_first_wave'] = country_series.loc[country_series['date']==data['first_wave_end'],'dead'].values[0] \
+                                      - country_series.loc[country_series['date']==data['first_wave_start'],'dead'].values[0]
+        except:
+            print(country+' skipped')
+            data['first_wave_start']=np.nan
+            data['first_wave_end']=np.nan
+            data['duration_first_wave']=np.nan
+            data['peak_1_cfr']=np.nan
+            data['dead_first_wave']=np.nan
     
     if data['class'] >= 3:
-        data['second_wave_start'] = country_series['date'].values[min([b for b in bases if b>genuine_peaks[0]])]
+        try:
+            data['second_wave_start'] = country_series['date'].values[min([b for b in bases if b>genuine_peaks[0]])]
+        except:
+            print(country+' skipped')
+            data['second_wave_start']=np.nan
         data['second_wave_end'] = max(country_series['date'])
         data['duration_second_wave'] = (data['second_wave_end'] - data['second_wave_start']).days
 
@@ -663,32 +737,42 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
         data['peak_2_per_10k'] = country_series['new_cases_per_10k'].values[genuine_peaks[1]]
         data['peak_2_dead_per_10k'] = country_series['new_deaths_per_10k'].values[genuine_peaks[1]]
         data['date_peak_2'] = country_series['date'].values[genuine_peaks[1]]
-        data['second_wave_start'] = country_series['date'].values[max([b for b in bases if b<genuine_peaks[1]])]
-        data['second_wave_end'] = country_series['date'].values[min([b for b in bases if b>genuine_peaks[1]])]
-        data['peak_2_cfr'] = country_series[
-                                 (country_series['date'] >= data['second_wave_start'] +
-                                  datetime.timedelta(days=DEATH_LAG)) &
-                                 (country_series['date'] <= data['second_wave_end'] +
-                                  datetime.timedelta(days=DEATH_LAG))]['dead_per_day_smooth'].sum()/\
-                             country_series[
-                                 (country_series['date'] >= data['second_wave_start']) &
-                                 (country_series['date'] <= data['second_wave_end'])]['new_per_day_smooth'].sum()
-        data['dead_second_wave'] = country_series.loc[country_series['date']==data['second_wave_end'],'dead'].values[0] \
-                                  - country_series.loc[country_series['date']==data['second_wave_start'],'dead'].values[0]
-        data['dead_peak_2'] = country_series['dead_per_day_smooth'].values[genuine_peaks[1]]
-    data['last_confirmed'] = country_series['confirmed'].iloc[-1]
-    data['last_dead'] = country_series['dead'].iloc[-1]
-    data['testing_available'] = True if len(country_series['new_tests'].dropna()) > 0 else False
-
-    # Classify wave status for deaths
+        try:
+            data['second_wave_start'] = country_series['date'].values[max([b for b in bases if b<genuine_peaks[1]])]
+            data['second_wave_end'] = country_series['date'].values[min([b for b in bases if b>genuine_peaks[1]])]
+            data['peak_2_cfr'] = country_series[
+                                     (country_series['date'] >= data['second_wave_start'] +
+                                      datetime.timedelta(days=DEATH_LAG)) &
+                                     (country_series['date'] <= data['second_wave_end'] +
+                                      datetime.timedelta(days=DEATH_LAG))]['dead_per_day_smooth'].sum()/\
+                                 country_series[
+                                     (country_series['date'] >= data['second_wave_start']) &
+                                     (country_series['date'] <= data['second_wave_end'])]['new_per_day_smooth'].sum()
+            data['dead_second_wave'] = country_series.loc[country_series['date']==data['second_wave_end'],'dead'].values[0] \
+                                      - country_series.loc[country_series['date']==data['second_wave_start'],'dead'].values[0]
+        except:
+            print(country+' skipped')
+            data['second_wave_start']=np.nan
+            data['second_wave_end']=np.nan
+            data['peak_2_cfr']=np.nan
+            data['dead_second_wave']=np.nan
+    # define the prominence thresholds to be used for the country
     dead_prominence_threshold = max(ABS_PROMINENCE_THRESHOLD_DEAD, min(POP_PROMINENCE_THRESHOLD_DEAD * data['population'] / 10000,
                                                                        ABS_PROMINENCE_THRESHOLD_UPPER_DEAD))
-    dead_peak_characteristics = find_peaks(country_series['dead_per_day_smooth'].values,
-                                      prominence=dead_prominence_threshold, distance=DISTANCE)
-    peak_locations = dead_peak_characteristics[0]
-    peak_prominences = dead_peak_characteristics[1]['prominences']
-    dead_genuine_peaks = [p for i,p in enumerate(peak_locations) 
-                     if peak_prominences[i] >= RELATIVE_PROMINENCE_THRESHOLD * country_series['dead_per_day_smooth'].values[p]]
+    time_series = country_series['dead_per_day_smooth']
+    # run the peak candidates through sub algorithm A and sub algorithm B
+    remaining_extrema = sub_algo_A(time_series, T_SEP)
+    remaining_extrema = sub_algo_B(remaining_extrema, time_series, T_SEP, V_SEP)
+    # filter out troughs
+    remaining_extrema = remaining_extrema.sort_values(by='location').reset_index(drop=True)
+    remaining_peaks=remaining_extrema.loc[remaining_extrema['peak_trough_ind']=='peak',]
+    # filter by prominence threshold
+    locations=remaining_peaks.loc[remaining_peaks['prominence']>=dead_prominence_threshold,'location']
+    locations=[int(x) for x in locations.values]
+    prominences=remaining_peaks.loc[remaining_peaks['prominence']>=dead_prominence_threshold,'prominence'].values
+    # filter by relative prominence threshold
+    dead_genuine_peaks = [p for i,p in enumerate(locations) 
+                          if prominences[i] >= RELATIVE_PROMINENCE_THRESHOLD * country_series['dead_per_day_smooth'].values[p]]
 
     # Label class for deaths
     if country in exclude_countries:
@@ -711,49 +795,29 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     
     if len(dead_genuine_peaks) >= 1:
         data['date_dead_peak_1'] = country_series['date'].values[dead_genuine_peaks[0]]
-        bases = np.append(dead_peak_characteristics[1]['left_bases'],dead_peak_characteristics[1]['right_bases'])
-        data['dead_first_wave_start'] = min(data['t0_1_dead'],country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[0]])]) \
-                                        if not pd.isnull(data['t0_1_dead']) \
-                                        else country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[0]])]
-        data['dead_first_wave_end'] = country_series['date'].values[min([b for b in bases if b>dead_genuine_peaks[0]])]
+        
+        # run find_peaks again to get left and right bases
+        dead_peak_characteristics = find_peaks(time_series, prominence=dead_prominence_threshold)
+        bases=np.append([dead_peak_characteristics[1]['left_bases'][i] for i in range(0,len(dead_peak_characteristics[0])) if dead_peak_characteristics[0][i] in dead_genuine_peaks],
+                        [dead_peak_characteristics[1]['right_bases'][i] for i in range(0,len(dead_peak_characteristics[0])) if dead_peak_characteristics[0][i] in dead_genuine_peaks])
+        try:
+            data['dead_first_wave_start'] = min(data['t0_1_dead'],country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[0]])]) \
+                                            if not pd.isnull(data['t0_1_dead']) \
+                                            else country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[0]])]
+            data['dead_first_wave_end'] = country_series['date'].values[min([b for b in bases if b>dead_genuine_peaks[0]])]
+        except:
+            print(country+' skipped dead')
+            data['dead_first_wave_start']=np.nan
+            data['dead_first_wave_end']=np.nan
     if len(dead_genuine_peaks) >= 2:
         data['date_dead_peak_2'] = country_series['date'].values[dead_genuine_peaks[1]]
-        data['dead_second_wave_start'] = country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[1]])]
-        data['dead_second_wave_end'] = country_series['date'].values[min([b for b in bases if b>dead_genuine_peaks[1]])]
-
-    # Calculate average daily cases, deaths and tests during 30 day period before first and second wave
-    if data['testing_available']:
-        start_date = min(country_series[['date','confirmed','dead','new_tests']].dropna()['date'])
-        end_date = max(country_series[['date','confirmed','dead','new_tests']].dropna()['date'])
-    else: # testing data not available
-        start_date = min(country_series[['date','confirmed','dead']].dropna()['date'])
-        end_date = max(country_series[['date','confirmed','dead']].dropna()['date'])
-    # For first wave, take the 30 days before the first peak, or if no first peak then the last 30 days of time series
-    # Mean requires at least 14 days in the period
-    if data['class'] == 1: 
-        first = country_series.loc[(country_series['date']>=start_date) &
-                                   (country_series['date']<=end_date) &
-                                   (country_series['date']>=end_date-datetime.timedelta(days=30)),
-                                   ['date','confirmed','dead','new_tests']]
-    elif data['class'] >= 2:
-        first = country_series.loc[(country_series['date']>=start_date) &
-                                   (country_series['date']<=end_date) &
-                                   (country_series['date']<=data['date_peak_1']) &
-                                   (country_series['date']>=data['date_peak_1']-datetime.timedelta(days=30)),
-                                   ['date','confirmed','dead','new_tests']]
-     # For second wave, take the 30 days before the second peak, or if entering second wwave then the last 30 days of time series
-    if data['class'] == 3: 
-        second = country_series.loc[(country_series['date']>=start_date) &
-                                   (country_series['date']<=end_date) &
-                                   (country_series['date']>=end_date-datetime.timedelta(days=30)),
-                                   ['date','confirmed','dead','new_tests']]
-    elif data['class'] >= 4:
-        second = country_series.loc[(country_series['date']>=start_date) &
-                                   (country_series['date']<=end_date) &
-                                   (country_series['date']<=data['date_peak_2']) &
-                                   (country_series['date']>=data['date_peak_2']-datetime.timedelta(days=30)),
-                                   ['date','confirmed','dead','new_tests']]
-    
+        try:
+            data['dead_second_wave_start'] = country_series['date'].values[max([b for b in bases if b<dead_genuine_peaks[1]])]
+            data['dead_second_wave_end'] = country_series['date'].values[min([b for b in bases if b>dead_genuine_peaks[1]])]
+        except:
+            print(country+' skipped dead')
+            data['dead_second_wave_start']=np.nan
+            data['dead_second_wave_start']=np.nan
     if SAVE_PLOTS:
         f, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
         axes[0].plot(country_series['date'].values,
@@ -798,6 +862,7 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     
     epidemiology_panel = epidemiology_panel.append(data,ignore_index=True)
 
+#%%
 
 mobility_panel = pd.DataFrame(columns=['countrycode','country'] +
                                       [mobility_type + '_max' for mobility_type in mobilities] +
@@ -960,7 +1025,9 @@ class_coarse = {
     3:'EPI_SECOND_WAVE',
     4:'EPI_SECOND_WAVE',
     5:'EPI_THIRD_WAVE',
-    6:'EPI_THIRD_WAVE'
+    6:'EPI_THIRD_WAVE',
+    7:'EPI_FOURTH_WAVE',
+    8:'EPI_FOURTH_WAVE',
 }
 
 # Figure 3a: Scatterplot of cumulative deaths per 10k population (integral of deaths curve) against integral of SI curve
