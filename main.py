@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 import datetime
+import psycopg2
 from tqdm import tqdm
 from csaps import csaps
-import psycopg2
+from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 
 class epidemetrics:
@@ -13,24 +14,28 @@ class epidemetrics:
         self.ma_window = 7
         self.use_splines = False
         self.smooth = 0.001
-        self.flags = {'c1_school_closing': 3,
-                      'c2_workplace_closing': 3,
-                      'c3_cancel_public_events': 2,
-                      'c4_restrictions_on_gatherings': 4,
-                      'c5_close_public_transport': 2,
-                      'c6_stay_at_home_requirements': 2,
-                      'c7_restrictions_on_internal_movement': 2,
-                      'c8_international_travel_controls': 4,
-                      'h2_testing_policy': 3,
-                      'h3_contact_tracing': 2}
+        self.flags = {
+            'c1_school_closing': 3,
+            'c2_workplace_closing': 3,
+            'c3_cancel_public_events': 2,
+            'c4_restrictions_on_gatherings': 4,
+            'c5_close_public_transport': 2,
+            'c6_stay_at_home_requirements': 2,
+            'c7_restrictions_on_internal_movement': 2,
+            'c8_international_travel_controls': 4,
+            'h2_testing_policy': 3,
+            'h3_contact_tracing': 2
+            }
         self.wb_codes = {
             'SP.POP.TOTL': 'value',
             'EN.POP.DNST': 'population_density',
             'NY.GNP.PCAP.PP.KD': 'gni_per_capita',
-            'SM.POP.NETM': 'net_migration'}
+            'SM.POP.NETM': 'net_migration'
+            }
         self.abs_t0_threshold = 1000
         self.rel_t0_threshold = 0.05 # cases per rel_to_constant
         self.rel_to_constant = 10000 # used as population reference for relative t0
+        self.t_sep_a = 10.5
 
         '''
         INITIALISE SERVER CONNECTION
@@ -319,5 +324,56 @@ class epidemetrics:
                 testing = pd.concat((testing, data), ignore_index=True)
         return testing
 
-    def _sub_aglorithm_a(self, country):
-        return
+    def _sub_aglorithm_a(self, country, field='new_per_day_smooth', plot=False):
+        data = self._get_series(country, field)
+        peak = find_peaks(data[field].values, prominence=0, distance=1)
+        trough = find_peaks(-1 * data[field].values, prominence=0, distance=1)
+        sub_a = pd.DataFrame(
+            data=np.array([np.append(peak[0], trough[0]), np.append(peak[1]['prominences'], trough[1]['prominences'])]).T,
+            columns=['location', 'prominence']
+        )
+        # creates the alternating max, min index dictionary
+        sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
+        # creates the distance column
+        sub_a.loc[0:len(sub_a) - 2, 'distance'] = np.diff(sub_a['location'])
+        # if sub_a has no values or if all peaks are within t_sep_a then ignore
+        if (len(sub_a) == 0) or max(sub_a['distance']) < self.t_sep_a:
+            results = list()
+        else:
+            while min(sub_a['distance']) < self.t_sep_a:
+                # multilevel sorting works because distance is in a set of positive integers
+                sub_a = sub_a.sort_values(by=['prominence', 'distance'], ascending=[True, True]).reset_index(drop=False)
+                x = min(sub_a[sub_a['distance'] < self.t_sep_a].index)
+                i = sub_a.loc[x, 'index']
+                sub_a.drop(index=x, inplace=True)
+
+                # remove whichever adjacent candidate has the lower prominence. If tied, remove the earlier.
+                if i == 0:
+                    sub_a = sub_a.loc[sub_a['index'] != i + 1, ['prominence', 'location']]
+                elif i == len(sub_a):
+                    sub_a = sub_a.loc[sub_a['index'] != i - 1, ['prominence', 'location']]
+                elif sub_a.loc[sub_a['index'] == i + 1, 'prominence'].values[0] >= \
+                        sub_a.loc[sub_a['index'] == i - 1, 'prominence'].values[0]:
+                    sub_a = sub_a.loc[sub_a['index'] != i - 1, ['prominence', 'location']]
+                else:
+                    sub_a = sub_a.loc[sub_a['index'] != i + 1, ['prominence', 'location']]
+
+                # unsort the values, and recompute the distances
+                sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
+                sub_a.loc[0:len(sub_a) - 2, 'distance'] = np.diff(sub_a['location'])
+
+            # finally remove the troughs
+            sub_a = sub_a.iloc[::2]
+            # prepare final list of peaks
+            results = list(sub_a['location'].values)
+
+        if plot:
+            plt.plot(data[field].values)
+            plt.scatter(sub_a['location'].values,
+                        data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
+
+        return results
+
+    def _get_series(self, country, field):
+        return self.epidemiology_series[self.epidemiology_series['countrycode']==country][
+            ['date', field]].dropna().reset_index(drop=True)
