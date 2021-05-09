@@ -35,8 +35,9 @@ class epidemetrics:
         self.abs_t0_threshold = 1000
         self.rel_t0_threshold = 0.05 # cases per rel_to_constant
         self.rel_to_constant = 10000 # used as population reference for relative t0
-        self.t_sep_a = 10.5
+        self.t_sep_a = 21
         self.v_sep_b = 10 # v separation for sub algorithm B
+        self.d_match = 28 # matching window for undetected case based waves on death waves
 
         '''
         INITIALISE SERVER CONNECTION
@@ -325,55 +326,48 @@ class epidemetrics:
                 testing = pd.concat((testing, data), ignore_index=True)
         return testing
 
-    def _sub_aglorithm_a(self, country, field='new_per_day_smooth', plot=False):
-        data = self._get_series(country, field)
-        peak = find_peaks(data[field].values, prominence=0, distance=1)
-        trough = find_peaks(-1 * data[field].values, prominence=0, distance=1)
-        sub_a = pd.DataFrame(
-            data=np.array([np.append(peak[0], trough[0]), np.append(peak[1]['prominences'], trough[1]['prominences'])]).T,
-            columns=['location', 'prominence']
-        )
-        # creates the alternating max, min index dictionary
-        sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
-        # creates the distance column
-        sub_a.loc[0:len(sub_a) - 2, 'distance'] = np.diff(sub_a['location'])
-        # if sub_a has less than three values or if all peaks are within t_sep_a then ignore
-        if (len(sub_a) < 3) or max(sub_a['distance']) < self.t_sep_a:
-            results = list()
+    def _sub_algorithm_a(self, country, field='new_per_day_smooth', plot=False, override=None):
+        if type(override) == pd.core.frame.DataFrame:
+            data = override.copy()
         else:
-            while (np.nanmin(sub_a['distance'].values) < self.t_sep_a) and len(sub_a) >= 3:
-                # multilevel sorting works because distance is in a set of positive integers
-                sub_a = sub_a.sort_values(by=['prominence', 'distance'], ascending=[True, True]).reset_index(drop=False)
-                x = min(sub_a[sub_a['distance'] < self.t_sep_a].index)
+            data = self._get_series(country, field)
+        peak = find_peaks(data[field].values, prominence=0, distance=1)
+        trough = find_peaks([-x for x in data[field].values], prominence=0, distance=1)
+        sub_a = pd.DataFrame(data=np.transpose([np.append(data.index[peak[0]], data.index[trough[0]]),
+                                      np.append(peak[1]['prominences'], trough[1]['prominences'])]),
+                             columns=['location', 'prominence'])
+        sub_a['peak_ind'] = np.append([1] * len(peak[0]), [0] * len(trough[0]))
+        sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
+        # if there are fewer than 3 points, the algorithm cannot be run, return nothing
+        if len(sub_a) < 3:
+            results = pd.DataFrame(columns=['location', 'prominence', 'duration', 'index', 'peak_ind'])
+        else:
+            # calculate the duration of extrema i as the distance between the extrema to the left and to the right of i
+            for i in range(1, len(sub_a) - 1):
+                sub_a.loc[i, 'duration'] = sub_a.loc[i + 1, 'location'] - sub_a.loc[i - 1, 'location']
+            # remove peaks and troughs until the smallest duration meets T_SEP
+            while np.nanmin(sub_a['duration']) < self.t_sep_a and len(sub_a) >= 3:
+                # sort the peak/trough candidates by prominence, retaining the location index
+                sub_a = sub_a.sort_values(by=['prominence', 'duration']).reset_index(drop=False)
+                # remove the lowest prominence candidate with duration < T_SEP
+                x = min(sub_a[sub_a['duration'] < self.t_sep_a].index)
                 i = sub_a.loc[x, 'index']
                 sub_a.drop(index=x, inplace=True)
-
                 # remove whichever adjacent candidate has the lower prominence. If tied, remove the earlier.
-                if i == 0:
-                    sub_a = sub_a.loc[sub_a['index'] != i + 1, ['prominence', 'location']]
-                elif i == len(sub_a):
-                    sub_a = sub_a.loc[sub_a['index'] != i - 1, ['prominence', 'location']]
-                elif sub_a.loc[sub_a['index'] == i + 1, 'prominence'].values[0] >= \
+                if sub_a.loc[sub_a['index'] == i + 1, 'prominence'].values[0] >= \
                         sub_a.loc[sub_a['index'] == i - 1, 'prominence'].values[0]:
-                    sub_a = sub_a.loc[sub_a['index'] != i - 1, ['prominence', 'location']]
+                    sub_a = sub_a.loc[sub_a['index'] != i - 1, ['prominence', 'location', 'peak_ind']]
                 else:
-                    sub_a = sub_a.loc[sub_a['index'] != i + 1, ['prominence', 'location']]
-
-                # unsort the values, and recompute the distances
+                    sub_a = sub_a.loc[sub_a['index'] != i + 1, ['prominence', 'location', 'peak_ind']]
+                # re-sort by location and recalculate duration
                 sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
-                # recalculate the distances
                 if len(sub_a) >= 3:
                     for i in range(1, len(sub_a) - 1):
-                        sub_a.loc[i, 'distance'] = sub_a.loc[i + 1, 'location'] - sub_a.loc[i - 1, 'location']
+                        sub_a.loc[i, 'duration'] = sub_a.loc[i + 1, 'location'] - sub_a.loc[i - 1, 'location']
                 else:
-                    sub_a['distance'] = np.nan
-                # sub_a.loc[0:len(sub_a) - 2, 'distance'] = np.diff(sub_a['location'])
+                    sub_a['duration'] = np.nan
+            results = sub_a.copy()
 
-            # finally remove the troughs
-            # sub_a = sub_a.iloc[::2]
-            # prepare final list of peaks
-            results = list(sub_a['location'].values)
-        # plot results for validation
         if plot:
             plt.plot(data[field].values)
             plt.scatter(sub_a['location'].values,
@@ -381,9 +375,63 @@ class epidemetrics:
         # results returns a set of peaks and troughs which are at least a minimum distance apart
         return results
 
-    def _sub_algorithm_b(self, country, , field='new_per_day_smooth', plot=False):
+    def _sub_algorithm_b(self, sub_a, country, field='new_per_day_smooth', plot=False):
+        data = self._get_series(country, field)
+        sub_b_flag = True
+        # avoid overwriting sub_a when values replaced by t0 and t1
+        results = sub_a.copy()
+        # dictionary to hold boundaries for peak-trough pairs too close to each other
+        og_dict = dict()
+        while sub_b_flag == True:
+            # separation here refers to temporal distance S_i
+            results.loc[0:len(results) - 2, 'separation'] = np.diff(results['location'])
+            results.loc[:, 'y_position'] = data[field][results['location']].values
+            # compute vertical distance V_i
+            results.loc[0:len(results) - 2, 'y_distance'] = [abs(x) for x in np.diff(results['y_position'])]
+            # sort in ascending order of height
+            results = results.sort_values(by='y_distance').reset_index(drop=False)
+            # set to false until we find an instance where S_i < t_sep_a / 2 and V_i > v_sep_b
+            sub_b_flag = False
+            for x in results.index:
+                if results.loc[x, 'y_distance'] >= self.v_sep_b and results.loc[x, 'separation'] < self.t_sep_a / 2:
+                    sub_b_flag = True
+                    i = results.loc[x, 'index']
+                    og_0 = results.loc[results['index'] == i, 'location'].values[0]
+                    og_1 = results.loc[results['index'] == i + 1, 'location'].values[0]
+                    # creating boundaries t_0 and t_1 around the peak-trough pair
+                    t_0 = np.floor((og_0 + og_1 - self.t_sep_a) / 2)
+                    t_1 = np.floor((og_0 + og_1 + self.t_sep_a) / 2)
+                    # store the original locations to restore them at the end
+                    og_dict[len(og_dict)] = [og_0, t_0, og_1, t_1]
+                    # setting the peak locations to the boundaries to be filtered by sub_algorithm_a
+                    results.loc[results['index'] == i, 'location'] = t_0
+                    results.loc[results['index'] == i + 1, 'location'] = t_1
+                    # run the indices list (adding start and end of the time series to the list) through find_peaks again
+                    locations = np.sort(np.append(results['location'],
+                                                  [min(data[field][~np.isnan(data[field].values)].index),
+                                                   max(data[field][~np.isnan(data[field])].index)]))
+                    # run the resulting peaks through sub algorithm A again
+                    results = self._sub_aglorithm_a(country=country, field=field,
+                                                    plot=False, override=data.iloc[locations])
+                    break
 
-        return
+        for g in sorted(og_dict, reverse=True):
+            results.loc[results['location'] == og_dict[g][1], 'location'] = og_dict[g][0]
+            results.loc[results['location'] == og_dict[g][3], 'location'] = og_dict[g][2]
+
+        if plot:
+            fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, sharex='all')
+            # plot peaks-trough pairs from sub_a
+            ax0.set_title('After Sub Algorithm A')
+            ax0.plot(data[field].values)
+            ax0.scatter(sub_a['location'].values,
+                        data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
+            # plot peaks-trough pairs from sub_b
+            ax1.set_title('After Sub Algorithm B')
+            ax1.plot(data[field].values)
+            ax1.scatter(results['location'].values,
+                        data[field].values[results['location'].values.astype(int)], color='red', marker='o')
+        return results
 
     def _get_series(self, country, field):
         return self.epidemiology_series[self.epidemiology_series['countrycode']==country][
