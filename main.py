@@ -36,6 +36,7 @@ class epidemetrics:
         self.rel_t0_threshold = 0.05 # cases per rel_to_constant
         self.rel_to_constant = 10000 # used as population reference for relative t0
         self.t_sep_a = 10.5
+        self.v_sep_b = 10 # v separation for sub algorithm B
 
         '''
         INITIALISE SERVER CONNECTION
@@ -336,11 +337,11 @@ class epidemetrics:
         sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
         # creates the distance column
         sub_a.loc[0:len(sub_a) - 2, 'distance'] = np.diff(sub_a['location'])
-        # if sub_a has no values or if all peaks are within t_sep_a then ignore
-        if (len(sub_a) == 0) or max(sub_a['distance']) < self.t_sep_a:
+        # if sub_a has less than three values or if all peaks are within t_sep_a then ignore
+        if (len(sub_a) < 3) or max(sub_a['distance']) < self.t_sep_a:
             results = list()
         else:
-            while min(sub_a['distance']) < self.t_sep_a:
+            while (np.nanmin(sub_a['distance'].values) < self.t_sep_a) and len(sub_a) >= 3:
                 # multilevel sorting works because distance is in a set of positive integers
                 sub_a = sub_a.sort_values(by=['prominence', 'distance'], ascending=[True, True]).reset_index(drop=False)
                 x = min(sub_a[sub_a['distance'] < self.t_sep_a].index)
@@ -360,19 +361,29 @@ class epidemetrics:
 
                 # unsort the values, and recompute the distances
                 sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
-                sub_a.loc[0:len(sub_a) - 2, 'distance'] = np.diff(sub_a['location'])
+                # recalculate the distances
+                if len(sub_a) >= 3:
+                    for i in range(1, len(sub_a) - 1):
+                        sub_a.loc[i, 'distance'] = sub_a.loc[i + 1, 'location'] - sub_a.loc[i - 1, 'location']
+                else:
+                    sub_a['distance'] = np.nan
+                # sub_a.loc[0:len(sub_a) - 2, 'distance'] = np.diff(sub_a['location'])
 
             # finally remove the troughs
-            sub_a = sub_a.iloc[::2]
+            # sub_a = sub_a.iloc[::2]
             # prepare final list of peaks
             results = list(sub_a['location'].values)
-
+        # plot results for validation
         if plot:
             plt.plot(data[field].values)
             plt.scatter(sub_a['location'].values,
                         data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
-
+        # results returns a set of peaks and troughs which are at least a minimum distance apart
         return results
+
+    def _sub_algorithm_b(self, country, , field='new_per_day_smooth', plot=False):
+
+        return
 
     def _get_series(self, country, field):
         return self.epidemiology_series[self.epidemiology_series['countrycode']==country][
