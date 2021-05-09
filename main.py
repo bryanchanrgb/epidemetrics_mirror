@@ -32,9 +32,14 @@ class epidemetrics:
             'NY.GNP.PCAP.PP.KD': 'gni_per_capita',
             'SM.POP.NETM': 'net_migration'
             }
+        # convention - rel refers to metrics normalised by population, abs refers to no normalisation
         self.abs_t0_threshold = 1000
+        self.abs_prominence_threshold = 55 # minimum prominence
         self.rel_t0_threshold = 0.05 # cases per rel_to_constant
+        self.rel_prominence_threshold = 0.05 # prominence relative to rel_to_constant
+        self.rel_prominence_max_threshold = 500 # upper limit on relative prominence
         self.rel_to_constant = 10000 # used as population reference for relative t0
+        self.prominence_height_threshold = 0.7 # prominence must be above a percentage of the peak height
         self.t_sep_a = 21
         self.v_sep_b = 10 # v separation for sub algorithm B
         self.d_match = 28 # matching window for undetected case based waves on death waves
@@ -432,6 +437,44 @@ class epidemetrics:
             ax1.scatter(results['location'].values,
                         data[field].values[results['location'].values.astype(int)], color='red', marker='o')
         return results
+
+    def _sub_algorithm_c(self, sub_a, sub_b, country, field='new_per_day_smooth', plot=False):
+        data = self._get_series(country, field)
+        population = self.wbi_table[self.wbi_table['countrycode'] == country]['value'].values[0]
+        # prominence filter will use the larger of the absolute prominence threshold and relative prominence threshold
+        # we cap the relative prominence threshold to rel_prominence_max_threshold
+        prominence_threshold = max(self.abs_prominence_threshold,
+                                         min(self.rel_prominence_threshold * population / self.rel_to_constant,
+                                             self.rel_prominence_max_threshold))
+        results = sub_b.copy()
+        results = sub_b.sort_values(by='location').reset_index(drop=True)
+        # filter out troughs and peaks below prominence threshold
+        results = results[(results['peak_ind'] == 1) & (results['prominence'] >= prominence_threshold)]
+        # filter out relatively low prominent peaks
+        results = results[(results['prominence'] >= self.prominence_height_threshold * results['y_position'])]
+
+        if plot:
+            fig, (ax0, ax1, ax2) = plt.subplots(nrows=1, ncols=3)
+            # plot peaks-trough pairs from sub_a
+            ax0.set_title('After Sub Algorithm A')
+            ax0.plot(data[field].values)
+            ax0.scatter(sub_a['location'].values,
+                        data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
+            # plot peaks-trough pairs from sub_b
+            ax1.set_title('After Sub Algorithm B')
+            ax1.plot(data[field].values)
+            ax1.scatter(sub_b['location'].values,
+                        data[field].values[sub_b['location'].values.astype(int)], color='red', marker='o')
+            # plot peaks from sub_c
+            ax2.set_title('After Sub Algorithm C & D')
+            ax2.plot(data[field].values)
+            ax2.scatter(results['location'].values,
+                        data[field].values[results['location'].values.astype(int)], color='red', marker='o')
+        return results
+
+    def _find_peaks(self, country, plot=False, save=False):
+
+        return
 
     def _get_series(self, country, field):
         return self.epidemiology_series[self.epidemiology_series['countrycode']==country][
