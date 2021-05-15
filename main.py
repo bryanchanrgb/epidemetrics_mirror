@@ -35,9 +35,12 @@ class epidemetrics:
         # convention - rel refers to metrics normalised by population, abs refers to no normalisation
         self.abs_t0_threshold = 1000
         self.abs_prominence_threshold = 55 # minimum prominence
+        self.abs_prominence_threshold_dead = 5 # minimum prominence for dead peak detection
         self.rel_t0_threshold = 0.05 # cases per rel_to_constant
         self.rel_prominence_threshold = 0.05 # prominence relative to rel_to_constant
+        self.rel_prominence_threshold_dead = 0.0015 # prominence threshold for dead rel_to_constant
         self.rel_prominence_max_threshold = 500 # upper limit on relative prominence
+        self.rel_prominence_max_threshold_dead = 50 # upper limit on relative prominencce
         self.rel_to_constant = 10000 # used as population reference for relative t0
         self.prominence_height_threshold = 0.7 # prominence must be above a percentage of the peak height
         self.t_sep_a = 21
@@ -413,9 +416,9 @@ class epidemetrics:
                     results.loc[results['index'] == i, 'location'] = t_0
                     results.loc[results['index'] == i + 1, 'location'] = t_1
                     # run the indices list (adding start and end of the time series to the list) through find_peaks again
-                    locations = np.sort(np.append(results['location'],
+                    locations = np.clip(np.sort(np.append(results['location'],
                                                   [min(data[field][~np.isnan(data[field].values)].index),
-                                                   max(data[field][~np.isnan(data[field])].index)]))
+                                                   max(data[field][~np.isnan(data[field])].index)])), 0, len(data) - 1)
                     # run the resulting peaks through sub algorithm A again
                     results = self._sub_algorithm_a(country=country, field=field,
                                                     plot=False, override=data.iloc[locations])
@@ -442,11 +445,20 @@ class epidemetrics:
     def _sub_algorithm_c(self, sub_a, sub_b, country, field='new_per_day_smooth', plot=False):
         data = self._get_series(country, field)
         population = self.wbi_table[self.wbi_table['countrycode'] == country]['value'].values[0]
+        if field == 'dead_per_day_smooth':
+            abs_prominence_threshold = self.abs_prominence_threshold_dead
+            rel_prominence_threshold = self.rel_prominence_threshold_dead
+            rel_prominence_max_threshold = self.rel_prominence_max_threshold_dead
+        else:
+            abs_prominence_threshold = self.abs_prominence_threshold
+            rel_prominence_threshold = self.rel_prominence_threshold
+            rel_prominence_max_threshold = self.rel_prominence_max_threshold
+
         # prominence filter will use the larger of the absolute prominence threshold and relative prominence threshold
         # we cap the relative prominence threshold to rel_prominence_max_threshold
-        prominence_threshold = max(self.abs_prominence_threshold,
-                                         min(self.rel_prominence_threshold * population / self.rel_to_constant,
-                                             self.rel_prominence_max_threshold))
+        prominence_threshold = max(abs_prominence_threshold,
+                                   min(rel_prominence_threshold * population / self.rel_to_constant,
+                                       rel_prominence_max_threshold))
         results = sub_b.copy()
         results = sub_b.sort_values(by='location').reset_index(drop=True)
         # filter out troughs and peaks below prominence threshold
@@ -495,7 +507,7 @@ class epidemetrics:
                 # potential candidates for peaks are those within range in cases_sub_b
                 candidates = cases_sub_b[
                     (cases_sub_b['location'] >= death_peak - self.d_match) & (cases_sub_b['location'] <= death_peak)]
-                results = results.append(candidates.loc[candidates['prominence'].argmax()])
+                results = results.append(candidates.iloc[candidates['prominence'].argmax()])
                 continue
             # if nothing, could use max - but might violate t_sep rule...
             else:
@@ -615,7 +627,16 @@ class epidemetrics:
                 plt.close('all')
         return
 
+    def _classify(self):
+        return
+
     def main(self):
+        countries = self.testing['countrycode'].unique()
+        for country in tqdm(countries, desc='Plotting all charts'):
+            try:
+                self._find_peaks(country, plot=True, save=True)
+            except:
+                print(country)
         return
 
     def _get_series(self, country, field):
