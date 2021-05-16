@@ -6,6 +6,7 @@ from tqdm import tqdm
 from csaps import csaps
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 class epidemetrics:
     def __init__(self):
@@ -47,6 +48,11 @@ class epidemetrics:
         self.v_sep_b = 10 # v separation for sub algorithm B
         self.d_match = 35 # matching window for undetected case waves based on death waves
         self.plot_path = './plots/algorithm_results/'
+        self.exclude_countries = ['CMR','COG','GNQ','BWA','ESH'] # countries with low quality data to be ignored
+        self.class_1_threshold = 55 # minimum number of absolute cases to be considered going into first wave
+        self.class_1_threshold_dead = 5
+        self.debug_death_lag = 9 # death lag for case-death ascertainment
+        self.debug_countries_of_interest = ['USA', 'GBR', 'BRA', 'IND', 'ESP', 'FRA', 'ZAF']
 
         '''
         INITIALISE SERVER CONNECTION
@@ -134,7 +140,8 @@ class epidemetrics:
             'days_since_t0_pop': np.empty(0),
             'days_since_t0_1_dead': np.empty(0),
             'days_since_t0_5_dead': np.empty(0),
-            'days_since_t0_10_dead': np.empty(0)
+            'days_since_t0_10_dead': np.empty(0),
+            'case_death_ascertainment': np.empty(0)
         }
 
         for country in tqdm(np.sort(epidemiology['countrycode'].unique()),
@@ -157,6 +164,7 @@ class epidemetrics:
             else:
                 ys = epi_data[['new_per_day', 'date']].rolling(window=self.ma_window, on='date').mean()['new_per_day']
                 zs = epi_data[['dead_per_day', 'date']].rolling(window=self.ma_window, on='date').mean()['dead_per_day']
+            # preparing testing data based metrics
             if len(tst_data) > 1:
                 tests = epi_data[['date']].merge(
                     tst_data[['date', 'total_tests']], how='left', on='date')['total_tests'].values
@@ -210,6 +218,8 @@ class epidemetrics:
             # again rel constant represents a population threhsold - 10,000 in the default case
             new_cases_per_rel_constant = self.rel_to_constant * (ys / population)
             new_deaths_per_rel_constant = self.rel_to_constant * (zs / population)
+            # compute case-death ascertaintment
+            case_death_ascertainment = (ys / zs.shift(-9)).values
             # upsert processed data
             epidemiology_series['countrycode'] = np.concatenate((
                 epidemiology_series['countrycode'], epi_data['countrycode'].values))
@@ -253,9 +263,12 @@ class epidemetrics:
                 (epidemiology_series['days_since_t0_5_dead'], days_since_t0_5_dead))
             epidemiology_series['days_since_t0_10_dead'] = np.concatenate(
                 (epidemiology_series['days_since_t0_10_dead'], days_since_t0_10_dead))
+            epidemiology_series['case_death_ascertainment'] = np.concatenate(
+                (epidemiology_series['case_death_ascertainment'], case_death_ascertainment))
             continue
-        return pd.DataFrame.from_dict(epidemiology_series)
 
+        return pd.DataFrame.from_dict(epidemiology_series)
+    # waiting implementation
     def _get_epi_static(self):
         return
 
@@ -460,7 +473,7 @@ class epidemetrics:
                                    min(rel_prominence_threshold * population / self.rel_to_constant,
                                        rel_prominence_max_threshold))
         results = sub_b.copy()
-        results = sub_b.sort_values(by='location').reset_index(drop=True)
+        results = results.sort_values(by='location').reset_index(drop=True)
         # filter out troughs and peaks below prominence threshold
         results = results[(results['peak_ind'] == 1) & (results['prominence'] >= prominence_threshold)]
         # filter out relatively low prominent peaks
@@ -545,12 +558,16 @@ class epidemetrics:
     def _find_peaks(self, country, plot=False, save=False):
         # match parameter tries to use death waves to detect case waves under sub_algorithm_e
         cases = self._get_series(country=country, field='new_per_day_smooth')
+        if len(cases) == 0:
+            raise ValueError
         cases_sub_a = self._sub_algorithm_a(country=country, field='new_per_day_smooth')
         cases_sub_b = self._sub_algorithm_b(cases_sub_a, country=country, field='new_per_day_smooth')
         cases_sub_c = self._sub_algorithm_c(
             sub_a=cases_sub_a, sub_b=cases_sub_b, country=country, field='new_per_day_smooth')
         # compute equivalent series for deaths
         deaths = self._get_series(country=country, field='dead_per_day_smooth')
+        if len(deaths) == 0:
+            raise ValueError
         deaths_sub_a = self._sub_algorithm_a(country=country, field='dead_per_day_smooth')
         deaths_sub_b = self._sub_algorithm_b(deaths_sub_a, country=country, field='dead_per_day_smooth')
         deaths_sub_c = self._sub_algorithm_c(
@@ -625,10 +642,65 @@ class epidemetrics:
             if save:
                 plt.savefig(self.plot_path + country + '.png')
                 plt.close('all')
-        return
+        return cases_sub_e
+    # waiting implementation
+    def _classify(self, country, field='new_per_day_smooth', plot=False):
+        data = self._get_series(country=country, field=field)
+        # class 0 reserved for misbehaving cases
+        if (len(data) < 3) or \
+                (country in self.exclude_countries) or \
+                not(country in self.wbi_table['countrycode'].values):
+            return 0
+        # method _find_peaks is only supported for new_cases_per_day as the cross-validation step requires death per day
+        # for alternative fields the output of sub_algorithm_c is used
+        if field == 'new_per_day_smooth':
+            deaths = self._get_series(country=country, field='dead_per_day_smooth')
+            if len(deaths) < 3:
+                return 0
+            genuine_peaks = self._find_peaks(country, plot=False, save=False)
+        else:
+            sub_a = self._sub_algorithm_a(country, field=field, plot=False)
+            sub_b = self._sub_algorithm_b(sub_a, country, field=field, plot=False)
+            genuine_peaks = self._sub_algorithm_c(sub_a, sub_b, country, field=field, plot=False)
 
-    def _classify(self):
-        return
+        population = self.wbi_table[self.wbi_table['countrycode'] == country]['value'].values[0]
+        if field == 'dead_per_day_smooth':
+            abs_prominence_threshold = self.abs_prominence_threshold_dead
+            rel_prominence_threshold = self.rel_prominence_threshold_dead
+            rel_prominence_max_threshold = self.rel_prominence_max_threshold_dead
+            class_1_threshold = self.class_1_threshold_dead
+        else:
+            abs_prominence_threshold = self.abs_prominence_threshold
+            rel_prominence_threshold = self.rel_prominence_threshold
+            rel_prominence_max_threshold = self.rel_prominence_max_threshold
+            class_1_threshold = self.class_1_threshold
+
+        # prominence filter will use the larger of the absolute prominence threshold and relative prominence threshold
+        # we cap the relative prominence threshold to rel_prominence_max_threshold
+        prominence_threshold = max(abs_prominence_threshold,
+                                   min(rel_prominence_threshold * population / self.rel_to_constant,
+                                       rel_prominence_max_threshold))
+
+        peak_class = 2 * len(genuine_peaks)
+        # if the last value is able to meet the constraints from sub algorithm C, we can
+        if (peak_class > 0) and (genuine_peaks['location'].iloc[-1] < len(data)):
+            last_peak_date = data['date'].values[int(genuine_peaks['location'].iloc[-1])]
+            trough_value = min(data.loc[data['date'] > last_peak_date, 'new_per_day_smooth'])
+            trough_date = data['date'][
+                np.argmin(data.loc[data['date'] > last_peak_date, 'new_per_day_smooth'])]
+            max_after_trough = np.nanmax(
+                data.loc[data['date'] >= trough_date, 'new_per_day_smooth'])
+            if (max_after_trough - trough_value >= prominence_threshold) \
+                    and (max_after_trough - trough_value >= self.prominence_height_threshold * max_after_trough):
+                peak_class += 1
+        elif (peak_class == 0) and not(country in self.exclude_countries):
+            if np.nanmax(data['new_per_day_smooth']) >= class_1_threshold:
+                peak_class += 1
+        else:
+            pass
+
+
+        return peak_class
 
     def main(self):
         countries = self.testing['countrycode'].unique()
@@ -642,3 +714,42 @@ class epidemetrics:
     def _get_series(self, country, field):
         return self.epidemiology_series[self.epidemiology_series['countrycode']==country][
             ['date', field]].dropna().reset_index(drop=True)
+
+    def _debug_case_death_ascertainment_plot(self):
+        n = 50
+        data = self.epidemiology_series[
+            ['countrycode', 'days_since_t0', 'date', 'confirmed', 'case_death_ascertainment']]
+        worst_n_countries = pd.DataFrame.from_records(
+            [{'countrycode': i, 'confirmed': data[data['countrycode']==i]['confirmed'].iloc[-1]}
+             for i in data['countrycode'].unique()]).sort_values(
+            by=['confirmed'], ascending=False).iloc[0:n]['countrycode'].values
+        data_t0 = data[(data['days_since_t0'] >= 0) & (data['countrycode'].isin(worst_n_countries))]
+        data_date = data[(data['date'] >= datetime.date(2020, 3, 1)) & (data['countrycode'].isin(worst_n_countries))]
+        fig, ax = plt.subplots(nrows=2, figsize=(20, 10))
+        for country in worst_n_countries:
+            if country in self.debug_countries_of_interest:
+                ax[0].plot(data_t0[data_t0['countrycode']==country]['days_since_t0'].values,
+                           data_t0[data_t0['countrycode']==country]['case_death_ascertainment'].values,
+                           linewidth=2, label=country)
+                ax[1].plot(data_date[data_date['countrycode']==country]['date'].values,
+                           data_date[data_date['countrycode']==country]['case_death_ascertainment'].values,
+                           linewidth=2, label=country)
+            else:
+                ax[0].plot(data_t0[data_t0['countrycode']==country]['days_since_t0'].values,
+                           data_t0[data_t0['countrycode']==country]['case_death_ascertainment'].values, color='grey',
+                           alpha=0.25, linewidth=1, label='_nolegend_')
+                ax[1].plot(data_date[data_date['countrycode']==country]['date'].values,
+                           data_date[data_date['countrycode']==country]['case_death_ascertainment'].values, color='grey',
+                           alpha=0.25, linewidth=1, label='_nolegend_')
+            ax[0].legend()
+            ax[0].set_xlabel('Days Since T0')
+            ax[0].set_ylabel('New Cases / New Deaths (+9d)')
+            ax[0].set_ylim([0, 1e3])
+            ax[1].legend()
+            ax[1].set_xlabel('Date')
+            ax[1].set_ylabel('New Cases / New Deaths (+9d)')
+            ax[1].set_ylim([0, 1e3])
+        plt.tight_layout()
+        plt.savefig(self.plot_path + 'inverse_cfr.png')
+        plt.close('all')
+        return
