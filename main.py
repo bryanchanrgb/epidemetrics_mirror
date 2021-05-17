@@ -219,7 +219,8 @@ class epidemetrics:
             new_cases_per_rel_constant = self.rel_to_constant * (ys / population)
             new_deaths_per_rel_constant = self.rel_to_constant * (zs / population)
             # compute case-death ascertaintment
-            case_death_ascertainment = (ys / zs.shift(-9)).values
+            case_death_ascertainment = (epi_data['confirmed'].astype(int) /
+                                        epi_data['dead'].astype(int).shift(-9).replace(0, np.nan)).values
             # upsert processed data
             epidemiology_series['countrycode'] = np.concatenate((
                 epidemiology_series['countrycode'], epi_data['countrycode'].values))
@@ -743,12 +744,12 @@ class epidemetrics:
                            alpha=0.25, linewidth=1, label='_nolegend_')
             ax[0].legend()
             ax[0].set_xlabel('Days Since T0')
-            ax[0].set_ylabel('New Cases / New Deaths (+9d)')
-            ax[0].set_ylim([0, 1e3])
+            ax[0].set_ylabel('Cases / Deaths (+9d)')
+            ax[0].set_ylim([0, 1e2])
             ax[1].legend()
             ax[1].set_xlabel('Date')
-            ax[1].set_ylabel('New Cases / New Deaths (+9d)')
-            ax[1].set_ylim([0, 1e3])
+            ax[1].set_ylabel('Cases / Deaths (+9d)')
+            ax[1].set_ylim([0, 1e2])
         plt.tight_layout()
         plt.savefig(self.plot_path + 'inverse_cfr.png')
         plt.close('all')
