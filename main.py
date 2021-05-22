@@ -357,13 +357,15 @@ class epidemetrics:
         peak = find_peaks(data[field].values, prominence=0, distance=1)
         trough = find_peaks([-x for x in data[field].values], prominence=0, distance=1)
         sub_a = pd.DataFrame(data=np.transpose([np.append(data.index[peak[0]], data.index[trough[0]]),
-                                      np.append(peak[1]['prominences'], trough[1]['prominences'])]),
-                             columns=['location', 'prominence'])
+                                      np.append(peak[1]['prominences'], trough[1]['prominences']),
+                                      np.append(data.index[peak[1]['left_bases']], data.index[trough[1]['left_bases']]),
+                                      np.append(data.index[peak[1]['right_bases']], data.index[trough[1]['right_bases']])]),
+                             columns=['location', 'prominence','left_base','right_base'])
         sub_a['peak_ind'] = np.append([1] * len(peak[0]), [0] * len(trough[0]))
         sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
         # if there are fewer than 3 points, the algorithm cannot be run, return nothing
         if len(sub_a) < 3:
-            results = pd.DataFrame(columns=['location', 'prominence', 'duration', 'index', 'peak_ind'])
+            results = pd.DataFrame(columns=['location', 'prominence', 'duration','left_base','right_base', 'index', 'peak_ind'])
         else:
             # calculate the duration of extrema i as the distance between the extrema to the left and to the right of i
             for i in range(1, len(sub_a) - 1):
@@ -379,9 +381,9 @@ class epidemetrics:
                 # remove whichever adjacent candidate has the lower prominence. If tied, remove the earlier.
                 if sub_a.loc[sub_a['index'] == i + 1, 'prominence'].values[0] >= \
                         sub_a.loc[sub_a['index'] == i - 1, 'prominence'].values[0]:
-                    sub_a = sub_a.loc[sub_a['index'] != i - 1, ['prominence', 'location', 'peak_ind']]
+                    sub_a = sub_a.loc[sub_a['index'] != i - 1, ['prominence', 'location', 'peak_ind', 'left_base', 'right_base']]
                 else:
-                    sub_a = sub_a.loc[sub_a['index'] != i + 1, ['prominence', 'location', 'peak_ind']]
+                    sub_a = sub_a.loc[sub_a['index'] != i + 1, ['prominence', 'location', 'peak_ind', 'left_base', 'right_base']]
                 # re-sort by location and recalculate duration
                 sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
                 if len(sub_a) >= 3:
@@ -521,7 +523,7 @@ class epidemetrics:
                 # potential candidates for peaks are those within range in cases_sub_b
                 candidates = cases_sub_b[
                     (cases_sub_b['location'] >= death_peak - self.d_match) & (cases_sub_b['location'] <= death_peak)]
-                results = results.append(candidates.iloc[candidates['prominence'].argmax()])
+                results = results.append(candidates.loc[candidates.idxmax()['prominence']])
                 continue
             # if nothing, could use max - but might violate t_sep rule...
             else:
@@ -701,7 +703,7 @@ class epidemetrics:
             pass
 
 
-        return peak_class
+        return peak_class, genuine_peaks
 
     def main(self):
         countries = self.testing['countrycode'].unique()
