@@ -73,6 +73,7 @@ class epidemetrics:
         self.wbi_table = self._get_wbi_table()
         self.epidemiology_series = self._get_epi_series(
             epidemiology=self.epidemiology, testing=self.testing, wbi_table=self.wbi_table)
+        self.gsi_table = self._get_gsi_table()
         return
 
     def _get_epi_table(self):
@@ -286,19 +287,26 @@ class epidemetrics:
             data['countrycode'] = country
             data['country'] = np.nan
             data['class'] = np.nan
+            data['class_coarse'] = np.nan # one, two, three or more waves
             data['population'] = np.nan
             data['population_density'] = np.nan
             data['total_confirmed'] = np.nan
             data['total_dead'] = np.nan
+            data['mortality_rate'] = np.nan
+            data['case_rate'] = np.nan
+            data['peak_case_rate'] = np.nan
+            data['stringency_response_time'] = np.nan
+            data['total_stringency'] = np.nan
+            data['testing_response_time'] = np.nan # days to reach 10 tests per rel_to
             data['t0'] = np.nan
             data['t0_relative'] = np.nan
             data['t0_1_dead'] = np.nan
             data['t0_5_dead'] = np.nan
             data['t0_10_dead'] = np.nan
             data['testing_available'] = np.nan
+            data['rel_to_constant'] = self.rel_to_constant
             data['peak_1'] = np.nan # w
-            data['peak_1_per_10k'] = np.nan # w
-            data['peak_1_dead_per_10k'] = np.nan # w
+            data['peak_1_per_rel_to'] = np.nan # w
             data['date_peak_1'] = np.nan # w
             data['wave_start_1'] = np.nan # w
             data['wave_end_1'] = np.nan # w
@@ -307,12 +315,29 @@ class epidemetrics:
 
             country_series = self.epidemiology_series \
             [self.epidemiology_series['countrycode'] == country].reset_index(drop=True)
+            gsi_series = self.gsi_table[self.gsi_table['countrycode'] == country].reset_index(drop=True)
+            testing_series = self.testing[self.testing['countrycode'] == country].reset_index(drop=True)
             # skip country if number of observed days is less than the minimum number of days for a wave
             if len(country_series) < self.t_sep_a:
                 continue
+            # first populate non-wave characteristics
             data['country'] = country_series['country'].iloc[0]
+            data['class'], peaks = self._classify(country)
+            data['class_coarse'] = 1 if data['class'] <= 2 else (2 if data['class'] <= 4 else 3)
             data['population'] = np.nan if len(self.wbi_table[self.wbi_table['countrycode'] == country]) == 0 else \
                 self.wbi_table[self.wbi_table['countrycode'] == country]['value'].values[0]
+            data['population_density'] = np.nan if len(self.wbi_table[self.wbi_table['countrycode'] == country]) == 0 else \
+                self.wbi_table[self.wbi_table['countrycode'] == country]['population_density'].values[0]
+            data['total_confirmed'] = country_series['confirmed'].iloc[-1]
+            data['total_dead'] = country_series['dead'].iloc[-1]
+            data['mortality_rate'] = (data['total_dead'] / data['population']) * data['rel_to_constant']
+            data['case_rate'] = (data['total_confirmed'] / data['population']) * data['rel_to_constant']
+            data['peak_case_rate'] = \
+                (country_series['new_per_day_smooth'].max() / data['population']) * data['rel_to_constant']
+            data['total_stringency'] = np.nan if len(gsi_series) == 0 else np.trapz(
+                y=gsi_series['stringency_index'].dropna(),
+                x=[(a-gsi_series['date'].values[0]).days
+                   for a in gsi_series['date'][~np.isnan(gsi_series['stringency_index'])]])
             data['t0'] = np.nan if len(
                 country_series[country_series['confirmed'] >= self.abs_t0_threshold]['date']) == 0 else \
                 country_series[country_series['confirmed'] >= self.abs_t0_threshold]['date'].iloc[0]
@@ -327,13 +352,69 @@ class epidemetrics:
                 country_series[country_series['dead'] >= 5]['date'].iloc[0]
             data['t0_10_dead'] = np.nan if len(country_series[country_series['dead'] >= 10]['date']) == 0 else \
                 country_series[country_series['dead'] >= 10]['date'].iloc[0]
-            data['total_confirmed'] = country_series['confirmed'].iloc[-1]
-            data['total_dead'] = country_series['dead'].iloc[-1]
             data['testing_available'] = True if len(country_series['new_tests'].dropna()) > 0 else False
-            data['class'], peaks = self._classify(country)
+            # if t0 not defined all other metrics make no sense
+            if pd.isnull(data['t0_1_dead']):
+                continue
+
+            # response time is only defined for the first wave
+            if (len(gsi_series) > 0) and (type(peaks) == pd.core.frame.DataFrame) and len(peaks) >= 1:
+                sorted_bases = np.sort(
+                    np.concatenate((peaks['left_base'].values, peaks['right_base'].values))).astype(int)
+                peak_start = country_series.dropna(
+                        subset=['new_per_day_smooth'])['date'].iloc[
+                        sorted_bases[np.where(sorted_bases <= int(peaks['location'].iloc[0]))][-1]]
+                peak_end = country_series.dropna(
+                        subset=['new_per_day_smooth'])['date'].iloc[
+                        sorted_bases[np.where(sorted_bases >= int(peaks['location'].iloc[0]))][0]]
+                gsi_first_wave = gsi_series[(gsi_series['date'] <= peak_end) & (gsi_series['date'] >= peak_start)]\
+                    .reset_index(drop=True)
+                data['stringency_response_time'] = \
+                    (gsi_first_wave.iloc[gsi_first_wave['stringency_index'].argmax()]['date'] -  data['t0_1_dead']).days
+            elif (len(gsi_series) > 0) and (type(peaks) == pd.core.frame.DataFrame):
+                data['stringency_response_time'] = (gsi_series.iloc[gsi_series['stringency_index'].argmax()]['date']
+                                                   -  data['t0_1_dead']).days
+            else:
+                pass
+
+            if data['testing_available']:
+                data['testing_response_time'] = np.nan if \
+                    len(testing_series[(testing_series['total_tests'] / data['population']) *
+                                       data['rel_to_constant'] >= 10]) == 0 \
+                    else \
+                    (testing_series[(testing_series['total_tests'] / data['population']) *
+                                   data['rel_to_constant'] >= 10]['date'].iloc[0] - data['t0_1_dead']).days
+            # for each wave we add characteristics
+            if (type(peaks) == pd.core.frame.DataFrame) and len(peaks) > 0:
+                sorted_bases = np.sort(np.concatenate((peaks['left_base'].values, peaks['right_base'].values))).astype(int)
+                for i, (_, peak) in enumerate(peaks.iterrows(), 1):
+                    data['peak_{}'.format(str(i))] = peak['y_position']
+                    data['peak_{}_per_rel_to'.format(str(i))] = \
+                        (peak['y_position'] / data['population']) * data['rel_to_constant']
+                    data['date_peak_{}'.format(str(i))] = country_series.dropna(
+                        subset=['new_per_day_smooth'])['date'].iloc[int(peak['location'])]
+                    data['wave_start_{}'.format(str(i))] = country_series.dropna(
+                        subset=['new_per_day_smooth'])['date'].iloc[
+                        sorted_bases[np.where(sorted_bases <= int(peak['location']))][-1]]
+                    data['wave_end_{}'.format(str(i))] = country_series.dropna(
+                        subset=['new_per_day_smooth'])['date'].iloc[
+                        sorted_bases[np.where(sorted_bases >= int(peak['location']))][0]]
+                    data['wave_duration_{}'.format(str(i))] = (data['wave_end_{}'.format(str(i))] -
+                                                               data['wave_start_{}'.format(str(i))]).days
+                    data['wave_cfr_{}'.format(str(i))] = \
+                        (country_series[country_series['date'] ==
+                                        data['wave_end_{}'.format(str(i))]]['dead'].iloc[0] -
+                         country_series[country_series['date'] ==
+                                        data['wave_start_{}'.format(str(i))]]['dead'].iloc[0]) / \
+                        (country_series[country_series['date'] ==
+                                        data['wave_end_{}'.format(str(i))]]['confirmed'].iloc[0] -
+                         country_series[country_series['date'] ==
+                                        data['wave_start_{}'.format(str(i))]]['confirmed'].iloc[0])
+                    continue
             epidemiology_panel = epidemiology_panel.append(data, ignore_index=True)
             continue
-        return
+        epidemiology_panel.to_csv('./table_of_results.csv',index=False)
+        return epidemiology_panel
 
     def _get_gsi_table(self):
         '''
@@ -343,8 +424,10 @@ class epidemetrics:
         sql_command = """SELECT """ + cols + """ FROM government_response"""
         gsi_table = pd.read_sql(sql_command, self.conn) \
                             .sort_values(by=['countrycode', 'date']) \
-                            .filter(items=['countrycode', 'country', 'date', 'stringency_index'] + self.flags) \
+                            .filter(items=['countrycode', 'country', 'date', 'stringency_index'] +
+                                          list(self.flags.keys())) \
                             .reset_index(drop=True)
+        gsi_table = gsi_table.drop_duplicates(subset=['countrycode', 'date'])
         assert not gsi_table[['countrycode', 'date']].duplicated().any()
         return gsi_table
 
@@ -775,6 +858,7 @@ class epidemetrics:
         return
     # waiting implementation
     def table_1(self):
+
         return
 
     def _get_series(self, country, field):
