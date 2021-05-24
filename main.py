@@ -271,6 +271,68 @@ class epidemetrics:
         return pd.DataFrame.from_dict(epidemiology_series)
     # waiting implementation
     def _get_epi_static(self):
+        '''epidemiology_static = pd.DataFrame(
+            columns=['countrycode', 'country', 'class', 'population',
+                     't0', 't0_relative', 't0_1_dead','t0_5_dead',
+                     't0_10_dead', 'peak_1', 'peak_2', 'date_peak_1',
+                     'date_peak_2', 'first_wave_start', 'first_wave_end', 'duration_first_wave',
+                     'second_wave_start', 'second_wave_end','last_confirmed', 'last_dead',
+                     'testing_available','peak_1_cfr','peak_2_cfr', 'dead_class','tests_class'])'''
+        epidemiology_panel = pd.DataFrame()
+        # wave parameters marked a w
+        for country in tqdm(np.sort(self.epidemiology_series['countrycode'].unique()),
+                            desc='Preparing Epidemiological Results Table'):
+            data = dict()
+            data['countrycode'] = country
+            data['country'] = np.nan
+            data['class'] = np.nan
+            data['population'] = np.nan
+            data['population_density'] = np.nan
+            data['total_confirmed'] = np.nan
+            data['total_dead'] = np.nan
+            data['t0'] = np.nan
+            data['t0_relative'] = np.nan
+            data['t0_1_dead'] = np.nan
+            data['t0_5_dead'] = np.nan
+            data['t0_10_dead'] = np.nan
+            data['testing_available'] = np.nan
+            data['peak_1'] = np.nan # w
+            data['peak_1_per_10k'] = np.nan # w
+            data['peak_1_dead_per_10k'] = np.nan # w
+            data['date_peak_1'] = np.nan # w
+            data['wave_start_1'] = np.nan # w
+            data['wave_end_1'] = np.nan # w
+            data['wave_duration_1'] = np.nan # w
+            data['wave_cfr_1'] = np.nan # w
+
+            country_series = self.epidemiology_series \
+            [self.epidemiology_series['countrycode'] == country].reset_index(drop=True)
+            # skip country if number of observed days is less than the minimum number of days for a wave
+            if len(country_series) < self.t_sep_a:
+                continue
+            data['country'] = country_series['country'].iloc[0]
+            data['population'] = np.nan if len(self.wbi_table[self.wbi_table['countrycode'] == country]) == 0 else \
+                self.wbi_table[self.wbi_table['countrycode'] == country]['value'].values[0]
+            data['t0'] = np.nan if len(
+                country_series[country_series['confirmed'] >= self.abs_t0_threshold]['date']) == 0 else \
+                country_series[country_series['confirmed'] >= self.abs_t0_threshold]['date'].iloc[0]
+            data['t0_relative'] = np.nan if len(
+                country_series[((country_series['confirmed'] /
+                                data['population']) * self.rel_to_constant >= self.rel_t0_threshold)]['date']) == 0 else \
+                country_series[((country_series['confirmed'] /
+                                data['population']) * self.rel_to_constant >= self.rel_t0_threshold)]['date'].iloc[0]
+            data['t0_1_dead'] = np.nan if len(country_series[country_series['dead'] >= 1]['date']) == 0 else \
+                country_series[country_series['dead'] >= 1]['date'].iloc[0]
+            data['t0_5_dead'] = np.nan if len(country_series[country_series['dead'] >= 5]['date']) == 0 else \
+                country_series[country_series['dead'] >= 5]['date'].iloc[0]
+            data['t0_10_dead'] = np.nan if len(country_series[country_series['dead'] >= 10]['date']) == 0 else \
+                country_series[country_series['dead'] >= 10]['date'].iloc[0]
+            data['total_confirmed'] = country_series['confirmed'].iloc[-1]
+            data['total_dead'] = country_series['dead'].iloc[-1]
+            data['testing_available'] = True if len(country_series['new_tests'].dropna()) > 0 else False
+            data['class'], peaks = self._classify(country)
+            epidemiology_panel = epidemiology_panel.append(data, ignore_index=True)
+            continue
         return
 
     def _get_gsi_table(self):
@@ -646,20 +708,20 @@ class epidemetrics:
                 plt.savefig(self.plot_path + country + '.png')
                 plt.close('all')
         return cases_sub_e
-    # waiting implementation
-    def _classify(self, country, field='new_per_day_smooth', plot=False):
+    # check with ZWE, ?
+    def _classify(self, country, field='new_per_day_smooth'):
         data = self._get_series(country=country, field=field)
         # class 0 reserved for misbehaving cases
         if (len(data) < 3) or \
                 (country in self.exclude_countries) or \
                 not(country in self.wbi_table['countrycode'].values):
-            return 0
+            return 0, None
         # method _find_peaks is only supported for new_cases_per_day as the cross-validation step requires death per day
         # for alternative fields the output of sub_algorithm_c is used
         if field == 'new_per_day_smooth':
             deaths = self._get_series(country=country, field='dead_per_day_smooth')
             if len(deaths) < 3:
-                return 0
+                return 0, None
             genuine_peaks = self._find_peaks(country, plot=False, save=False)
         else:
             sub_a = self._sub_algorithm_a(country, field=field, plot=False)
@@ -689,8 +751,8 @@ class epidemetrics:
         if (peak_class > 0) and (genuine_peaks['location'].iloc[-1] < len(data)):
             last_peak_date = data['date'].values[int(genuine_peaks['location'].iloc[-1])]
             trough_value = min(data.loc[data['date'] > last_peak_date, 'new_per_day_smooth'])
-            trough_date = data['date'][
-                np.argmin(data.loc[data['date'] > last_peak_date, 'new_per_day_smooth'])]
+            trough_date = data[data['date'] > last_peak_date]['date'].iloc[
+                int(np.argmin(data.loc[data['date'] > last_peak_date, 'new_per_day_smooth']))]
             max_after_trough = np.nanmax(
                 data.loc[data['date'] >= trough_date, 'new_per_day_smooth'])
             if (max_after_trough - trough_value >= prominence_threshold) \
@@ -701,8 +763,6 @@ class epidemetrics:
                 peak_class += 1
         else:
             pass
-
-
         return peak_class, genuine_peaks
 
     def main(self):
@@ -712,6 +772,9 @@ class epidemetrics:
                 self._find_peaks(country, plot=True, save=True)
             except:
                 print(country)
+        return
+    # waiting implementation
+    def table_1(self):
         return
 
     def _get_series(self, country, field):
