@@ -271,7 +271,7 @@ class epidemetrics:
 
         return pd.DataFrame.from_dict(epidemiology_series)
     # waiting implementation
-    def _get_epi_static(self):
+    def _get_epi_panel(self):
         '''epidemiology_static = pd.DataFrame(
             columns=['countrycode', 'country', 'class', 'population',
                      't0', 't0_relative', 't0_1_dead','t0_5_dead',
@@ -290,6 +290,7 @@ class epidemetrics:
             data['class_coarse'] = np.nan # one, two, three or more waves
             data['population'] = np.nan
             data['population_density'] = np.nan
+            data['gni_per_capita'] = np.nan
             data['total_confirmed'] = np.nan
             data['total_dead'] = np.nan
             data['mortality_rate'] = np.nan
@@ -328,6 +329,8 @@ class epidemetrics:
                 self.wbi_table[self.wbi_table['countrycode'] == country]['value'].values[0]
             data['population_density'] = np.nan if len(self.wbi_table[self.wbi_table['countrycode'] == country]) == 0 else \
                 self.wbi_table[self.wbi_table['countrycode'] == country]['population_density'].values[0]
+            data['gni_per_capita'] = np.nan if len(self.wbi_table[self.wbi_table['countrycode'] == country]) == 0 else \
+                self.wbi_table[self.wbi_table['countrycode'] == country]['gni_per_capita'].values[0]
             data['total_confirmed'] = country_series['confirmed'].iloc[-1]
             data['total_dead'] = country_series['dead'].iloc[-1]
             data['mortality_rate'] = (data['total_dead'] / data['population']) * data['rel_to_constant']
@@ -354,9 +357,10 @@ class epidemetrics:
                 country_series[country_series['dead'] >= 10]['date'].iloc[0]
             data['testing_available'] = True if len(country_series['new_tests'].dropna()) > 0 else False
             # if t0 not defined all other metrics make no sense
-            if pd.isnull(data['t0_1_dead']):
+            if pd.isnull(data['t0_10_dead']):
                 continue
 
+            '''
             # response time is only defined for the first wave
             if (len(gsi_series) > 0) and (type(peaks) == pd.core.frame.DataFrame) and len(peaks) >= 1:
                 sorted_bases = np.sort(
@@ -376,6 +380,10 @@ class epidemetrics:
                                                    -  data['t0_1_dead']).days
             else:
                 pass
+            '''
+            if (len(gsi_series) > 0) and (len(gsi_series[gsi_series['c3_cancel_public_events'] == 2]) > 0):
+                data['stringency_response_time'] = \
+                    (gsi_series[gsi_series['c3_cancel_public_events'] == 2]['date'].iloc[0] - data['t0_10_dead']).days
 
             if data['testing_available']:
                 data['testing_response_time'] = np.nan if \
@@ -856,10 +864,15 @@ class epidemetrics:
             except:
                 print(country)
         return
-    # waiting implementation
+    # waiting implementation 'country', 'countrycode',
     def table_1(self):
-
-        return
+        epidemiology_panel = self._get_epi_panel()
+        data = epidemiology_panel[
+            ['class_coarse', 'mortality_rate', 'case_rate', 'peak_case_rate',
+             'stringency_response_time', 'total_stringency', 'testing_response_time',
+             'population_density', 'gni_per_capita']].groupby(by=['class_coarse']).mean().T
+        data.to_csv('./data/table_1.csv')
+        return data
 
     def _get_series(self, country, field):
         return self.epidemiology_series[self.epidemiology_series['countrycode']==country][
