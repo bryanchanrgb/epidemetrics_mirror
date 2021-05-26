@@ -755,7 +755,6 @@ data['last_tests_per_10k'] = 10000 * epidemiology_panel['last_tests'] / epidemio
 data['first_date_si_above_threshold'] = np.nan
 for flag in flags:
     data['first_date_'+flag[0:2]+'_above_threshold'] = np.nan
-    
 for country in tqdm(epidemiology_panel.countrycode):
     gov_country_series = government_response_series[government_response_series['countrycode']==country]
     country_series = epidemiology_series[epidemiology_series['countrycode']==country]
@@ -764,16 +763,22 @@ for country in tqdm(epidemiology_panel.countrycode):
     for flag in flags:
         if sum(gov_country_series[flag]>=flag_thresholds[flag]) > 0:
             data.loc[data['countrycode']==country,'first_date_'+flag[0:2]+'_above_threshold'] = min(gov_country_series.loc[gov_country_series[flag]>=flag_thresholds[flag],'date'])
-    
+            if not pd.isnull(data.loc[data['countrycode']==country,'t0_10_dead']).values[0]:
+                data.loc[data['countrycode']==country,flag[0:2]+'_response_time'] = (data.loc[data['countrycode']==country,'first_date_'+flag[0:2]+'_above_threshold'].values[0]-data.loc[data['countrycode']==country,'t0_10_dead'].values[0]).days
     tests_threshold_pop = TESTS_THRESHOLD * data.loc[data['countrycode']==country,'population'].values[0] / 10000 
     if sum(country_series['tests']>=tests_threshold_pop) > 0:
         data.loc[data['countrycode']==country,'first_date_tests_above_threshold'] = min(country_series.loc[country_series['tests']>=tests_threshold_pop,'date'])
-
+        if not pd.isnull(data.loc[data['countrycode']==country,'t0_10_dead']).values[0]:
+            data.loc[data['countrycode']==country,'testing_response_time'] = (data.loc[data['countrycode']==country,'first_date_tests_above_threshold'].values[0]-data.loc[data['countrycode']==country,'t0_10_dead'].values[0]).days
+ 
 figure_3_total = data
 
 
 figure_3_all = figure_3_wave_level.merge(
-        figure_3_total[['countrycode','class_coarse','si_integral','last_dead_per_10k','last_tests_per_10k','first_date_si_above_threshold','first_date_c3_above_threshold','first_date_tests_above_threshold']],on='countrycode',how='left')
+        figure_3_total[['countrycode','class_coarse','si_integral','last_dead_per_10k','last_tests_per_10k',
+                        'first_date_si_above_threshold','first_date_c3_above_threshold','first_date_tests_above_threshold',
+                        'c3_response_time','testing_response_time']]
+                        ,on='countrycode',how='left')
 
 if SAVE_CSV:
     figure_3_all.to_csv(CSV_PATH + 'figure_3_all.csv')

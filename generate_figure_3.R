@@ -28,12 +28,6 @@ figure_3_all_data$class = as.factor(figure_3_all_data$class)
 figure_3_all_data$dead_during_wave_per_10k <- figure_3_all_data$dead_during_wave * 10000 / figure_3_all_data$population
 figure_3_all_data$tests_during_wave_per_10k <- figure_3_all_data$tests_during_wave * 10000 / figure_3_all_data$population
 
-# Calculate response time as date to reach threshold - date of T0
-figure_3_all_data$c3_response_time <- figure_3_all_data$first_date_c3_above_threshold - figure_3_all_data$t0_10_dead
-figure_3_all_data$c3_response_time = as.numeric(figure_3_all_data$c3_response_time)
-figure_3_all_data$testing_response_time <- figure_3_all_data$first_date_tests_above_threshold - figure_3_all_data$t0_10_dead
-figure_3_all_data$testing_response_time = as.numeric(figure_3_all_data$testing_response_time)
-
 # Highlight some countries
 highlight_countries = c('Australia','Belgium','United States')
 figure_3_all_data$country_highlight = ''
@@ -306,7 +300,13 @@ x_trans <- pseudolog10_trans
 plot_figure(data,y,x,y_title,x_title,y_trans,x_trans)
 
 
-figure_3_data <- figure_3_all_data[figure_3_all_data$wave==2,]
+data <- subset(figure_3_all_data,population>=2500000)
+x <- 'c3_response_time'
+y <- 'class'
+data$class = as.numeric(data$class)
+corr <- cor.test(data[[x]], data[[y]], method = "kendall")
+p_value_str <- if (corr$p.value<0.0001) {"<0.0001"} else {toString(signif(corr$p.value,2))}
+estimate_str <- toString(signif(corr$estimate,2))
 
 # likelihood of second wave given response time
 data <- figure_3_all_data[figure_3_all_data$wave==1,c('countrycode','c3_response_time','testing_response_time')]
