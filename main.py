@@ -6,7 +6,6 @@ from tqdm import tqdm
 from csaps import csaps
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 class epidemetrics:
     def __init__(self):
