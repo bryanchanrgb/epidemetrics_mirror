@@ -1,10 +1,12 @@
 import numpy as np
 import pandas as pd
+import pingouin as pg
 import datetime
 import psycopg2
 from tqdm import tqdm
 from csaps import csaps
 from scipy.signal import find_peaks
+from scipy.stats import mannwhitneyu
 import matplotlib.pyplot as plt
 
 class epidemetrics:
@@ -866,12 +868,39 @@ class epidemetrics:
     # waiting implementation 'country', 'countrycode',
     def table_1(self):
         epidemiology_panel = self._get_epi_panel()
-        data = epidemiology_panel[
+        median = epidemiology_panel[
             ['class_coarse', 'mortality_rate', 'case_rate', 'peak_case_rate',
              'stringency_response_time', 'total_stringency', 'testing_response_time',
-             'population_density', 'gni_per_capita']].groupby(by=['class_coarse']).mean().T
-        data.to_csv('./data/table_1.csv')
+             'population_density', 'gni_per_capita']].groupby(by=['class_coarse']).median().T
+        quartile_1 = epidemiology_panel[
+            ['class_coarse', 'mortality_rate', 'case_rate', 'peak_case_rate',
+             'stringency_response_time', 'total_stringency', 'testing_response_time',
+             'population_density', 'gni_per_capita']].groupby(by=['class_coarse']).quantile(0.25).T
+        quartile_3 = epidemiology_panel[
+            ['class_coarse', 'mortality_rate', 'case_rate', 'peak_case_rate',
+             'stringency_response_time', 'total_stringency', 'testing_response_time',
+             'population_density', 'gni_per_capita']].groupby(by=['class_coarse']).quantile(0.75).T
+        data = pd.concat(
+            [quartile_1, median, quartile_3], keys=['quartile_1', 'median', 'quartile_3'], axis=1).sort_values(
+            by=['class_coarse'], axis=1)
+        data.to_csv('./data/table_1_v1.csv')
+        self._mann_whitney(epidemiology_panel[
+            ['class_coarse', 'mortality_rate', 'case_rate', 'peak_case_rate',
+             'stringency_response_time', 'total_stringency', 'testing_response_time',
+             'population_density', 'gni_per_capita']].copy(), field='gni_per_capita').to_csv(
+            './data/mann_whitney_gni.csv')
+        self._mann_whitney(epidemiology_panel[
+            ['class_coarse', 'mortality_rate', 'case_rate', 'peak_case_rate',
+             'stringency_response_time', 'total_stringency', 'testing_response_time',
+             'population_density', 'gni_per_capita']].copy(), field='stringency_response_time').to_csv(
+            './data/mann_whitney_si.csv')
         return data
+    # pg.mwu abstracts the decision of less than or greater than
+    # results after droping NaNs should be the same
+    def _mann_whitney(self, data, field='gni_per_capita'):
+        x = data[data['class_coarse'] == 1][field].dropna().values
+        y = data[~(data['class_coarse'] == 1)][field].dropna().values
+        return pg.mwu(x, y, tail='one-sided')
 
     def _get_series(self, country, field):
         return self.epidemiology_series[self.epidemiology_series['countrycode']==country][
