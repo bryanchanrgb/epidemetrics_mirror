@@ -118,7 +118,6 @@ y_title <- "Deaths During First Wave per 10000"
 x_title <- "Tests During First Wave per 10000"
 y_trans <- 'log10'
 x_trans <- 'log10'
-plot_figure(data,y,x,y_title,x_title,y_trans,x_trans)
 
 # deaths in first wave vs. tests in all waves
 wave <- 1
@@ -316,3 +315,48 @@ data[data$second_wave==TRUE,'second_wave'] <- 1
 data[data$second_wave==FALSE,'second_wave'] <- 0
 mylogit <- glm(second_wave ~ c3_response_time, data = data, family = "binomial")
 summary(mylogit)
+
+
+# Compute correlations for all flag response times  ------------------------------------------------------------
+
+flags = c('si_integral','last_tests_per_10k',
+          'si_response_time','c1_response_time','c2_response_time','c3_response_time','c4_response_time','c5_response_time',
+          'c6_response_time','c7_response_time','c8_response_time',
+          'h2_response_time','h3_response_time',
+          'testing_response_time_1','testing_response_time_10','testing_response_time_100','testing_response_time_1000')
+df <- data.frame(flag=character(),
+                wave=factor(),
+                estimate=character(),
+                p_value=double(),
+                stringsAsFactors=FALSE)
+figure_3_data <- subset(figure_3_all_data,population>=2500000)
+
+for (f in flags){
+  for (w in c('1','2')){
+    x <- f
+    y <- 'dead_during_wave_per_10k'
+    data = figure_3_data[figure_3_data[['wave']] == w, ]
+    corr <- cor.test(data[[x]], data[[y]], method = "kendall")
+    p_value_str <- if (corr$p.value<0.0001) {"<0.0001"} else {toString(signif(corr$p.value,2))}
+    estimate_str <- toString(signif(corr$estimate,2))
+    df <- rbind(df, data.frame(flag=f, wave=w, estimate=estimate_str, p_value=p_value_str))
+  }
+  y <- 'last_dead_per_10k'
+  data = figure_3_data[figure_3_data[['wave']] == 1, ]
+  corr <- cor.test(data[[x]], data[[y]], method = "kendall")
+  p_value_str <- if (corr$p.value<0.0001) {"<0.0001"} else {toString(signif(corr$p.value,2))}
+  estimate_str <- toString(signif(corr$estimate,2))
+  df <- rbind(df, data.frame(flag=f, wave='all', estimate=estimate_str, p_value=p_value_str))
+  
+  y <- 'class'
+  data$class = as.numeric(data$class)
+  corr <- cor.test(data[[x]], data[[y]], method = "kendall")
+  p_value_str <- if (corr$p.value<0.0001) {"<0.0001"} else {toString(signif(corr$p.value,2))}
+  estimate_str <- toString(signif(corr$estimate,2))
+  df <- rbind(df, data.frame(flag=f, wave='class', estimate=estimate_str, p_value=p_value_str))
+  
+}
+
+write.csv(df,"./data/corr.csv")
+
+
