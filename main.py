@@ -8,7 +8,7 @@ from scipy.signal import find_peaks
 from scipy.stats import mannwhitneyu
 import matplotlib.pyplot as plt
 
-class epidemetrics:
+class Epidemetrics:
     def __init__(self):
         self.source = 'WRD_WHO'
         self.end_date = datetime.date(2021, 4, 1)
@@ -638,7 +638,7 @@ class epidemetrics:
             result_troughs = results[results['peak_ind'] == 0]
             dummy = pd.DataFrame([[np.nan]*len(result_troughs.columns)],columns=result_troughs.columns)
             result_troughs = pd.concat([result_troughs,dummy], ignore_index=True).reset_index(drop=True)
-        
+
         # filter out a peak and its corresponding trough if the peak does not meet the prominence threshold
         result_peaks_c = result_peaks[result_peaks['prominence'] >= prominence_threshold]
         result_troughs_c = result_troughs[list(result_peaks['prominence'] >= prominence_threshold)]
@@ -647,7 +647,7 @@ class epidemetrics:
         result_troughs_d = result_troughs_c[list((result_peaks_c['prominence'] >= self.prominence_height_threshold * result_peaks_c['y_position']))]
         result_troughs_d = result_troughs_d[~pd.isnull(result_troughs_d['peak_ind'])]
         results = pd.concat([result_peaks_d,result_troughs_d], ignore_index=True).sort_values(by='location').reset_index(drop=True)
-        
+
         if plot:
             fig, (ax0, ax1, ax2) = plt.subplots(nrows=1, ncols=3)
             # plot peaks-trough pairs from sub_a
@@ -688,7 +688,7 @@ class epidemetrics:
             elif np.any([True if (x >= death_peak - self.d_match) and (x <= death_peak)
                         else False for x in cases_sub_b.loc[cases_sub_b['peak_ind']==1,'location']]):
                 # potential candidates for peaks are those within range in cases_sub_b
-                candidates = cases_sub_b[(cases_sub_b['peak_ind'] == 1) & 
+                candidates = cases_sub_b[(cases_sub_b['peak_ind'] == 1) &
                     (cases_sub_b['location'] >= death_peak - self.d_match) & (cases_sub_b['location'] <= death_peak)]
                 results = results.append(candidates.loc[candidates.idxmax()['prominence']])
                 continue
@@ -754,10 +754,10 @@ class epidemetrics:
             trough = find_peaks([-x for x in deaths['dead_per_day_smooth'].values], prominence=0, distance=1)
             deaths_pre_algo = pd.DataFrame(data=np.transpose(np.append(deaths.index[peak[0]], deaths.index[trough[0]])),
                                  columns=['location'])
-            
+
             fig, axs = plt.subplots(nrows=2, ncols=4, sharex=True, figsize=(14, 7))
             plt.suptitle(country)
-            
+
             axs[0, 0].set_title('Cases Before Algorithm')
             axs[0, 0].plot(cases['new_per_day_smooth'].values)
             axs[0, 0].scatter(cases_pre_algo['location'].values,
@@ -765,7 +765,7 @@ class epidemetrics:
                                   cases_pre_algo['location'].values.astype(int)], color='red', marker='o')
             axs[0, 0].get_xaxis().set_visible(False)
             axs[0, 0].get_yaxis().set_visible(False)
-            
+
             axs[0, 1].set_title('Cases After Sub Algorithm A')
             axs[0, 1].plot(cases['new_per_day_smooth'].values)
             axs[0, 1].scatter(cases_sub_a['location'].values,
@@ -789,7 +789,7 @@ class epidemetrics:
                                   cases_sub_c['location'].values.astype(int)], color='red', marker='o')
             axs[0, 3].get_xaxis().set_visible(False)
             axs[0, 3].get_yaxis().set_visible(False)
-            
+
             axs[1, 0].set_title('Deaths Before Algorithm')
             axs[1, 0].plot(deaths['dead_per_day_smooth'].values)
             axs[1, 0].scatter(deaths_pre_algo['location'].values,
@@ -797,7 +797,7 @@ class epidemetrics:
                                   deaths_pre_algo['location'].values.astype(int)], color='red', marker='o')
             axs[1, 0].get_xaxis().set_visible(False)
             axs[1, 0].get_yaxis().set_visible(False)
-            
+
             axs[1, 1].set_title('Deaths After Sub Algorithm A')
             axs[1, 1].plot(deaths['dead_per_day_smooth'].values)
             axs[1, 1].scatter(deaths_sub_a['location'].values,
@@ -849,7 +849,7 @@ class epidemetrics:
             sub_b = self._sub_algorithm_b(sub_a, country, field=field, plot=False)
             genuine_peaks = self._sub_algorithm_c(sub_a, sub_b, country, field=field, plot=False)
             genuine_peaks = genuine_peaks[genuine_peaks['peak_ind']==1]
-            
+
         population = self.wbi_table[self.wbi_table['countrycode'] == country]['value'].values[0]
         if field == 'dead_per_day_smooth':
             abs_prominence_threshold = self.abs_prominence_threshold_dead
@@ -894,6 +894,7 @@ class epidemetrics:
                 self._find_peaks(country, plot=True, save=True)
             except:
                 print(country)
+        self.table_1()
         return
     # waiting implementation 'country', 'countrycode',
     def table_1(self):
@@ -974,3 +975,7 @@ class epidemetrics:
         plt.savefig(self.plot_path + 'inverse_cfr.png')
         plt.close('all')
         return
+
+if __name__ == '__main__':
+    a = Epidemetrics()
+    a.main()
