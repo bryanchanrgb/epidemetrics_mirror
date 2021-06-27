@@ -7,6 +7,7 @@ from csaps import csaps
 from scipy.signal import find_peaks
 from scipy.stats import mannwhitneyu
 import matplotlib.pyplot as plt
+import pingouin as pg
 
 class Epidemetrics:
     def __init__(self):
@@ -645,11 +646,9 @@ class Epidemetrics:
             if i < max(result_peaks_d.index):
                 candidate_troughs = result_troughs[(result_troughs['location']>=result_peaks_d.loc[i,'location'])&
                                                    (result_troughs['location']<=result_peaks_d.loc[i+1,'location'])]
-            else:
-                candidate_troughs = result_troughs[result_troughs['location']>=result_peaks_d.loc[i,'location']]
-            if len(candidate_troughs) > 0:
-                candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmax()['prominence']]
-                results = results.append(candidate_troughs, ignore_index=True)
+                if len(candidate_troughs) > 0:
+                    candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmax()['prominence']]
+                    results = results.append(candidate_troughs, ignore_index=True)
         results = results.sort_values(by='location').reset_index(drop=True)
 
         if plot:
