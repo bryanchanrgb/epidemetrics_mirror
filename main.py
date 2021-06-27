@@ -632,22 +632,26 @@ class epidemetrics:
         results = results.sort_values(by='location').reset_index(drop=True)
         # filter out troughs and peaks below prominence threshold
         result_peaks = results[results['peak_ind'] == 1].reset_index(drop=True)
-        if sum(results['peak_ind'] == 1) == sum(results['peak_ind'] == 0):
-            result_troughs = results[results['peak_ind'] == 0].reset_index(drop=True)
-        else:
-            result_troughs = results[results['peak_ind'] == 0]
-            dummy = pd.DataFrame([[np.nan]*len(result_troughs.columns)],columns=result_troughs.columns)
-            result_troughs = pd.concat([result_troughs,dummy], ignore_index=True).reset_index(drop=True)
+        result_troughs = results[results['peak_ind'] == 0].reset_index(drop=True)
         
         # filter out a peak and its corresponding trough if the peak does not meet the prominence threshold
         result_peaks_c = result_peaks[result_peaks['prominence'] >= prominence_threshold]
-        result_troughs_c = result_troughs[list(result_peaks['prominence'] >= prominence_threshold)]
         # filter out relatively low prominent peaks
         result_peaks_d = result_peaks_c[(result_peaks_c['prominence'] >= self.prominence_height_threshold * result_peaks_c['y_position'])]
-        result_troughs_d = result_troughs_c[list((result_peaks_c['prominence'] >= self.prominence_height_threshold * result_peaks_c['y_position']))]
-        result_troughs_d = result_troughs_d[~pd.isnull(result_troughs_d['peak_ind'])]
-        results = pd.concat([result_peaks_d,result_troughs_d], ignore_index=True).sort_values(by='location').reset_index(drop=True)
-        
+        #between each remaining peak, retain the trough with the highest prominence
+        result_peaks_d = result_peaks_d.reset_index(drop=True)
+        results = result_peaks_d
+        for i in result_peaks_d.index:
+            if i < max(result_peaks_d.index):
+                candidate_troughs = result_troughs[(result_troughs['location']>=result_peaks_d.loc[i,'location'])&
+                                                   (result_troughs['location']<=result_peaks_d.loc[i+1,'location'])]
+            else:
+                candidate_troughs = result_troughs[result_troughs['location']>=result_peaks_d.loc[i,'location']]
+            if len(candidate_troughs) > 0:
+                candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmax()['prominence']]
+                results = results.append(candidate_troughs, ignore_index=True)
+        results = results.sort_values(by='location').reset_index(drop=True)
+
         if plot:
             fig, (ax0, ax1, ax2) = plt.subplots(nrows=1, ncols=3)
             # plot peaks-trough pairs from sub_a
