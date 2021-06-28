@@ -390,10 +390,10 @@ for country in tqdm(countries, desc='Processing Epidemiological Panel Data'):
     data['third_wave_start'] = np.nan
     data['third_wave_end'] = np.nan
     data['countrycode'] = country
-    country_series = epidemetrics._get_series(country,'new_per_day_smooth') \
-        .merge(epidemetrics._get_series(country,'confirmed'),on=['date'],how='left') \
-        .merge(epidemetrics._get_series(country,'dead'),on=['date'],how='left') \
-        .merge(epidemetrics._get_series(country,'tests'),on=['date'],how='left')
+    country_series = epidemetrics.get_series(country, 'new_per_day_smooth') \
+        .merge(epidemetrics.get_series(country, 'confirmed'), on=['date'], how='left') \
+        .merge(epidemetrics.get_series(country, 'dead'), on=['date'], how='left') \
+        .merge(epidemetrics.get_series(country, 'tests'), on=['date'], how='left')
     
     if len(country_series) < DISTANCE: # If the time series does not have sufficient length, skip the country
         continue
