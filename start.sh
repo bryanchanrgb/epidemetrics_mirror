@@ -2,13 +2,12 @@
 
 echo "Starting processing pipeline"
 
+cd /src
 python3 ./main.py
-#ls -las
 
 echo "Pipeline processing finished"
 
+echo "Running web server"
 ln -s /data /web/data
 cd /web
-ls -las /web/
-ls -las /web/data/
 . /web/run-server.sh
