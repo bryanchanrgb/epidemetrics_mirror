@@ -16,7 +16,7 @@ rm(list=ls())
 # Import Data ------------------------------------------------------------
 
 # Import csv file for Figure 2
-figure_2_data <- read_csv("./data/figure_2.csv", 
+figure_2_data <- read_csv("../data/figure_2.csv",
                           na = c("N/A","NA","#N/A"," ",""),
                           col_types = cols(date = col_date(format = "%Y-%m-%d"),
                                            new_tests = col_double(),
@@ -87,5 +87,5 @@ for (country_a in country_list){
                                  ncol=1)
   figure_2_all <- annotate_figure(figure_2_all,
                                   top = text_grob("Figure 2: Cases, Deaths and Testing Over Time", size = 9, family='serif'))
-  ggsave(paste("./plots/figure_2_",country_a,".png",sep=""), plot = figure_2_all, width = 8,  height = 10, units='cm',dpi=300)
+  ggsave(paste("../plots/figure_2_",country_a,".png",sep=""), plot = figure_2_all, width = 8,  height = 10, units='cm',dpi=300)
 }

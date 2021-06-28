@@ -19,12 +19,12 @@ rm(list=ls())
 
 # Import Data for figure 4 -------------------------------------------------------------------
 
-figure_4a_data <- read_csv(file="./data/figure_4a.csv",
+figure_4a_data <- read_csv(file="../data/figure_4a.csv",
                            na = c("N/A","NA","#N/A"," ",""))
 figure_4a_data$countrycode <- as.factor(figure_4a_data$countrycode)
 figure_4a_data$adm_area_1 <- as.factor(figure_4a_data$adm_area_1)
 
-figure_4b_data <- read_delim(file="./data/figure_4.csv",
+figure_4b_data <- read_delim(file="../data/figure_4.csv",
                              delim=";",
                              na = c("N/A","NA","#N/A"," ","","None"))
 figure_4b_data$gid <- as.factor(figure_4b_data$gid)
@@ -123,7 +123,7 @@ figure_4a <-  (ggplot(data=figure_4a_agg, aes(x=date,y=new_per_day_smooth,fill=S
                + theme(plot.title = element_text(hjust = 0.5, size=9),
                        plot.margin=unit(c(0,0,0,0),"pt"), legend.position = c(0.09, 0.55),legend.key.size = unit(0.25, "cm"),
                        legend.title = element_text(size = 8),legend.text = element_text(size = 8)))
-ggsave("./plots/figure_4a.png", plot = figure_4a, width = 16,  height = 7, units='cm', dpi=300)
+ggsave("../plots/figure_4a.png", plot = figure_4a, width = 16,  height = 7, units='cm', dpi=300)
 
 # Figure 4b: Choropleth of US counties at USA peak dates
 figure_4b1 <- (ggplot(data = figure_4b1_data) 
@@ -135,7 +135,7 @@ figure_4b1 <- (ggplot(data = figure_4b1_data)
                + theme_void()
                #+ guides(fill = guide_colourbar(barwidth = 30, barheight = 0.6, reverse=T))
                + theme(plot.title = element_text(hjust = 0.5,size=8,family='serif'), panel.grid.major=element_line(colour = "transparent"),legend.position="bottom"))
-ggsave("./plots/figure_4b1.png", plot = figure_4b1, width = 5.3,  height = 2.9, units='cm', dpi=300)
+ggsave("../plots/figure_4b1.png", plot = figure_4b1, width = 5.3,  height = 2.9, units='cm', dpi=300)
 
 figure_4b2 <- (ggplot(data = figure_4b2_data) 
                + geom_sf(aes(fill=new_cases_censored), lwd=0, color=NA, na.rm=TRUE, show.legend=FALSE)
@@ -146,7 +146,7 @@ figure_4b2 <- (ggplot(data = figure_4b2_data)
                + theme_void()
                #+ guides(fill = guide_colourbar(barwidth = 30, barheight = 0.6, reverse=T))
                + theme(plot.title = element_text(hjust = 0.5,size=8,family='serif'), panel.grid.major=element_line(colour = "transparent"),legend.position="bottom"))
-ggsave("./plots/figure_4b2.png", plot = figure_4b2, width = 5.3,  height = 2.9, units='cm', dpi=300)
+ggsave("../plots/figure_4b2.png", plot = figure_4b2, width = 5.3,  height = 2.9, units='cm', dpi=300)
 
 figure_4b3 <- (ggplot(data = figure_4b3_data) 
                + geom_sf(aes(fill=new_cases_censored), lwd=0, color=NA, na.rm=TRUE)#, show.legend=FALSE)
@@ -158,5 +158,5 @@ figure_4b3 <- (ggplot(data = figure_4b3_data)
                + guides(fill = guide_colourbar(barwidth = 20, barheight = 0.3, reverse=T))
                + theme(plot.title = element_text(hjust = 0.5,size=8,family='serif'), panel.grid.major=element_line(colour = "transparent"),legend.position="bottom",
                        legend.title = element_text(vjust=1,size=9,family='serif'), legend.text = element_text(size=8,family='serif')))
-ggsave("./plots/figure_4b3.png", plot = figure_4b3, width = 5.3,  height = 2.9, units='cm', dpi=300)
-ggsave("./plots/figure_4b_legend.png", plot = figure_4b3, width = 15.9,  height = 2.9, units='cm', dpi=300)
+ggsave("../plots/figure_4b3.png", plot = figure_4b3, width = 5.3,  height = 2.9, units='cm', dpi=300)
+ggsave("../plots/figure_4b_legend.png", plot = figure_4b3, width = 15.9,  height = 2.9, units='cm', dpi=300)

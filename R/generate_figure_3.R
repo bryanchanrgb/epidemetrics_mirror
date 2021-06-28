@@ -16,7 +16,7 @@ rm(list=ls())
 # Import Data ------------------------------------------------------------
 
 # Import csv file for Figure 3 
-figure_3_all_data <- read_csv("./data/figure_3_all.csv", 
+figure_3_all_data <- read_csv("../data/figure_3_all.csv",
                                 na = c("N/A","NA","#N/A"," ",""))
 figure_3_all_data$countrycode = as.factor(figure_3_all_data$countrycode)
 figure_3_all_data$country = as.factor(figure_3_all_data$country)
@@ -74,7 +74,7 @@ plot_figure <- function(data,y,x,y_title,x_title,y_trans='identity',x_trans='ide
   if (wave == 1) {y_text = sub('during_wave','during_first_wave',y)} 
   else if (wave == 2) {y_text = sub('during_wave','during_second_wave',y)} 
   else {y_text = y}
-  ggsave(paste("./plots/figure_3_",y_text,"_",x,".png",sep=""), plot=figure, width=10, height=10, units='cm', dpi=300)
+  ggsave(paste("../plots/figure_3_",y_text,"_",x,".png",sep=""), plot=figure, width=10, height=10, units='cm', dpi=300)
 }
 
 # deaths in first wave vs. si in first wave
@@ -357,6 +357,6 @@ for (f in flags){
   
 }
 
-write.csv(df,"./data/corr.csv")
+write.csv(df,"../data/corr.csv")
 
 
