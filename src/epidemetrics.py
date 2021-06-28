@@ -57,88 +57,95 @@ class Epidemetrics:
         cases_sub_e = self.algorithm_e.run(cases_sub_a, cases_sub_b, cases_sub_c, deaths_sub_c, country=country)
         # compute plots
         if plot:
-            peak = find_peaks(cases['new_per_day_smooth'].values, prominence=0, distance=1)
-            trough = find_peaks([-x for x in cases['new_per_day_smooth'].values], prominence=0, distance=1)
-            cases_pre_algo = pd.DataFrame(data=np.transpose(np.append(cases.index[peak[0]], cases.index[trough[0]])),
-                                          columns=['location'])
-            peak = find_peaks(deaths['dead_per_day_smooth'].values, prominence=0, distance=1)
-            trough = find_peaks([-x for x in deaths['dead_per_day_smooth'].values], prominence=0, distance=1)
-            deaths_pre_algo = pd.DataFrame(data=np.transpose(np.append(deaths.index[peak[0]], deaths.index[trough[0]])),
-                                           columns=['location'])
+            self.plot_peaks(cases, deaths, country, cases_sub_a, cases_sub_b, cases_sub_c,
+                            deaths_sub_a, deaths_sub_b, deaths_sub_c, save)
 
-            fig, axs = plt.subplots(nrows=2, ncols=4, sharex=True, figsize=(14, 7))
-            plt.suptitle(country)
-
-            axs[0, 0].set_title('Cases Before Algorithm')
-            axs[0, 0].plot(cases['new_per_day_smooth'].values)
-            axs[0, 0].scatter(cases_pre_algo['location'].values,
-                              cases['new_per_day_smooth'].values[
-                                  cases_pre_algo['location'].values.astype(int)], color='red', marker='o')
-            axs[0, 0].get_xaxis().set_visible(False)
-            axs[0, 0].get_yaxis().set_visible(False)
-
-            axs[0, 1].set_title('Cases After Sub Algorithm A')
-            axs[0, 1].plot(cases['new_per_day_smooth'].values)
-            axs[0, 1].scatter(cases_sub_a['location'].values,
-                              cases['new_per_day_smooth'].values[
-                                  cases_sub_a['location'].values.astype(int)], color='red', marker='o')
-            axs[0, 1].get_xaxis().set_visible(False)
-            axs[0, 1].get_yaxis().set_visible(False)
-
-            axs[0, 2].set_title('Cases After Sub Algorithm B')
-            axs[0, 2].plot(cases['new_per_day_smooth'].values)
-            axs[0, 2].scatter(cases_sub_b['location'].values,
-                              cases['new_per_day_smooth'].values[
-                                  cases_sub_b['location'].values.astype(int)], color='red', marker='o')
-            axs[0, 2].get_xaxis().set_visible(False)
-            axs[0, 2].get_yaxis().set_visible(False)
-
-            axs[0, 3].set_title('Cases After Sub Algorithm C&D')
-            axs[0, 3].plot(cases['new_per_day_smooth'].values)
-            axs[0, 3].scatter(cases_sub_c['location'].values,
-                              cases['new_per_day_smooth'].values[
-                                  cases_sub_c['location'].values.astype(int)], color='red', marker='o')
-            axs[0, 3].get_xaxis().set_visible(False)
-            axs[0, 3].get_yaxis().set_visible(False)
-
-            axs[1, 0].set_title('Deaths Before Algorithm')
-            axs[1, 0].plot(deaths['dead_per_day_smooth'].values)
-            axs[1, 0].scatter(deaths_pre_algo['location'].values,
-                              deaths['dead_per_day_smooth'].values[
-                                  deaths_pre_algo['location'].values.astype(int)], color='red', marker='o')
-            axs[1, 0].get_xaxis().set_visible(False)
-            axs[1, 0].get_yaxis().set_visible(False)
-
-            axs[1, 1].set_title('Deaths After Sub Algorithm A')
-            axs[1, 1].plot(deaths['dead_per_day_smooth'].values)
-            axs[1, 1].scatter(deaths_sub_a['location'].values,
-                              deaths['dead_per_day_smooth'].values[
-                                  deaths_sub_a['location'].values.astype(int)], color='red', marker='o')
-            axs[1, 1].get_xaxis().set_visible(False)
-            axs[1, 1].get_yaxis().set_visible(False)
-
-            axs[1, 2].set_title('Deaths After Sub Algorithm B')
-            axs[1, 2].plot(deaths['dead_per_day_smooth'].values)
-            axs[1, 2].scatter(deaths_sub_b['location'].values,
-                              deaths['dead_per_day_smooth'].values[
-                                  deaths_sub_b['location'].values.astype(int)], color='red', marker='o')
-            axs[1, 2].get_xaxis().set_visible(False)
-            axs[1, 2].get_yaxis().set_visible(False)
-
-            axs[1, 3].set_title('Deaths After Sub Algorithm C&D')
-            axs[1, 3].plot(deaths['dead_per_day_smooth'].values)
-            axs[1, 3].scatter(deaths_sub_c['location'].values,
-                              deaths['dead_per_day_smooth'].values[
-                                  deaths_sub_c['location'].values.astype(int)], color='red', marker='o')
-            axs[1, 3].get_xaxis().set_visible(False)
-            axs[1, 3].get_yaxis().set_visible(False)
-
-            fig.tight_layout()
-
-            if save:
-                plt.savefig(os.path.join(self.plot_path, country + '.png'))
-                plt.close('all')
         return cases_sub_e
+
+    def plot_peaks(self, cases, deaths, country, cases_sub_a, cases_sub_b, cases_sub_c,
+                   deaths_sub_a, deaths_sub_b, deaths_sub_c, save):
+
+        peak = find_peaks(cases['new_per_day_smooth'].values, prominence=0, distance=1)
+        trough = find_peaks([-x for x in cases['new_per_day_smooth'].values], prominence=0, distance=1)
+        cases_pre_algo = pd.DataFrame(data=np.transpose(np.append(cases.index[peak[0]], cases.index[trough[0]])),
+                                      columns=['location'])
+        peak = find_peaks(deaths['dead_per_day_smooth'].values, prominence=0, distance=1)
+        trough = find_peaks([-x for x in deaths['dead_per_day_smooth'].values], prominence=0, distance=1)
+        deaths_pre_algo = pd.DataFrame(data=np.transpose(np.append(deaths.index[peak[0]], deaths.index[trough[0]])),
+                                       columns=['location'])
+
+        fig, axs = plt.subplots(nrows=2, ncols=4, sharex=True, figsize=(14, 7))
+        plt.suptitle(country)
+
+        axs[0, 0].set_title('Cases Before Algorithm')
+        axs[0, 0].plot(cases['new_per_day_smooth'].values)
+        axs[0, 0].scatter(cases_pre_algo['location'].values,
+                          cases['new_per_day_smooth'].values[
+                              cases_pre_algo['location'].values.astype(int)], color='red', marker='o')
+        axs[0, 0].get_xaxis().set_visible(False)
+        axs[0, 0].get_yaxis().set_visible(False)
+
+        axs[0, 1].set_title('Cases After Sub Algorithm A')
+        axs[0, 1].plot(cases['new_per_day_smooth'].values)
+        axs[0, 1].scatter(cases_sub_a['location'].values,
+                          cases['new_per_day_smooth'].values[
+                              cases_sub_a['location'].values.astype(int)], color='red', marker='o')
+        axs[0, 1].get_xaxis().set_visible(False)
+        axs[0, 1].get_yaxis().set_visible(False)
+
+        axs[0, 2].set_title('Cases After Sub Algorithm B')
+        axs[0, 2].plot(cases['new_per_day_smooth'].values)
+        axs[0, 2].scatter(cases_sub_b['location'].values,
+                          cases['new_per_day_smooth'].values[
+                              cases_sub_b['location'].values.astype(int)], color='red', marker='o')
+        axs[0, 2].get_xaxis().set_visible(False)
+        axs[0, 2].get_yaxis().set_visible(False)
+
+        axs[0, 3].set_title('Cases After Sub Algorithm C&D')
+        axs[0, 3].plot(cases['new_per_day_smooth'].values)
+        axs[0, 3].scatter(cases_sub_c['location'].values,
+                          cases['new_per_day_smooth'].values[
+                              cases_sub_c['location'].values.astype(int)], color='red', marker='o')
+        axs[0, 3].get_xaxis().set_visible(False)
+        axs[0, 3].get_yaxis().set_visible(False)
+
+        axs[1, 0].set_title('Deaths Before Algorithm')
+        axs[1, 0].plot(deaths['dead_per_day_smooth'].values)
+        axs[1, 0].scatter(deaths_pre_algo['location'].values,
+                          deaths['dead_per_day_smooth'].values[
+                              deaths_pre_algo['location'].values.astype(int)], color='red', marker='o')
+        axs[1, 0].get_xaxis().set_visible(False)
+        axs[1, 0].get_yaxis().set_visible(False)
+
+        axs[1, 1].set_title('Deaths After Sub Algorithm A')
+        axs[1, 1].plot(deaths['dead_per_day_smooth'].values)
+        axs[1, 1].scatter(deaths_sub_a['location'].values,
+                          deaths['dead_per_day_smooth'].values[
+                              deaths_sub_a['location'].values.astype(int)], color='red', marker='o')
+        axs[1, 1].get_xaxis().set_visible(False)
+        axs[1, 1].get_yaxis().set_visible(False)
+
+        axs[1, 2].set_title('Deaths After Sub Algorithm B')
+        axs[1, 2].plot(deaths['dead_per_day_smooth'].values)
+        axs[1, 2].scatter(deaths_sub_b['location'].values,
+                          deaths['dead_per_day_smooth'].values[
+                              deaths_sub_b['location'].values.astype(int)], color='red', marker='o')
+        axs[1, 2].get_xaxis().set_visible(False)
+        axs[1, 2].get_yaxis().set_visible(False)
+
+        axs[1, 3].set_title('Deaths After Sub Algorithm C&D')
+        axs[1, 3].plot(deaths['dead_per_day_smooth'].values)
+        axs[1, 3].scatter(deaths_sub_c['location'].values,
+                          deaths['dead_per_day_smooth'].values[
+                              deaths_sub_c['location'].values.astype(int)], color='red', marker='o')
+        axs[1, 3].get_xaxis().set_visible(False)
+        axs[1, 3].get_yaxis().set_visible(False)
+
+        fig.tight_layout()
+
+        if save:
+            plt.savefig(os.path.join(self.plot_path, country + '.png'))
+            plt.close('all')
 
     def _debug_case_death_ascertainment_plot(self):
         n = 50

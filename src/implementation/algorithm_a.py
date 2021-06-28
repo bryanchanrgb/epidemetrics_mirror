@@ -62,8 +62,11 @@ class AlgorithmA:
             results = sub_a.copy()
 
         if plot:
-            plt.plot(data[field].values)
-            plt.scatter(sub_a['location'].values,
-                        data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
+            self.plot(data, sub_a, field)
         # results returns a set of peaks and troughs which are at least a minimum distance apart
         return results
+
+    def plot(self, data, sub_a, field):
+        plt.plot(data[field].values)
+        plt.scatter(sub_a['location'].values,
+                    data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')

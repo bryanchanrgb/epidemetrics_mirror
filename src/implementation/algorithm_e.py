@@ -42,29 +42,33 @@ class AlgorithmE:
         results = results.sort_values(by=['location'])
 
         if plot:
-            fig, (ax0, ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=4)
-            # plot peaks-trough pairs from sub_a
-            ax0.set_title('After Sub Algorithm A')
-            ax0.plot(data['new_per_day_smooth'].values)
-            ax0.scatter(cases_sub_a['location'].values,
-                        data['new_per_day_smooth'].values[
-                            cases_sub_a['location'].values.astype(int)], color='red', marker='o')
-            # plot peaks-trough pairs from sub_b
-            ax1.set_title('After Sub Algorithm B')
-            ax1.plot(data['new_per_day_smooth'].values)
-            ax1.scatter(cases_sub_b['location'].values,
-                        data['new_per_day_smooth'].values[
-                            cases_sub_b['location'].values.astype(int)], color='red', marker='o')
-            # plot peaks after sub_c
-            ax2.set_title('After Sub Algorithm C & D')
-            ax2.plot(data['new_per_day_smooth'].values)
-            ax2.scatter(cases_sub_c['location'].values,
-                        data['new_per_day_smooth'].values[
-                            cases_sub_c['location'].values.astype(int)], color='red', marker='o')
-            # plot peaks from sub_e
-            ax3.set_title('After Sub Algorithm E')
-            ax3.plot(data['new_per_day_smooth'].values)
-            ax3.scatter(results['location'].values,
-                        data['new_per_day_smooth'].values[
-                            results['location'].values.astype(int)], color='red', marker='o')
+            self.plot(data, cases_sub_a, cases_sub_b, cases_sub_c, results)
+
         return results
+
+    def plot(self, data, cases_sub_a, cases_sub_b, cases_sub_c, results):
+        fig, (ax0, ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=4)
+        # plot peaks-trough pairs from sub_a
+        ax0.set_title('After Sub Algorithm A')
+        ax0.plot(data['new_per_day_smooth'].values)
+        ax0.scatter(cases_sub_a['location'].values,
+                    data['new_per_day_smooth'].values[
+                        cases_sub_a['location'].values.astype(int)], color='red', marker='o')
+        # plot peaks-trough pairs from sub_b
+        ax1.set_title('After Sub Algorithm B')
+        ax1.plot(data['new_per_day_smooth'].values)
+        ax1.scatter(cases_sub_b['location'].values,
+                    data['new_per_day_smooth'].values[
+                        cases_sub_b['location'].values.astype(int)], color='red', marker='o')
+        # plot peaks after sub_c
+        ax2.set_title('After Sub Algorithm C & D')
+        ax2.plot(data['new_per_day_smooth'].values)
+        ax2.scatter(cases_sub_c['location'].values,
+                    data['new_per_day_smooth'].values[
+                        cases_sub_c['location'].values.astype(int)], color='red', marker='o')
+        # plot peaks from sub_e
+        ax3.set_title('After Sub Algorithm E')
+        ax3.plot(data['new_per_day_smooth'].values)
+        ax3.scatter(results['location'].values,
+                    data['new_per_day_smooth'].values[
+                        results['location'].values.astype(int)], color='red', marker='o')

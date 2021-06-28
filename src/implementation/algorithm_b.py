@@ -59,15 +59,18 @@ class AlgorithmB:
             results.loc[results['location'] == og_dict[g][3], 'location'] = og_dict[g][2]
 
         if plot:
-            fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, sharex='all')
-            # plot peaks-trough pairs from sub_a
-            ax0.set_title('After Sub Algorithm A')
-            ax0.plot(data[field].values)
-            ax0.scatter(sub_a['location'].values,
-                        data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
-            # plot peaks-trough pairs from sub_b
-            ax1.set_title('After Sub Algorithm B')
-            ax1.plot(data[field].values)
-            ax1.scatter(results['location'].values,
-                        data[field].values[results['location'].values.astype(int)], color='red', marker='o')
+            self.plot(data, sub_a, results, field)
         return results
+
+    def plot(self, data, sub_a, results, field):
+        fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, sharex='all')
+        # plot peaks-trough pairs from sub_a
+        ax0.set_title('After Sub Algorithm A')
+        ax0.plot(data[field].values)
+        ax0.scatter(sub_a['location'].values,
+                    data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
+        # plot peaks-trough pairs from sub_b
+        ax1.set_title('After Sub Algorithm B')
+        ax1.plot(data[field].values)
+        ax1.scatter(results['location'].values,
+                    data[field].values[results['location'].values.astype(int)], color='red', marker='o')
