@@ -20,6 +20,8 @@ class AlgorithmB:
         # dictionary to hold boundaries for peak-trough pairs too close to each other
         og_dict = dict()
         while sub_b_flag == True:
+            if len(results) < 2:
+                print('Fix me!')
             # separation here refers to temporal distance S_i
             results.loc[0:len(results) - 2, 'separation'] = np.diff(results['location'])
             results.loc[:, 'y_position'] = data[field][results['location']].values
