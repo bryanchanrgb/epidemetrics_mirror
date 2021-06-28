@@ -6,12 +6,11 @@ import datetime
 import psycopg2
 from tqdm import tqdm
 from csaps import csaps
-
 from pandas import DataFrame
 
 
 class DataProvider:
-    def __init__(self):
+    def __init__(self, cache_path):
         self.source = 'WRD_WHO'
         self.end_date = datetime.date(2021, 4, 1)
         self.ma_window = 7
@@ -47,14 +46,7 @@ class DataProvider:
         self.rel_to_constant = 10000  # used as population reference for relative t0
         self.prominence_height_threshold = 0.7  # prominence must be above a percentage of the peak height
         self.t_sep_a = 21
-        # self.v_sep_b = 10  # v separation for sub algorithm B
-        # self.d_match = 35  # matching window for undetected case waves based on death waves
-        # self.plot_path = './plots/algorithm_results/'
-        # self.exclude_countries = ['CMR', 'COG', 'GNQ', 'BWA', 'ESH']  # countries with low quality data to be ignored
-        # self.class_1_threshold = 55  # minimum number of absolute cases to be considered going into first wave
-        # self.class_1_threshold_dead = 5
-        # self.debug_death_lag = 9  # death lag for case-death ascertainment
-        # self.debug_countries_of_interest = ['USA', 'GBR', 'BRA', 'IND', 'ESP', 'FRA', 'ZAF']
+        self.cache_path = cache_path
 
     def open_db_connection(self):
         '''
@@ -67,26 +59,34 @@ class DataProvider:
             user='covid19',
             password='covid19')
 
-    def fetch_data(self, use_cache=True):
+    def fetch_data(self, use_cache: bool = True):
         self.use_cache = use_cache
         self.conn = self.open_db_connection()
 
         '''
         PULL/PROCESS DATA 
         '''
-        self.epidemiology = self._get_epi_table()
-        self.testing = self._get_tst_table()
-        self.wbi_table = self._get_wbi_table()
-        self.gsi_table = self._get_gsi_table()
-        self.epidemiology_series = self._get_epi_series(
+        self.epidemiology = self.get_epi_table()
+        self.testing = self.get_tst_table()
+        self.wbi_table = self.get_wbi_table()
+        self.gsi_table = self.get_gsi_table()
+        self.epidemiology_series = self.get_epi_series(
             epidemiology=self.epidemiology,
             testing=self.testing,
             wbi_table=self.wbi_table)
 
-    def load_from_cache(self, file_name: str):
-        if self.use_cache and os.path.exists(file_name):
-            print(f'Loading data from cache file: {file_name}')
-            df = pd.read_csv(file_name, encoding='utf-8')
+    def get_series(self, country: str, field: str) -> DataFrame:
+        return self.epidemiology_series[self.epidemiology_series['countrycode'] == country][
+            ['date', field]].dropna().reset_index(drop=True)
+
+    def get_countries(self):
+        return self.testing['countrycode'].unique()
+
+    def load_from_cache(self, file_name: str) -> DataFrame:
+        full_path = os.path.join(self.cache_path, file_name)
+        if self.use_cache and os.path.exists(full_path):
+            print(f'Loading data from cache file: {full_path}')
+            df = pd.read_csv(full_path, encoding='utf-8')
             if 'date' in df.columns:
                 df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d').dt.date
 
@@ -95,15 +95,18 @@ class DataProvider:
         return None
 
     def save_to_cache(self, df: DataFrame, file_name: str):
-        pathlib.Path(os.path.dirname(file_name)).mkdir(parents=True, exist_ok=True)
-        df.to_csv(file_name, encoding='utf-8')
+        if self.use_cache:
+            full_path = os.path.join(self.cache_path, file_name)
+            print(f'Saving data to cache: {full_path}')
+            pathlib.Path(os.path.dirname(full_path)).mkdir(parents=True, exist_ok=True)
+            df.to_csv(full_path, encoding='utf-8')
 
-    def _get_epi_table(self):
+    def get_epi_table(self) -> DataFrame:
         '''
         PREPARE EPIDEMIOLOGY TABLE
         '''
         print('Fetching epidemiology data')
-        cache_filename = "./cache/epidemiology_table.csv"
+        cache_filename = "epidemiology_table.csv"
 
         epidemiology = self.load_from_cache(cache_filename)
         if epidemiology is not None:
@@ -148,9 +151,9 @@ class DataProvider:
         self.save_to_cache(epidemiology, cache_filename)
         return epidemiology
 
-    def _get_epi_series(self, epidemiology, testing, wbi_table):
+    def get_epi_series(self, epidemiology: DataFrame, testing: DataFrame, wbi_table: DataFrame) -> DataFrame:
         print('Processing Epidemiological Time Series Data')
-        cache_filename = "./cache/epidemiology_series.csv"
+        cache_filename = "epidemiology_series.csv"
 
         epidemiology_series = self.load_from_cache(cache_filename)
         if epidemiology_series is not None:
@@ -312,9 +315,9 @@ class DataProvider:
         self.save_to_cache(epidemiology_series, cache_filename)
         return epidemiology_series
 
-    def _get_gsi_table(self):
+    def get_gsi_table(self) -> DataFrame:
         print('Fetching government_response data')
-        cache_filename = "./cache/government_response_table.csv"
+        cache_filename = "government_response_table.csv"
 
         government_response = self.load_from_cache(cache_filename)
         if government_response is not None:
@@ -336,9 +339,9 @@ class DataProvider:
         self.save_to_cache(government_response, cache_filename)
         return government_response
 
-    def _get_wbi_table(self):
+    def get_wbi_table(self) -> DataFrame:
         print('Fetching world_bank data')
-        cache_filename = "./cache/world_bank_table.csv"
+        cache_filename = "world_bank_table.csv"
 
         wbi_table = self.load_from_cache(cache_filename)
         if wbi_table is not None:
@@ -372,12 +375,12 @@ class DataProvider:
         self.save_to_cache(wbi_table, cache_filename)
         return wbi_table
 
-    def _get_tst_table(self):
+    def get_tst_table(self) -> DataFrame:
         print('Preparing testing data')
         '''
         PREPARE TESTING TABLE
         '''
-        cache_filename = "./cache/testing_table.csv"
+        cache_filename = "testing_table.csv"
         testing = self.load_from_cache(cache_filename)
         if testing is not None:
             return testing
