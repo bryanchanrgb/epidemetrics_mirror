@@ -16,6 +16,7 @@ if __name__ == '__main__':
     data_provider.fetch_data(use_cache=True)
 
     config = Config()
+    config.plot_path = plot_path
     epidemetrics = Epidemetrics(config, data_provider, plot_path=plot_path)
 
     countries = data_provider.get_countries()

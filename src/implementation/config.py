@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
+    plot_path = None
     abs_t0_threshold = 1000
     abs_prominence_threshold = 55  # minimum prominence
     abs_prominence_threshold_dead = 5  # minimum prominence for dead peak detection

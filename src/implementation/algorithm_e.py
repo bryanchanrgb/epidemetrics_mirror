@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from pandas import DataFrame
 import matplotlib.pyplot as plt
@@ -42,11 +44,11 @@ class AlgorithmE:
         results = results.sort_values(by=['location'])
 
         if plot:
-            self.plot(data, cases_sub_a, cases_sub_b, cases_sub_c, results)
+            self.plot(data, country, cases_sub_a, cases_sub_b, cases_sub_c, results)
 
         return results
 
-    def plot(self, data, cases_sub_a, cases_sub_b, cases_sub_c, results):
+    def plot(self, data, country, cases_sub_a, cases_sub_b, cases_sub_c, results):
         fig, (ax0, ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=4)
         # plot peaks-trough pairs from sub_a
         ax0.set_title('After Sub Algorithm A')
@@ -72,3 +74,7 @@ class AlgorithmE:
         ax3.scatter(results['location'].values,
                     data['new_per_day_smooth'].values[
                         results['location'].values.astype(int)], color='red', marker='o')
+
+        fig.tight_layout()
+        plt.savefig(os.path.join(self.config.plot_path, country + '_algorithm_e.png'))
+        plt.close('all')

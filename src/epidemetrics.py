@@ -54,7 +54,8 @@ class Epidemetrics:
         deaths_sub_c = self.algorithm_c.run(
             sub_a=deaths_sub_a, sub_b=deaths_sub_b, country=country, field='dead_per_day_smooth')
         # run sub algorithm e
-        cases_sub_e = self.algorithm_e.run(cases_sub_a, cases_sub_b, cases_sub_c, deaths_sub_c, country=country)
+        cases_sub_e = self.algorithm_e.run(cases_sub_a, cases_sub_b, cases_sub_c, deaths_sub_c, country=country,
+                                           plot=plot)
         # compute plots
         if plot:
             self.plot_peaks(cases, deaths, country, cases_sub_a, cases_sub_b, cases_sub_c,
