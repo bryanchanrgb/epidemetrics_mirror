@@ -20,8 +20,8 @@ INTITALISE SCRIPT PARAMETERS
 
 SAVE_PLOTS = False
 SAVE_CSV = True
-PLOT_PATH = './plots/'
-CSV_PATH = './data/'
+PLOT_PATH = '../plots/'
+CSV_PATH = '../data/'
 SMOOTH = 0.001
 T_SEP = 21  # Minimum number of days apart between peaks for sub-algorithm A
 V_SEP = 0  # Minimum vertical distance for sub-algorithm B
