@@ -1,5 +1,4 @@
 import os
-
 import numpy as np
 from pandas import DataFrame
 import matplotlib.pyplot as plt
@@ -37,10 +36,9 @@ class AlgorithmE:
                                          (cases_sub_b['location'] >= death_peak - self.config.d_match) & (
                                                  cases_sub_b['location'] <= death_peak)]
                 results = results.append(candidates.loc[candidates.idxmax()['prominence']])
-                continue
             # if nothing, could use max - but might violate t_sep rule...
             else:
-                continue
+                pass
         results = results.sort_values(by=['location'])
 
         if plot:

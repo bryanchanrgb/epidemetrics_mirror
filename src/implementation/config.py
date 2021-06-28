@@ -1,9 +1,9 @@
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 
 
 @dataclass
 class Config:
-    plot_path = None
     abs_t0_threshold = 1000
     abs_prominence_threshold = 55  # minimum prominence
     abs_prominence_threshold_dead = 5  # minimum prominence for dead peak detection
@@ -22,3 +22,13 @@ class Config:
     class_1_threshold_dead = 5
     debug_death_lag = 9  # death lag for case-death ascertainment
     debug_countries_of_interest = ['USA', 'GBR', 'BRA', 'IND', 'ESP', 'FRA', 'ZAF']
+
+    base_path: str = None
+    plot_path: str = field(init=False)
+    data_path: str = field(init=False)
+    cache_path: str = field(init=False)
+
+    def __post_init__(self):
+        self.plot_path = os.path.abspath(os.path.join(self.base_path, '../plots/algorithm_results'))
+        self.data_path = os.path.abspath(os.path.join(self.base_path, '../data'))
+        self.cache_path = os.path.abspath(os.path.join(self.base_path, '../cache'))

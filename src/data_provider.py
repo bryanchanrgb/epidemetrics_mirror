@@ -6,11 +6,12 @@ import datetime
 import psycopg2
 from tqdm import tqdm
 from csaps import csaps
+
 from pandas import DataFrame
 
 
 class DataProvider:
-    def __init__(self, cache_path):
+    def __init__(self, config):
         self.source = 'WRD_WHO'
         self.end_date = datetime.date(2021, 4, 1)
         self.ma_window = 7
@@ -46,7 +47,7 @@ class DataProvider:
         self.rel_to_constant = 10000  # used as population reference for relative t0
         self.prominence_height_threshold = 0.7  # prominence must be above a percentage of the peak height
         self.t_sep_a = 21
-        self.cache_path = cache_path
+        self.config = config
 
     def open_db_connection(self):
         '''
@@ -83,7 +84,7 @@ class DataProvider:
         return self.testing['countrycode'].unique()
 
     def load_from_cache(self, file_name: str) -> DataFrame:
-        full_path = os.path.join(self.cache_path, file_name)
+        full_path = os.path.join(self.config.cache_path, file_name)
         if self.use_cache and os.path.exists(full_path):
             print(f'Loading data from cache file: {full_path}')
             df = pd.read_csv(full_path, encoding='utf-8')
@@ -96,7 +97,7 @@ class DataProvider:
 
     def save_to_cache(self, df: DataFrame, file_name: str):
         if self.use_cache:
-            full_path = os.path.join(self.cache_path, file_name)
+            full_path = os.path.join(self.config.cache_path, file_name)
             print(f'Saving data to cache: {full_path}')
             pathlib.Path(os.path.dirname(full_path)).mkdir(parents=True, exist_ok=True)
             df.to_csv(full_path, encoding='utf-8')

@@ -13,9 +13,8 @@ from implementation.config import Config
 
 
 class Table_1:
-    def __init__(self, config: Config, data_provider: DataProvider, epimetrics: Epidemetrics, data_path: str):
+    def __init__(self, config: Config, data_provider: DataProvider, epimetrics: Epidemetrics):
         self.config = config
-        self.data_path = data_path
         self.epimetrics = epimetrics
         self.data_provider = data_provider
 
@@ -253,7 +252,7 @@ class Table_1:
                     continue
             epidemiology_panel = epidemiology_panel.append(data, ignore_index=True)
             continue
-        epidemiology_panel.to_csv(os.path.join(self.data_path, 'table_of_results.csv'), index=False)
+        epidemiology_panel.to_csv(os.path.join(self.config.data_path, 'table_of_results.csv'), index=False)
         return epidemiology_panel
 
     # pg.mwu abstracts the decision of less than or greater than
@@ -283,17 +282,17 @@ class Table_1:
         data = pd.concat(
             [quartile_1, median, quartile_3], keys=['quartile_1', 'median', 'quartile_3'], axis=1).sort_values(
             by=['class_coarse'], axis=1)
-        data.to_csv(os.path.join(self.data_path, 'table_1_v1.csv'))
+        data.to_csv(os.path.join(self.config.data_path, 'table_1_v1.csv'))
         self._mann_whitney(epidemiology_panel[
                                ['class_coarse', 'mortality_rate', 'case_rate', 'peak_case_rate',
                                 'stringency_response_time', 'total_stringency', 'testing_response_time',
                                 'population_density', 'gni_per_capita']].copy(), field='gni_per_capita').to_csv(
-            os.path.join(self.data_path, 'mann_whitney_gni.csv'))
+            os.path.join(self.config.data_path, 'mann_whitney_gni.csv'))
         self._mann_whitney(epidemiology_panel[
                                ['class_coarse', 'mortality_rate', 'case_rate', 'peak_case_rate',
                                 'stringency_response_time', 'total_stringency', 'testing_response_time',
                                 'population_density', 'gni_per_capita']].copy(),
                            field='stringency_response_time').to_csv(
-            os.path.join(self.data_path, 'mann_whitney_si.csv'))
+            os.path.join(self.config.data_path, 'mann_whitney_si.csv'))
         print('Done')
         return data

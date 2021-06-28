@@ -17,11 +17,10 @@ from implementation.config import Config
 
 
 class Epidemetrics:
-    def __init__(self, config: Config, data_provider: DataProvider, plot_path: str):
+    def __init__(self, config: Config, data_provider: DataProvider):
         self.config = config
         self.data_provider = data_provider
-        self.plot_path = plot_path
-        self.prepare_output_dirs(self.plot_path)
+        self.prepare_output_dirs(self.config.plot_path)
 
         self.algorithm_a = AlgorithmA(self.config, self.data_provider)
         self.algorithm_b = AlgorithmB(self.config, self.data_provider, algorithm_a=self.algorithm_a)
@@ -145,7 +144,7 @@ class Epidemetrics:
         fig.tight_layout()
 
         if save:
-            plt.savefig(os.path.join(self.plot_path, country + '.png'))
+            plt.savefig(os.path.join(self.config.plot_path, country + '.png'))
             plt.close('all')
 
     def _debug_case_death_ascertainment_plot(self):
@@ -184,5 +183,5 @@ class Epidemetrics:
             ax[1].set_ylabel('Cases / Deaths (+9d)')
             ax[1].set_ylim([0, 1e2])
         plt.tight_layout()
-        plt.savefig(os.path.join(self.plot_path, 'inverse_cfr.png'))
+        plt.savefig(os.path.join(self.config.plot_path, 'inverse_cfr.png'))
         plt.close('all')
