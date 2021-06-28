@@ -1,3 +1,10 @@
+# How to run
+
+```
+docker-compose build
+docker-compose run epidemetrics
+```
+
 # Epidemetrics
 
 The code has been redesigned and older versions of the scripts can be found
