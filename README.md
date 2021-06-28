@@ -4,7 +4,13 @@
 docker-compose build
 docker-compose run epidemetrics
 ```
+ or
 
+```
+pip3 install -r ./requirements.txt
+cd ./src
+python3 ./main.py
+```
 # Epidemetrics
 
 The code has been redesigned and older versions of the scripts can be found
