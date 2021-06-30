@@ -38,7 +38,7 @@ class AlgorithmC:
         # filter out relatively low prominent peaks
         result_peaks_d = result_peaks_c[
             (result_peaks_c['prominence'] >= self.config.prominence_height_threshold * result_peaks_c['y_position'])]
-        # between each remaining peak, retain the trough with the highest prominence
+        # between each remaining peak, retain the trough with the lowest value
         result_peaks_d = result_peaks_d.reset_index(drop=True)
         results = result_peaks_d
         for i in result_peaks_d.index:
@@ -47,9 +47,23 @@ class AlgorithmC:
                                                    (result_troughs['location'] <= result_peaks_d.loc[
                                                        i + 1, 'location'])]
                 if len(candidate_troughs) > 0:
-                    candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmax()['prominence']]
+                    candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmin()['y_position']]
                     results = results.append(candidate_troughs, ignore_index=True)
         results = results.sort_values(by='location').reset_index(drop=True)
+
+        # add final trough after final peak
+        if len(result_peaks_d) > 0:
+            candidate_troughs = result_troughs[result_troughs.location >= result_peaks_d.location.iloc[-1]]
+            if len(candidate_troughs) > 0:
+                candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmin()['y_position']]
+                final_maximum = max(data[(data.index > candidate_troughs.location)][field])
+                if (candidate_troughs.y_position <= (1 - self.config.prominence_height_threshold) *
+                    result_peaks_d.y_position.iloc[-1]) and (
+                        result_peaks_d.y_position.iloc[-1] - candidate_troughs.y_position >= prominence_threshold):
+                    if (candidate_troughs.y_position <= (
+                            1 - self.config.prominence_height_threshold) * final_maximum) and (
+                            final_maximum - candidate_troughs.y_position >= prominence_threshold):
+                        results = results.append(candidate_troughs, ignore_index=True)
 
         if plot:
             self.plot(data, sub_a, sub_b, results, field)
