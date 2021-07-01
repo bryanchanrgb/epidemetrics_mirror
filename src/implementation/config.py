@@ -29,6 +29,9 @@ class Config:
     cache_path: str = field(init=False)
 
     def __post_init__(self):
+        if not self.base_path:
+            return
+
         self.plot_path = os.path.abspath(os.path.join(self.base_path, '../plots/algorithm_results'))
         self.data_path = os.path.abspath(os.path.join(self.base_path, '../data'))
         self.cache_path = os.path.abspath(os.path.join(self.base_path, '../cache'))
