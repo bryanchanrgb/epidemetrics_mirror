@@ -6,6 +6,8 @@ import datetime
 import psycopg2
 from tqdm import tqdm
 from csaps import csaps
+from typing import List
+import scipy.interpolate as interp
 
 from pandas import DataFrame
 
@@ -420,3 +422,18 @@ class DataProvider:
 
         self.save_to_cache(testing, cache_filename)
         return testing
+
+
+class ListDataProvider:
+
+    def __init__(self, data: List, rescale_length: int = 100, country: str = 'TEST'):
+        # Rescale input data list
+        arr_interp = interp.interp1d(np.arange(len(data)), data)
+        data_stretch = arr_interp(np.linspace(0, len(data) - 1, rescale_length))
+
+        self.df = pd.DataFrame({'value': data_stretch})
+        self.df['countrycode'] = country
+        self.df['date'] = pd.date_range(start='1/1/2020', periods=len(self.df), freq='D')
+
+    def get_series(self, country: str, field: str) -> DataFrame:
+        return self.df[self.df['countrycode'] == country][['date', field]].dropna().reset_index(drop=True)

@@ -11,6 +11,12 @@ pip3 install -r ./requirements.txt
 cd ./src
 python3 ./main.py
 ```
+
+# How to test
+
+```
+python -m pytest tests 
+```
 # Epidemetrics
 
 The code has been redesigned and older versions of the scripts can be found

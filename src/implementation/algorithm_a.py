@@ -3,8 +3,8 @@ import pandas as pd
 from pandas import DataFrame
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
-from ..implementation.config import Config
-from ..data_provider import DataProvider
+from implementation.config import Config
+from data_provider import DataProvider
 
 
 class AlgorithmA:
