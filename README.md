@@ -4,16 +4,18 @@
 docker-compose build
 docker-compose run epidemetrics
 ```
- or
-
+or
 ```
 pip3 install -r ./requirements.txt
 cd ./src
 python3 ./main.py
 ```
 
-# How to test
-
+# How to run tests
+```
+docker-compose -f ./docker-compose.test.yml up --build
+```
+or
 ```
 python -m pytest tests 
 ```

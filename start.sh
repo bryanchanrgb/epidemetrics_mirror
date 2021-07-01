@@ -2,7 +2,7 @@
 
 echo "Starting processing pipeline"
 
-cd /src
+cd ./src
 python3 ./main.py
 
 echo "Pipeline processing finished"
