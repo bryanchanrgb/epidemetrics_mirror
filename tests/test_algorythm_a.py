@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import pandas as pd
+import scipy.interpolate as interp
 from pandas import DataFrame
 from typing import List
 
@@ -11,7 +12,11 @@ from src.implementation.algorithm_a import AlgorithmA
 class ListDataProvider:
 
     def __init__(self, data: List, country: str = 'TEST'):
-        self.df = pd.DataFrame({'value': data})
+        # Stretch input data list to 100 points
+        arr_interp = interp.interp1d(np.arange(len(data)), data)
+        data_stretch = arr_interp(np.linspace(0, len(data) - 1, 100))
+
+        self.df = pd.DataFrame({'value': data_stretch})
         self.df['countrycode'] = country
         self.df['date'] = pd.date_range(start='1/1/2020', periods=len(self.df), freq='D')
 
