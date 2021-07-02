@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 class Config:
     abs_t0_threshold = 1000
     abs_prominence_threshold = 55  # minimum prominence
-    abs_prominence_threshold_dead = 5  # minimum prominence for dead peak detection
+    abs_prominence_threshold_dead = 7  # minimum prominence for dead peak detection
     rel_t0_threshold = 0.05  # cases per rel_to_constant
     rel_prominence_threshold = 0.05  # prominence relative to rel_to_constant
     rel_prominence_threshold_dead = 0.0015  # prominence threshold for dead rel_to_constant
