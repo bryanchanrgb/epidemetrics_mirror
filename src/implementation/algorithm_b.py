@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from data_provider import DataProvider
 from implementation.config import Config
 from implementation.algorithm_a import AlgorithmA
+from implementation.prominence_updater import ProminenceUpdater
 
 
 class AlgorithmB:
@@ -14,6 +15,12 @@ class AlgorithmB:
 
     def run(self, sub_a, country, field='new_per_day_smooth', plot=False):
         data = self.data_provider.get_series(country, field)
+
+        # initialise prominence_updater to run when checking pairs
+        initial_value = data[field].iloc[0]
+        terminal_value = data[field].iloc[-1]
+        prominence_updater = ProminenceUpdater(initial_value, terminal_value)
+
         sub_b_flag = True
         # avoid overwriting sub_a when values replaced by t0 and t1
         results = sub_a.copy()
@@ -21,10 +28,9 @@ class AlgorithmB:
         og_dict = dict()
         while sub_b_flag == True:
             if len(results) < 2:
-                print('Fix me!')
+                break
             # separation here refers to temporal distance S_i
             results.loc[0:len(results) - 2, 'separation'] = np.diff(results['location'])
-            results.loc[:, 'y_position'] = data[field][results['location']].values
             # compute vertical distance V_i
             results.loc[0:len(results) - 2, 'y_distance'] = [abs(x) for x in np.diff(results['y_position'])]
             # sort in ascending order of height
@@ -32,33 +38,36 @@ class AlgorithmB:
             # set to false until we find an instance where S_i < t_sep_a / 2 and V_i > v_sep_b
             sub_b_flag = False
             for x in results.index:
-                if results.loc[x, 'y_distance'] >= self.config.v_sep_b and results.loc[
-                    x, 'separation'] < self.config.t_sep_a / 2:
+                if results.loc[x, 'separation'] < self.config.t_sep_a / 2:
                     sub_b_flag = True
                     i = results.loc[x, 'index']
+                    # get original locations and values
                     og_0 = results.loc[results['index'] == i, 'location'].values[0]
                     og_1 = results.loc[results['index'] == i + 1, 'location'].values[0]
-                    # creating boundaries t_0 and t_1 around the peak-trough pair
-                    t_0 = np.floor((og_0 + og_1 - self.config.t_sep_a) / 2)
-                    t_1 = np.floor((og_0 + og_1 + self.config.t_sep_a) / 2)
-                    # store the original locations to restore them at the end
-                    og_dict[len(og_dict)] = [og_0, t_0, og_1, t_1]
-                    # setting the peak locations to the boundaries to be filtered by sub_algorithm_a
+                    y_0 = results.loc[results['index'] == i, 'y_position'].values[0]
+                    y_1 = results.loc[results['index'] == i + 1, 'y_position'].values[0]
+                    # create boundaries t_0 and t_1 around the peak-trough pair
+                    t_0 = max(np.floor((og_0 + og_1 - self.config.t_sep_a) / 2), 0)
+                    t_1 = min(np.floor((og_0 + og_1 + self.config.t_sep_a) / 2), data[field].index[-1])
+                    # store the original locations and values to restore them at the end
+                    og_dict[len(og_dict)] = [og_0, t_0, og_1, t_1, y_0, y_1]
+                    # reset the peak locations to the boundaries to be rechecked
                     results.loc[results['index'] == i, 'location'] = t_0
                     results.loc[results['index'] == i + 1, 'location'] = t_1
-                    # run the indices list (adding start and end of the time series to the list) through find_peaks again
-                    locations = np.clip(np.sort(np.append(results['location'],
-                                                          [min(data[field][~np.isnan(data[field].values)].index),
-                                                           max(data[field][~np.isnan(data[field])].index)])), 0,
-                                        len(data) - 1)
-                    # run the resulting peaks through sub algorithm A again
-                    results = self.algorithm_a.run(country=country, field=field,
-                                                   plot=False, override=data.iloc[locations])
+                    results.loc[results['index'] == i, 'y_position'] = data[field].iloc[int(t_0)]
+                    results.loc[results['index'] == i + 1, 'y_position'] = data[field].values[int(t_1)]
+                    # run the resulting peaks for a prominence check
+                    results = prominence_updater.run(results)
                     break
 
+        # restore old locations and heights
         for g in sorted(og_dict, reverse=True):
             results.loc[results['location'] == og_dict[g][1], 'location'] = og_dict[g][0]
+            results.loc[results['location'] == og_dict[g][1], 'y_position'] = og_dict[g][4]
             results.loc[results['location'] == og_dict[g][3], 'location'] = og_dict[g][2]
+            results.loc[results['location'] == og_dict[g][3], 'y_position'] = og_dict[g][5]
+        # recalculate prominence
+        results = prominence_updater.run(results)
 
         if plot:
             self.plot(data, sub_a, results, field)
