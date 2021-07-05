@@ -11,8 +11,7 @@ class AlgorithmC:
 
     def run(self, sub_a, sub_b, country, field='new_per_day_smooth', plot=False):
         data = self.data_provider.get_series(country, field)
-        population = \
-            self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country]['value'].values[0]
+        population = self.data_provider.get_population(country)
         if field == 'dead_per_day_smooth':
             abs_prominence_threshold = self.config.abs_prominence_threshold_dead
             rel_prominence_threshold = self.config.rel_prominence_threshold_dead
@@ -86,3 +85,4 @@ class AlgorithmC:
         ax2.plot(data[field].values)
         ax2.scatter(results['location'].values,
                     data[field].values[results['location'].values.astype(int)], color='red', marker='o')
+        plt.show()

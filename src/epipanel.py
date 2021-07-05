@@ -86,18 +86,9 @@ class EpiPanel:
             data['country'] = country_series['country'].iloc[0]
             data['class'], peaksAndTroughs = self._classify(country)
             data['class_coarse'] = 1 if data['class'] <= 2 else (2 if data['class'] <= 4 else 3)
-            data['population'] = np.nan if len(
-                self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country]) == 0 else \
-                self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country]['value'].values[0]
-            data['population_density'] = np.nan if len(
-                self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country]) == 0 else \
-                self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country][
-                    'population_density'].values[0]
-            data['gni_per_capita'] = np.nan if len(
-                self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country]) == 0 else \
-                self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country][
-                    'gni_per_capita'].values[
-                    0]
+            data['population'] = self.data_provider.get_wbi_data(country, 'value')
+            data['population_density'] = self.data_provider.get_wbi_data(country, 'population_density')
+            data['gni_per_capita'] = self.data_provider.get_wbi_data(country, 'gni_per_capita')
             data['total_confirmed'] = country_series['confirmed'].iloc[-1]
             data['total_dead'] = country_series['dead'].iloc[-1]
             data['mortality_rate'] = (data['total_dead'] / data['population']) * data['rel_to_constant']

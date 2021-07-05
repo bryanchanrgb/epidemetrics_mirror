@@ -83,6 +83,15 @@ class DataProvider:
         return self.epidemiology_series[self.epidemiology_series['countrycode'] == country][
             ['date', field]].dropna().reset_index(drop=True)
 
+    def get_wbi_data(self, country: str, field: str):
+        if len(self.wbi_table[self.wbi_table['countrycode'] == country]) == 0:
+            return np.nan
+
+        return self.wbi_table[self.wbi_table['countrycode'] == country][field].values[0]
+
+    def get_population(self, country: str):
+        return self.get_wbi_data(country, 'value')
+
     def get_countries(self):
         return self.testing['countrycode'].unique()
 
@@ -427,7 +436,7 @@ class DataProvider:
 
 class ListDataProvider:
 
-    def __init__(self, data: List, x_scaling_factor: int = 7, country: str = 'TEST'):
+    def __init__(self, data: List, x_scaling_factor: int = 7, country: str = 'TEST', country_population: int = 1000000):
         # Rescale input data list
         data_size = len(data)
         rescale_length = data_size * x_scaling_factor - x_scaling_factor + 1
@@ -435,12 +444,14 @@ class ListDataProvider:
         arr_interp = interp.interp1d(np.arange(data_size), data)
         data_stretch = arr_interp(np.linspace(0, data_size - 1, rescale_length))
 
-
         self.df = pd.DataFrame({'value': data_stretch})
         self.df['countrycode'] = country
         self.df['date'] = pd.date_range(start='1/1/2020', periods=len(self.df), freq='D')
 
-        self.wbi_table = None
+        self.country_population = country_population
 
     def get_series(self, country: str, field: str) -> DataFrame:
         return self.df[self.df['countrycode'] == country][['date', field]].dropna().reset_index(drop=True)
+
+    def get_population(self, country: str):
+        return self.country_population

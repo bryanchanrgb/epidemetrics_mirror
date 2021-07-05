@@ -30,14 +30,8 @@ class TestAlgorithmC:
 
         sub_a = algorithm_a.run(country='TEST', field='value', plot=True)
         sub_b = algorithm_b.run(sub_a, country='TEST', field='value', plot=True)
+        result = algorithm_c.run(sub_a, sub_b, country='TEST', field='value', plot=True)
+        y_positions = result["y_position"].to_list()
 
-        # TODO: Add wbi table
-        # population = \
-        #     self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country]['value'].values[0]
-
-
-        result = algorithm_c.run(sub_a, sub_b, country='TEST', field='value')
-        peaks_ind = result["peak_ind"].to_list()
-
-        expected_result = [1, 0, 1]
-        assert peaks_ind == expected_result
+        expected_result = []
+        assert y_positions == expected_result

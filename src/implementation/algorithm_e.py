@@ -55,8 +55,7 @@ class AlgorithmE:
         # add final trough after final peak
         if len(results) > 0:
             # obtain prominence threshold
-            population = \
-                self.data_provider.wbi_table[self.data_provider.wbi_table['countrycode'] == country]['value'].values[0]
+            population = self.data_provider.get_population(country)
             abs_prominence_threshold = self.config.abs_prominence_threshold
             rel_prominence_threshold = self.config.rel_prominence_threshold
             rel_prominence_max_threshold = self.config.rel_prominence_max_threshold
