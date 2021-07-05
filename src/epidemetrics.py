@@ -8,6 +8,7 @@ import datetime
 from pandas import DataFrame
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
+import json
 from data_provider import DataProvider
 from implementation.algorithm_a import AlgorithmA
 from implementation.algorithm_b import AlgorithmB
@@ -21,6 +22,7 @@ class Epidemetrics:
         self.config = config
         self.data_provider = data_provider
         self.prepare_output_dirs(self.config.plot_path)
+        self.summary_output = dict()
 
         self.algorithm_a = AlgorithmA(self.config, self.data_provider)
         self.algorithm_b = AlgorithmB(self.config, self.data_provider, algorithm_a=self.algorithm_a)
@@ -60,7 +62,25 @@ class Epidemetrics:
             self.plot_peaks(cases, deaths, country, cases_sub_a, cases_sub_b, cases_sub_c,
                             deaths_sub_a, deaths_sub_b, deaths_sub_c, save)
 
+        summary=[]
+        for row, peak in cases_sub_e.iterrows():
+            peak_data = dict({"index":row, "location":peak.location, "date":cases.iloc[int(peak.location)].date, "peak_ind":peak.peak_ind, "y_position":peak.y_position})
+            summary.append(peak_data)
+        self.summary_output[country]=summary
+
         return cases_sub_e
+
+    def save_summary(self):
+        json_data = dict({'data':[]})
+        for country, summary in self.summary_output.items():
+            country_summary = dict({'country':country, 'waves':[]})
+            for wave in summary:
+                copied_wave = wave.copy()
+                copied_wave['date'] = copied_wave['date'].strftime('%Y-%m-%d')
+                country_summary['waves'].append(copied_wave)
+            json_data['data'].append(country_summary)
+        with open(os.path.join(self.config.plot_path, 'summary_output.json'), 'w') as f:
+            json.dump(json_data, f)
 
     def plot_peaks(self, cases, deaths, country, cases_sub_a, cases_sub_b, cases_sub_c,
                    deaths_sub_a, deaths_sub_b, deaths_sub_c, save):

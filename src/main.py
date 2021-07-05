@@ -3,6 +3,7 @@ from tqdm import tqdm
 from epidemetrics import Epidemetrics
 from data_provider import DataProvider
 from implementation.config import Config
+from epipanel import EpiPanel
 from table_1 import Table_1
 
 if __name__ == '__main__':
@@ -25,5 +26,7 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             exit()
 
-    table_1 = Table_1(config, data_provider, epidemetrics)
+    epi_panel = EpiPanel(config, data_provider, epidemetrics.summary_output).get_epi_panel()
+
+    table_1 = Table_1(config, epi_panel)
     table_1.table_1()
