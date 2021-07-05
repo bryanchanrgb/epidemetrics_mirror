@@ -17,8 +17,9 @@ class ProminenceUpdater:
                                  columns=['location', 'y_position'])
         data = pd.concat([data, endpoints])
         data = data.sort_values(by='location').reset_index(drop=True)
-        peak, peak_properties = find_peaks(data.y_position.values, prominence=0, distance=1)
-        trough, trough_properties = find_peaks([-x for x in data.y_position.values], prominence=0, distance=1)
+        y_vals = data.y_position.tolist()
+        peak, peak_properties = find_peaks(y_vals, prominence=0, distance=1)
+        trough, trough_properties = find_peaks([-y for y in y_vals], prominence=0, distance=1)
 
         results = pd.DataFrame(data=np.transpose([np.append(data.location[peak], data.location[trough]),
                                                   np.append(peak_properties['prominences'],
