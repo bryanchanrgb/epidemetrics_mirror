@@ -87,3 +87,4 @@ class AlgorithmA:
         plt.plot(data[field].values)
         plt.scatter(sub_a['location'].values,
                     data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
+        plt.show()

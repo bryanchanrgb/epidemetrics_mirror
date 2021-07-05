@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import datetime
 import psycopg2
+import resampy
 from tqdm import tqdm
 from csaps import csaps
 from typing import List
@@ -426,14 +427,20 @@ class DataProvider:
 
 class ListDataProvider:
 
-    def __init__(self, data: List, rescale_length: int = 100, country: str = 'TEST'):
+    def __init__(self, data: List, x_scaling_factor: int = 7, country: str = 'TEST'):
         # Rescale input data list
-        arr_interp = interp.interp1d(np.arange(len(data)), data)
-        data_stretch = arr_interp(np.linspace(0, len(data) - 1, rescale_length))
+        data_size = len(data)
+        rescale_length = data_size * x_scaling_factor - x_scaling_factor + 1
+
+        arr_interp = interp.interp1d(np.arange(data_size), data)
+        data_stretch = arr_interp(np.linspace(0, data_size - 1, rescale_length))
+
 
         self.df = pd.DataFrame({'value': data_stretch})
         self.df['countrycode'] = country
         self.df['date'] = pd.date_range(start='1/1/2020', periods=len(self.df), freq='D')
+
+        self.wbi_table = None
 
     def get_series(self, country: str, field: str) -> DataFrame:
         return self.df[self.df['countrycode'] == country][['date', field]].dropna().reset_index(drop=True)

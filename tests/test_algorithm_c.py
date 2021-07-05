@@ -18,9 +18,9 @@ class TestAlgorithmC:
         cls.config = Config()
 
     def test_1(self):
-        input_data = [1, 5, 3, 10, 20]
+        input_data = [1, 5, 3, 10, 20, 19]
 
-        data_provider = ListDataProvider(input_data, rescale_length=50)
+        data_provider = ListDataProvider(input_data, x_scaling_factor=7)
 
         algorithm_a = AlgorithmA(self.config,
                                  data_provider=data_provider)
@@ -28,8 +28,8 @@ class TestAlgorithmC:
                                  data_provider=data_provider)
         algorithm_c = AlgorithmC(self.config, data_provider=data_provider)
 
-        sub_a = algorithm_a.run(country='TEST', field='value')
-        sub_b = algorithm_b.run(sub_a, country='TEST', field='value')
+        sub_a = algorithm_a.run(country='TEST', field='value', plot=True)
+        sub_b = algorithm_b.run(sub_a, country='TEST', field='value', plot=True)
 
         # TODO: Add wbi table
         # population = \

@@ -19,11 +19,11 @@ class TestAlgorithmA:
     def test_1(self):
         input_data = [1, 10, 5, 7, 6, 20, 19]
 
-        data_provider = ListDataProvider(input_data, rescale_length=50)
+        data_provider = ListDataProvider(input_data, x_scaling_factor=7)
 
         algorithm_a = AlgorithmA(self.config, data_provider)
-        result = algorithm_a.run(country='TEST', field='value')
-        peaks_ind = result["peak_ind"].to_list()
+        result = algorithm_a.run(country='TEST', field='value', plot=True)
+        y_positions = result["y_position"].to_list()
 
-        expected_result = [1, 0, 1]
-        assert peaks_ind == expected_result
+        expected_result = [10, 5, 20]
+        assert y_positions == expected_result

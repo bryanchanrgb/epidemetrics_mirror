@@ -85,3 +85,4 @@ class AlgorithmB:
         ax1.plot(data[field].values)
         ax1.scatter(results['location'].values,
                     data[field].values[results['location'].values.astype(int)], color='red', marker='o')
+        plt.show()
