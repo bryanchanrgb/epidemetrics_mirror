@@ -3,15 +3,13 @@ from pandas import DataFrame
 import matplotlib.pyplot as plt
 from data_provider import DataProvider
 from implementation.config import Config
-from implementation.algorithm_a import AlgorithmA
 from implementation.prominence_updater import ProminenceUpdater
 
 
 class AlgorithmB:
-    def __init__(self, config: Config, data_provider: DataProvider, algorithm_a: AlgorithmA) -> DataFrame:
+    def __init__(self, config: Config, data_provider: DataProvider) -> DataFrame:
         self.config = config
         self.data_provider = data_provider
-        self.algorithm_a = algorithm_a
 
     def run(self, sub_a, country, field='new_per_day_smooth', plot=False):
         data = self.data_provider.get_series(country, field)

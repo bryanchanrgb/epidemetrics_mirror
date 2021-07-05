@@ -22,10 +22,8 @@ class TestAlgorithmC:
 
         data_provider = ListDataProvider(input_data, x_scaling_factor=7)
 
-        algorithm_a = AlgorithmA(self.config,
-                                 data_provider=data_provider)
-        algorithm_b = AlgorithmB(self.config, algorithm_a=algorithm_a,
-                                 data_provider=data_provider)
+        algorithm_a = AlgorithmA(self.config, data_provider=data_provider)
+        algorithm_b = AlgorithmB(self.config, data_provider=data_provider)
         algorithm_c = AlgorithmC(self.config, data_provider=data_provider)
 
         sub_a = algorithm_a.run(country='TEST', field='value', plot=True)

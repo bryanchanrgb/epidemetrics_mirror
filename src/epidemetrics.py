@@ -25,7 +25,7 @@ class Epidemetrics:
         self.summary_output = dict()
 
         self.algorithm_a = AlgorithmA(self.config, self.data_provider)
-        self.algorithm_b = AlgorithmB(self.config, self.data_provider, algorithm_a=self.algorithm_a)
+        self.algorithm_b = AlgorithmB(self.config, self.data_provider)
         self.algorithm_c = AlgorithmC(self.config, self.data_provider)
         self.algorithm_e = AlgorithmE(self.config, self.data_provider)
 
