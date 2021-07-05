@@ -37,23 +37,28 @@ class Epidemetrics:
             print(f"Error: {path}: {e.strerror}")
         Path(path).mkdir(parents=True, exist_ok=True)
 
+    def find_peaks(self, field: str, country: str) -> DataFrame:
+        sub_a = self.algorithm_a.run(country=country, field=field)
+        sub_b = self.algorithm_b.run(cases_sub_a, country=country, field=field)
+        sub_c = self.algorithm_c.run(sub_a=cases_sub_a, sub_b=cases_sub_b, country=country, field=field)
+
+        return sub_a, sub_b, sub_c
+
     def epi_find_peaks(self, country: str, plot: bool = False, save: bool = False) -> DataFrame:
         # match parameter tries to use death waves to detect case waves under sub_algorithm_e
         cases = self.data_provider.get_series(country=country, field='new_per_day_smooth')
         if len(cases) == 0:
             raise ValueError
-        cases_sub_a = self.algorithm_a.run(country=country, field='new_per_day_smooth')
-        cases_sub_b = self.algorithm_b.run(cases_sub_a, country=country, field='new_per_day_smooth')
-        cases_sub_c = self.algorithm_c.run(
-            sub_a=cases_sub_a, sub_b=cases_sub_b, country=country, field='new_per_day_smooth')
+
+        cases_sub_a, cases_sub_b, cases_sub_c = self.find_peaks(country, field='new_per_day_smooth')
+
         # compute equivalent series for deaths
         deaths = self.data_provider.get_series(country=country, field='dead_per_day_smooth')
         if len(deaths) == 0:
             raise ValueError
-        deaths_sub_a = self.algorithm_a.run(country=country, field='dead_per_day_smooth')
-        deaths_sub_b = self.algorithm_b.run(deaths_sub_a, country=country, field='dead_per_day_smooth')
-        deaths_sub_c = self.algorithm_c.run(
-            sub_a=deaths_sub_a, sub_b=deaths_sub_b, country=country, field='dead_per_day_smooth')
+
+        deaths_sub_a, deaths_sub_b, deaths_sub_c = self.find_peaks(country, field='dead_per_day_smooth')
+
         # run sub algorithm e
         cases_sub_e = self.algorithm_e.run(cases_sub_a, cases_sub_b, cases_sub_c, deaths_sub_c, country=country,
                                            plot=plot)
@@ -62,18 +67,19 @@ class Epidemetrics:
             self.plot_peaks(cases, deaths, country, cases_sub_a, cases_sub_b, cases_sub_c,
                             deaths_sub_a, deaths_sub_b, deaths_sub_c, save)
 
-        summary=[]
+        summary = []
         for row, peak in cases_sub_e.iterrows():
-            peak_data = dict({"index":row, "location":peak.location, "date":cases.iloc[int(peak.location)].date, "peak_ind":peak.peak_ind, "y_position":peak.y_position})
+            peak_data = dict({"index": row, "location": peak.location, "date": cases.iloc[int(peak.location)].date,
+                              "peak_ind": peak.peak_ind, "y_position": peak.y_position})
             summary.append(peak_data)
-        self.summary_output[country]=summary
+        self.summary_output[country] = summary
 
         return cases_sub_e
 
     def save_summary(self):
-        json_data = dict({'data':[]})
+        json_data = dict({'data': []})
         for country, summary in self.summary_output.items():
-            country_summary = dict({'country':country, 'waves':[]})
+            country_summary = dict({'country': country, 'waves': []})
             for wave in summary:
                 copied_wave = wave.copy()
                 copied_wave['date'] = copied_wave['date'].strftime('%Y-%m-%d')
