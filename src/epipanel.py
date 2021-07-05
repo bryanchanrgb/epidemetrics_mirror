@@ -3,28 +3,29 @@ from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
+from typing import Dict
 from data_provider import DataProvider
 from implementation.config import Config
 
 
 class EpiPanel:
-    def __init__(self, config: Config, data_provider: DataProvider, peaksAndTroughs: dict):
+    def __init__(self, config: Config, data_provider: DataProvider, peaks_and_troughs: Dict):
         self.config = config
-        self.peaksAndTroughs = peaksAndTroughs
+        self.peaks_and_troughs = peaks_and_troughs
         self.data_provider = data_provider
 
     def _classify(self, country):
         if country not in self.config.exclude_countries:
-            peaksAndTroughs = self.peaksAndTroughs.get(country)
-            peak_class = len(self.peaksAndTroughs) + 1 if peaksAndTroughs else 0
-            # if the list of peaksAndTroughs is empty we get peak_class = 1 - check if this is accurate
+            peaks_and_troughs = self.peaks_and_troughs.get(country)
+            peak_class = len(self.peaks_and_troughs) + 1 if peaks_and_troughs else 0
+            # if the list of peaks_and_troughs is empty we get peak_class = 1 - check if this is accurate
             if peak_class == 1:
-                data = self._get_series(country=country, field='new_per_day_smooth')
+                data = self.data_provider.get_series(country=country, field='new_per_day_smooth')
                 if np.nanmax(data['new_per_day_smooth']) < self.class_1_threshold:
                     peak_class = 0
         else:
             return 0, None
-        return peak_class, peaksAndTroughs
+        return peak_class, peaks_and_troughs
 
     # waiting implementation
     def get_epi_panel(self):

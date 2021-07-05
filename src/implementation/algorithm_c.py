@@ -9,22 +9,22 @@ class AlgorithmC:
         self.config = config
         self.data_provider = data_provider
 
-    def run(self, sub_a, sub_b, country, field='new_per_day_smooth', plot=False):
-        data = self.data_provider.get_series(country, field)
-        population = self.data_provider.get_population(country)
+    @staticmethod
+    def apply(data: DataFrame, sub_b: DataFrame, population: int, field: str, config: Config) -> DataFrame:
+
         if field == 'dead_per_day_smooth':
-            abs_prominence_threshold = self.config.abs_prominence_threshold_dead
-            rel_prominence_threshold = self.config.rel_prominence_threshold_dead
-            rel_prominence_max_threshold = self.config.rel_prominence_max_threshold_dead
+            abs_prominence_threshold = config.abs_prominence_threshold_dead
+            rel_prominence_threshold = config.rel_prominence_threshold_dead
+            rel_prominence_max_threshold = config.rel_prominence_max_threshold_dead
         else:
-            abs_prominence_threshold = self.config.abs_prominence_threshold
-            rel_prominence_threshold = self.config.rel_prominence_threshold
-            rel_prominence_max_threshold = self.config.rel_prominence_max_threshold
+            abs_prominence_threshold = config.abs_prominence_threshold
+            rel_prominence_threshold = config.rel_prominence_threshold
+            rel_prominence_max_threshold = config.rel_prominence_max_threshold
 
         # prominence filter will use the larger of the absolute prominence threshold and relative prominence threshold
         # we cap the relative prominence threshold to rel_prominence_max_threshold
         prominence_threshold = max(abs_prominence_threshold,
-                                   min(rel_prominence_threshold * population / self.config.rel_to_constant,
+                                   min(rel_prominence_threshold * population / config.rel_to_constant,
                                        rel_prominence_max_threshold))
         results = sub_b.copy()
         results = results.sort_values(by='location').reset_index(drop=True)
@@ -36,7 +36,7 @@ class AlgorithmC:
         result_peaks_c = result_peaks[result_peaks['prominence'] >= prominence_threshold]
         # filter out relatively low prominent peaks
         result_peaks_d = result_peaks_c[
-            (result_peaks_c['prominence'] >= self.config.prominence_height_threshold * result_peaks_c['y_position'])]
+            (result_peaks_c['prominence'] >= config.prominence_height_threshold * result_peaks_c['y_position'])]
         # between each remaining peak, retain the trough with the lowest value
         result_peaks_d = result_peaks_d.reset_index(drop=True)
         results = result_peaks_d
@@ -56,19 +56,26 @@ class AlgorithmC:
             if len(candidate_troughs) > 0:
                 candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmin()['y_position']]
                 final_maximum = max(data[(data.index > candidate_troughs.location)][field])
-                if (candidate_troughs.y_position <= (1 - self.config.prominence_height_threshold) *
+                if (candidate_troughs.y_position <= (1 - config.prominence_height_threshold) *
                     result_peaks_d.y_position.iloc[-1]) and (
                         result_peaks_d.y_position.iloc[-1] - candidate_troughs.y_position >= prominence_threshold):
                     if (candidate_troughs.y_position <= (
-                            1 - self.config.prominence_height_threshold) * final_maximum) and (
+                            1 - config.prominence_height_threshold) * final_maximum) and (
                             final_maximum - candidate_troughs.y_position >= prominence_threshold):
                         results = results.append(candidate_troughs, ignore_index=True)
 
+        return results
+
+    def run(self, sub_a: DataFrame, sub_b: DataFrame, country: str, field: str = 'new_per_day_smooth',
+            plot: bool = False) -> DataFrame:
+        data = self.data_provider.get_series(country, field)
+        population = self.data_provider.get_population(country)
+        results = self.apply(data, sub_b, population, field, self.config)
         if plot:
             self.plot(data, sub_a, sub_b, results, field)
         return results
 
-    def plot(self, data, sub_a, sub_b, results, field):
+    def plot(self, data: DataFrame, sub_a: DataFrame, sub_b: DataFrame, results: DataFrame, field: str):
         fig, (ax0, ax1, ax2) = plt.subplots(nrows=1, ncols=3)
         # plot peaks-trough pairs from sub_a
         ax0.set_title('After Sub Algorithm A')

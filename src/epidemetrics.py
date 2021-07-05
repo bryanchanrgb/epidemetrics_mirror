@@ -37,10 +37,10 @@ class Epidemetrics:
             print(f"Error: {path}: {e.strerror}")
         Path(path).mkdir(parents=True, exist_ok=True)
 
-    def find_peaks(self, field: str, country: str) -> DataFrame:
+    def find_peaks(self, country: str, field: str) -> DataFrame:
         sub_a = self.algorithm_a.run(country=country, field=field)
-        sub_b = self.algorithm_b.run(cases_sub_a, country=country, field=field)
-        sub_c = self.algorithm_c.run(sub_a=cases_sub_a, sub_b=cases_sub_b, country=country, field=field)
+        sub_b = self.algorithm_b.run(sub_a=sub_a, country=country, field=field)
+        sub_c = self.algorithm_c.run(sub_a=sub_a, sub_b=sub_b, country=country, field=field)
 
         return sub_a, sub_b, sub_c
 
@@ -60,7 +60,7 @@ class Epidemetrics:
         deaths_sub_a, deaths_sub_b, deaths_sub_c = self.find_peaks(country, field='dead_per_day_smooth')
 
         # run sub algorithm e
-        cases_sub_e = self.algorithm_e.run(cases_sub_a, cases_sub_b, cases_sub_c, deaths_sub_c, country=country,
+        cases_sub_e = self.algorithm_e.run(cases_sub_b, cases_sub_c, deaths_sub_c, country=country,
                                            plot=plot)
         # compute plots
         if plot:

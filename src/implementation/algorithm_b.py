@@ -11,9 +11,8 @@ class AlgorithmB:
         self.config = config
         self.data_provider = data_provider
 
-    def run(self, sub_a, country, field='new_per_day_smooth', plot=False):
-        data = self.data_provider.get_series(country, field)
-
+    @staticmethod
+    def apply(data: DataFrame, sub_a: DataFrame, field: str, config: Config) -> DataFrame:
         # initialise prominence_updater to run when checking pairs
         initial_value = data[field].iloc[0]
         terminal_value = data[field].iloc[-1]
@@ -24,7 +23,7 @@ class AlgorithmB:
         results = sub_a.copy()
         # dictionary to hold boundaries for peak-trough pairs too close to each other
         og_dict = dict()
-        while sub_b_flag == True:
+        while sub_b_flag:
             if len(results) < 2:
                 break
             # separation here refers to temporal distance S_i
@@ -36,7 +35,7 @@ class AlgorithmB:
             # set to false until we find an instance where S_i < t_sep_a / 2 and V_i > v_sep_b
             sub_b_flag = False
             for x in results.index:
-                if results.loc[x, 'separation'] < self.config.t_sep_a / 2:
+                if results.loc[x, 'separation'] < config.t_sep_a / 2:
                     sub_b_flag = True
                     i = results.loc[x, 'index']
                     # get original locations and values
@@ -45,8 +44,8 @@ class AlgorithmB:
                     y_0 = results.loc[results['index'] == i, 'y_position'].values[0]
                     y_1 = results.loc[results['index'] == i + 1, 'y_position'].values[0]
                     # create boundaries t_0 and t_1 around the peak-trough pair
-                    t_0 = max(np.floor((og_0 + og_1 - self.config.t_sep_a) / 2), 0)
-                    t_1 = min(np.floor((og_0 + og_1 + self.config.t_sep_a) / 2), data[field].index[-1])
+                    t_0 = max(np.floor((og_0 + og_1 - config.t_sep_a) / 2), 0)
+                    t_1 = min(np.floor((og_0 + og_1 + config.t_sep_a) / 2), data[field].index[-1])
                     # store the original locations and values to restore them at the end
                     og_dict[len(og_dict)] = [og_0, t_0, og_1, t_1, y_0, y_1]
                     # reset the peak locations to the boundaries to be rechecked
@@ -67,11 +66,16 @@ class AlgorithmB:
         # recalculate prominence
         results = prominence_updater.run(results)
 
+        return results
+
+    def run(self, sub_a: DataFrame, country: str, field: str = 'new_per_day_smooth', plot: bool = False) -> DataFrame:
+        data = self.data_provider.get_series(country, field)
+        results = self.apply(data, sub_a, field, self.config)
         if plot:
             self.plot(data, sub_a, results, field)
         return results
 
-    def plot(self, data, sub_a, results, field):
+    def plot(self, data: DataFrame, sub_a: DataFrame, results: DataFrame, field: str):
         fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, sharex='all')
         # plot peaks-trough pairs from sub_a
         ax0.set_title('After Sub Algorithm A')
