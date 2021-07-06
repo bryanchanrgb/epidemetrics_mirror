@@ -13,8 +13,9 @@ class AlgorithmA:
         self.config = config
         self.data_provider = data_provider
 
-    @staticmethod
-    def apply(data: DataFrame, field: str, config: Config) -> DataFrame:
+    def init_country(self, country, field='new_per_day_smooth') -> DataFrame:
+        data = self.data_provider.get_series(country, field)
+
         # initialise prominence_updater to run when pairs are removed
         initial_value = data[field].iloc[0]
         terminal_value = data[field].iloc[-1]
@@ -25,60 +26,62 @@ class AlgorithmA:
         trough = find_peaks([-x for x in data[field].values], prominence=0, distance=1)
 
         # collect into a single dataframe
-        sub_a = pd.DataFrame(data=np.transpose([np.append(data.index[peak[0]], data.index[trough[0]]),
-                                                np.append(peak[1]['prominences'], trough[1]['prominences']),
-                                                np.append(data.index[peak[1]['left_bases']],
-                                                          data.index[trough[1]['left_bases']]),
-                                                np.append(data.index[peak[1]['right_bases']],
-                                                          data.index[trough[1]['right_bases']])]),
-                             columns=['location', 'prominence', 'left_base', 'right_base'])
-        sub_a['peak_ind'] = np.append([1] * len(peak[0]), [0] * len(trough[0]))
-        sub_a.loc[:, 'y_position'] = data[field][sub_a['location']].values
-        sub_a = sub_a.sort_values(by='location').reset_index(drop=True)
+        df = pd.DataFrame(data=np.transpose([np.append(data.index[peak[0]], data.index[trough[0]]),
+                                             np.append(peak[1]['prominences'], trough[1]['prominences'])]),
+                          columns=['location', 'prominence'])
+        df['peak_ind'] = np.append([1] * len(peak[0]), [0] * len(trough[0]))
+        df.loc[:, 'y_position'] = data[field][df['location']].values
+        df = df.sort_values(by='location').reset_index(drop=True)
+        return df, prominence_updater
 
-        # if there are fewer than 3 points, the algorithm cannot be run, return list unchanged
-        if len(sub_a) < 3:
-            return sub_a
-
-        # calculate the duration of extremum i as the distance between the extrema to the left and to the right of i
-        for i in range(1, len(sub_a) - 1):
-            sub_a.loc[i, 'duration'] = sub_a.loc[i + 1, 'location'] - sub_a.loc[i - 1, 'location']
-        # remove peaks and troughs until the smallest duration meets T_SEP
-        while np.nanmin(sub_a['duration']) < config.t_sep_a and len(sub_a) >= 3:
+    @staticmethod
+    def delete_pairs(data, t_sep_a):
+        if np.nanmin(data['duration']) < t_sep_a and len(data) >= 3:
             # sort the peak/trough candidates by prominence, retaining the location index
-            sub_a = sub_a.sort_values(by=['prominence', 'duration']).reset_index(drop=False)
+            data = data.sort_values(by=['prominence', 'duration']).reset_index(drop=False)
             # remove the lowest prominence candidate with duration < T_SEP
-            x = min(sub_a[sub_a['duration'] < config.t_sep_a].index)
-            i = sub_a.loc[x, 'index']
-            is_peak = sub_a.loc[x, 'peak_ind'] - 0.5
-            sub_a.drop(index=x, inplace=True)
+            x = min(data[data['duration'] < t_sep_a].index)
+            i = data.loc[x, 'index']
+            is_peak = data.loc[x, 'peak_ind'] - 0.5
+            data.drop(index=x, inplace=True)
             # remove whichever adjacent candidate is a greater minimum, or a lesser maximum. If tied, remove the
             # earlier.
-            if is_peak * (sub_a.loc[sub_a['index'] == i + 1, 'y_position'].values[0] -
-                          sub_a.loc[sub_a['index'] == i - 1, 'y_position'].values[0]) >= 0:
-                sub_a = sub_a.loc[
-                    sub_a['index'] != i + 1, ['prominence', 'location', 'peak_ind', 'left_base', 'right_base',
-                                              'y_position']]
+            if is_peak * (data.loc[data['index'] == i + 1, 'y_position'].values[0] -
+                          data.loc[data['index'] == i - 1, 'y_position'].values[0]) >= 0:
+                data = data.loc[
+                    data['index'] != i + 1]
             else:
-                sub_a = sub_a.loc[
-                    sub_a['index'] != i - 1, ['prominence', 'location', 'peak_ind', 'left_base', 'right_base',
-                                              'y_position']]
-            # update prominence and recalculate duration
-            sub_a = prominence_updater.run(sub_a)
-            if len(sub_a) < 3:
+                data = data.loc[
+                    data['index'] != i - 1]
+        return data
+
+    @staticmethod
+    def apply(data: DataFrame, prominence_updater: ProminenceUpdater, t_sep_a: int) -> DataFrame:
+        # if there are fewer than 3 points, the algorithm cannot be run, return list unchanged
+        if len(data) < 3:
+            return data
+
+        else:
+            # calculate the duration of extremum i as the distance between the extrema to the left and to the right of i
+            data['duration'] = data['location'].diff(periods=1) - data['location'].diff(periods=-1)
+
+        while np.nanmin(data['duration']) < t_sep_a and len(data) >= 3:
+            # remove peaks and troughs until the smallest duration meets T_SEP
+            data = AlgorithmA.delete_pairs(data, t_sep_a)
+            # update prominence
+            data = prominence_updater.run(data)
+            # recalculate duration
+            if len(data) >= 3:
+                data['duration'] = data['location'].diff(periods=1) - data['location'].diff(periods=-1)
+            else:
                 break
 
-            for i in range(1, len(sub_a) - 1):
-                sub_a.loc[i, 'duration'] = sub_a.loc[i + 1, 'location'] - sub_a.loc[i - 1, 'location']
-
-        results = sub_a.copy()
-
         # results returns a set of peaks and troughs which are at least a minimum distance apart
-        return results
+        return data
 
     def run(self, country: str, field: str = 'new_per_day_smooth', plot: bool = False) -> DataFrame:
-        data = self.data_provider.get_series(country, field)
-        results = self.apply(data, field, self.config)
+        data, prominence_updater = self.init_country(country, field=field)
+        results = self.apply(data, prominence_updater, self.config.t_sep_a)
         if plot:
             self.plot(data, results, field)
         return results
