@@ -14,9 +14,7 @@ class AlgorithmB:
     @staticmethod
     def apply(data: DataFrame, sub_a: DataFrame, field: str, config: Config) -> DataFrame:
         # initialise prominence_updater to run when checking pairs
-        initial_value = data[field].iloc[0]
-        terminal_value = data[field].iloc[-1]
-        prominence_updater = ProminenceUpdater(initial_value, terminal_value)
+        prominence_updater = ProminenceUpdater(data, field)
 
         sub_b_flag = True
         # avoid overwriting sub_a when values replaced by t0 and t1

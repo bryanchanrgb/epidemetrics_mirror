@@ -17,9 +17,7 @@ class AlgorithmA:
         data = self.data_provider.get_series(country, field)
 
         # initialise prominence_updater to run when pairs are removed
-        initial_value = data[field].iloc[0]
-        terminal_value = data[field].iloc[-1]
-        prominence_updater = ProminenceUpdater(initial_value, terminal_value)
+        prominence_updater = ProminenceUpdater(data, field)
 
         # identify initial list of peaks via find_peaks
         peak = find_peaks(data[field].values, prominence=0, distance=1)
@@ -37,22 +35,20 @@ class AlgorithmA:
     @staticmethod
     def delete_pairs(data, t_sep_a):
         if np.nanmin(data['duration']) < t_sep_a and len(data) >= 3:
-            # sort the peak/trough candidates by prominence, retaining the location index
-            data = data.sort_values(by=['prominence', 'duration']).reset_index(drop=False)
-            # remove the lowest prominence candidate with duration < T_SEP
-            x = min(data[data['duration'] < t_sep_a].index)
-            i = data.loc[x, 'index']
-            is_peak = data.loc[x, 'peak_ind'] - 0.5
-            data.drop(index=x, inplace=True)
+            # extract waves of low duration
+            df1 = data[data['duration'] < t_sep_a]
+            # extract those of least prominence
+            df2 = df1[df1['prominence'] == min(df1['prominence'])]
+            # find the shortest
+            i = df2.idxmin()['duration']
+            is_peak = data.loc[i, 'peak_ind'] - 0.5
+            data.drop(index=i, inplace=True)
             # remove whichever adjacent candidate is a greater minimum, or a lesser maximum. If tied, remove the
             # earlier.
-            if is_peak * (data.loc[data['index'] == i + 1, 'y_position'].values[0] -
-                          data.loc[data['index'] == i - 1, 'y_position'].values[0]) >= 0:
-                data = data.loc[
-                    data['index'] != i + 1]
+            if is_peak * (data.loc[i + 1, 'y_position'] - data.loc[i - 1, 'y_position']) >= 0:
+                data.drop(index=i+1, inplace=True)
             else:
-                data = data.loc[
-                    data['index'] != i - 1]
+                data.drop(index=i-1, inplace=True)
         return data
 
     @staticmethod

@@ -35,3 +35,19 @@ class Config:
         self.plot_path = os.path.abspath(os.path.join(self.base_path, '../plots/algorithm_results'))
         self.data_path = os.path.abspath(os.path.join(self.base_path, '../data'))
         self.cache_path = os.path.abspath(os.path.join(self.base_path, '../cache'))
+
+    def prominence_thresholds(self, field):
+        if field == 'new_per_day_smooth':
+            thresholds = {"abs_prominence_threshold": self.abs_prominence_threshold,
+                          "rel_prominence_threshold": self.rel_prominence_threshold,
+                          "rel_prominence_max_threshold": self.rel_prominence_max_threshold,
+                          "prominence_height_threshold": self.prominence_height_threshold}
+            return thresholds
+        elif field == 'dead_per_day_smooth':
+            thresholds = {"abs_prominence_threshold": self.abs_prominence_threshold_dead,
+                          "rel_prominence_threshold": self.rel_prominence_threshold_dead,
+                          "rel_prominence_max_threshold": self.rel_prominence_max_threshold_dead,
+                          "prominence_height_threshold": self.prominence_height_threshold_dead}
+            return thresholds
+        else:
+            return None

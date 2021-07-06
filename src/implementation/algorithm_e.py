@@ -4,6 +4,7 @@ from pandas import DataFrame
 import matplotlib.pyplot as plt
 from implementation.config import Config
 from data_provider import DataProvider
+from implementation.trough_finder import TroughFinder
 
 
 class AlgorithmE:
@@ -14,6 +15,16 @@ class AlgorithmE:
     @staticmethod
     def apply(data: DataFrame, cases_sub_b: DataFrame, cases_sub_c: DataFrame,
               deaths_sub_c: DataFrame, population: int, config: Config) -> DataFrame:
+
+        # set up prominence thresholds
+        field = 'new_per_day_smooth'
+        abs_prominence_threshold = config.prominence_thresholds(field)['abs_prominence_threshold']
+        rel_prominence_threshold = config.prominence_thresholds(field)['rel_prominence_threshold']
+        rel_prominence_max_threshold = config.prominence_thresholds(field)['rel_prominence_max_threshold']
+        prominence_height_threshold = config.prominence_thresholds(field)['prominence_height_threshold']
+        prominence_threshold = max(abs_prominence_threshold,
+                                   min(rel_prominence_threshold * population / config.rel_to_constant,
+                                       rel_prominence_max_threshold))
 
         # when a wave of deaths ends, check if there is match between the number of peaks in both series.
         # if not, then add the most prominent peak for the output of sub-algorithm B in the self.d_match days before or after
@@ -41,38 +52,8 @@ class AlgorithmE:
 
         # next add back any troughs as in algorithm_c
         result_troughs = cases_sub_b[cases_sub_b.peak_ind == 0]
-        results = results[results.peak_ind == 1].reset_index(drop=True)
-        for i in results.index:
-            if i < max(results.index):
-                candidate_troughs = result_troughs[(result_troughs['location'] >= results.loc[i, 'location']) &
-                                                   (result_troughs['location'] <= results.loc[
-                                                       i + 1, 'location'])]
-                if len(candidate_troughs) > 0:
-                    candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmin()['y_position']]
-                    results = results.append(candidate_troughs, ignore_index=True)
-        results = results.sort_values(by='location').reset_index(drop=True)
-
-        # add final trough after final peak
-        if len(results) > 0:
-            # obtain prominence threshold
-            abs_prominence_threshold = config.abs_prominence_threshold
-            rel_prominence_threshold = config.rel_prominence_threshold
-            rel_prominence_max_threshold = config.rel_prominence_max_threshold
-            prominence_threshold = max(abs_prominence_threshold,
-                                       min(rel_prominence_threshold * population / config.rel_to_constant,
-                                           rel_prominence_max_threshold))
-
-            candidate_troughs = result_troughs[result_troughs.location >= results.location.iloc[-1]]
-            if len(candidate_troughs) > 0:
-                candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmin()['y_position']]
-                final_maximum = max(data[(data.index > candidate_troughs.location)]['new_per_day_smooth'])
-                if (candidate_troughs.y_position <= (1 - config.prominence_height_threshold) *
-                    results.y_position.iloc[-1]) and (
-                        results.y_position.iloc[-1] - candidate_troughs.y_position >= prominence_threshold):
-                    if (candidate_troughs.y_position <= (
-                            1 - config.prominence_height_threshold) * final_maximum) and (
-                            final_maximum - candidate_troughs.y_position >= prominence_threshold):
-                        results = results.append(candidate_troughs, ignore_index=True)
+        results = results[results.peak_ind == 1]
+        results = TroughFinder.run(results,result_troughs,data,'new_per_day_smooth',prominence_threshold, prominence_height_threshold)
 
         return results
 

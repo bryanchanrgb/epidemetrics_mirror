@@ -2,6 +2,7 @@ from pandas import DataFrame
 import matplotlib.pyplot as plt
 from implementation.config import Config
 from data_provider import DataProvider
+from implementation.trough_finder import TroughFinder
 
 
 class AlgorithmC:
@@ -12,14 +13,10 @@ class AlgorithmC:
     @staticmethod
     def apply(data: DataFrame, sub_b: DataFrame, population: int, field: str, config: Config) -> DataFrame:
 
-        if field == 'dead_per_day_smooth':
-            abs_prominence_threshold = config.abs_prominence_threshold_dead
-            rel_prominence_threshold = config.rel_prominence_threshold_dead
-            rel_prominence_max_threshold = config.rel_prominence_max_threshold_dead
-        else:
-            abs_prominence_threshold = config.abs_prominence_threshold
-            rel_prominence_threshold = config.rel_prominence_threshold
-            rel_prominence_max_threshold = config.rel_prominence_max_threshold
+        abs_prominence_threshold = config.prominence_thresholds(field)['abs_prominence_threshold']
+        rel_prominence_threshold = config.prominence_thresholds(field)['rel_prominence_threshold']
+        rel_prominence_max_threshold = config.prominence_thresholds(field)['rel_prominence_max_threshold']
+        prominence_height_threshold = config.prominence_thresholds(field)['prominence_height_threshold']
 
         # prominence filter will use the larger of the absolute prominence threshold and relative prominence threshold
         # we cap the relative prominence threshold to rel_prominence_max_threshold
@@ -36,33 +33,9 @@ class AlgorithmC:
         result_peaks_c = result_peaks[result_peaks['prominence'] >= prominence_threshold]
         # filter out relatively low prominent peaks
         result_peaks_d = result_peaks_c[
-            (result_peaks_c['prominence'] >= config.prominence_height_threshold * result_peaks_c['y_position'])]
+            (result_peaks_c['prominence'] >= prominence_height_threshold * result_peaks_c['y_position'])]
         # between each remaining peak, retain the trough with the lowest value
-        result_peaks_d = result_peaks_d.reset_index(drop=True)
-        results = result_peaks_d
-        for i in result_peaks_d.index:
-            if i < max(result_peaks_d.index):
-                candidate_troughs = result_troughs[(result_troughs['location'] >= result_peaks_d.loc[i, 'location']) &
-                                                   (result_troughs['location'] <= result_peaks_d.loc[
-                                                       i + 1, 'location'])]
-                if len(candidate_troughs) > 0:
-                    candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmin()['y_position']]
-                    results = results.append(candidate_troughs, ignore_index=True)
-        results = results.sort_values(by='location').reset_index(drop=True)
-
-        # add final trough after final peak
-        if len(result_peaks_d) > 0:
-            candidate_troughs = result_troughs[result_troughs.location >= result_peaks_d.location.iloc[-1]]
-            if len(candidate_troughs) > 0:
-                candidate_troughs = candidate_troughs.loc[candidate_troughs.idxmin()['y_position']]
-                final_maximum = max(data[(data.index > candidate_troughs.location)][field])
-                if (candidate_troughs.y_position <= (1 - config.prominence_height_threshold) *
-                    result_peaks_d.y_position.iloc[-1]) and (
-                        result_peaks_d.y_position.iloc[-1] - candidate_troughs.y_position >= prominence_threshold):
-                    if (candidate_troughs.y_position <= (
-                            1 - config.prominence_height_threshold) * final_maximum) and (
-                            final_maximum - candidate_troughs.y_position >= prominence_threshold):
-                        results = results.append(candidate_troughs, ignore_index=True)
+        results = TroughFinder.run(result_peaks_d,result_troughs,data,field,prominence_threshold, prominence_height_threshold)
 
         return results
 
