@@ -28,12 +28,10 @@ class AlgorithmA:
             if is_peak * (sub_a.loc[sub_a['index'] == i + 1, 'y_position'].values[0] -
                           sub_a.loc[sub_a['index'] == i - 1, 'y_position'].values[0]) >= 0:
                 sub_a = sub_a.loc[
-                    sub_a['index'] != i + 1, ['prominence', 'location', 'peak_ind', 'left_base', 'right_base',
-                                              'y_position']]
+                    sub_a['index'] != i + 1]
             else:
                 sub_a = sub_a.loc[
-                    sub_a['index'] != i - 1, ['prominence', 'location', 'peak_ind', 'left_base', 'right_base',
-                                              'y_position']]
+                    sub_a['index'] != i - 1]
         return sub_a
 
     def collect_data(self, country, field='new_per_day_smooth') -> DataFrame:
