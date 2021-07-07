@@ -40,17 +40,27 @@ class DataProvider:
         }
         self.config = config
         self.conn = None
+        self.validation = {"abs_t0_threshold": self.config.abs_t0_threshold,
+                           "rel_to_constant": self.config.rel_to_constant,
+                           "rel_t0_threshold": self.config.rel_t0_threshold,
+                           "end_date": self.end_date.strftime('%Y-%m-%d'),
+                           "ma_window": self.ma_window,
+                           "use_splines": self.use_splines,
+                           "smooth": self.smooth,
+                           "flags": self.flags,
+                           "wb_codes": self.wb_codes}
 
     def open_db_connection(self):
         '''
         INITIALISE SERVER CONNECTION
         '''
-        return psycopg2.connect(
+        self.conn = psycopg2.connect(
             host='covid19db.org',
             port=5432,
             dbname='covid19',
             user='covid19',
             password='covid19')
+        return None
 
     def fetch_data(self, use_cache: bool = True):
         self.use_cache = use_cache
@@ -83,17 +93,21 @@ class DataProvider:
         return self.testing['countrycode'].unique()
 
     def load_from_cache(self, file_name: str) -> DataFrame:
-        full_path = os.path.join(self.config.cache_path, file_name)
+        cache_name = file_name + '.csv'
+        full_path = os.path.join(self.config.cache_path, cache_name)
+        metadata_filename = file_name + '.json'
+        metadata_path = os.path.join(self.config.cache_path, metadata_filename)
         if self.use_cache and os.path.exists(full_path):
             # validate config data
-            config_validation = False
-            config_data = {"abs_t0_threshold": self.config.abs_t0_threshold,
-                           "rel_to_constant": self.config.rel_to_constant,
-                           "rel_t0_threshold": self.config.rel_t0_threshold}
-            with open(os.path.join(self.config.cache_path, 'config.json') as f:
-                data_check = json.load(f)
-            if config_data != data_check:
-                print('The parameters used to generate this cache may have changed. Will reload data. Press any key to override.')
+            try:
+                with open(metadata_path) as f:
+                    metadata = json.load(f)
+            except:
+                print('The cache could not be validated. The data will be reloaded')
+                return None
+            if self.validation != metadata:
+                print('The parameters used to generate this cache may have changed. The data will be reloaded')
+                return None
             else:
                 print(f'Loading data from cache file: {full_path}')
                 df = pd.read_csv(full_path, encoding='utf-8')
@@ -106,26 +120,24 @@ class DataProvider:
 
     def save_to_cache(self, df: DataFrame, file_name: str):
         if self.use_cache:
-            full_path = os.path.join(self.config.cache_path, file_name)
+            cache_name = file_name + '.csv'
+            full_path = os.path.join(self.config.cache_path, cache_name)
             print(f'Saving data to cache: {full_path}')
             pathlib.Path(os.path.dirname(full_path)).mkdir(parents=True, exist_ok=True)
             df.to_csv(full_path, encoding='utf-8')
-            # also save the config file that was used
-            # put the date in here too
-            config_data = {"abs_t0_threshold": self.config.abs_t0_threshold,
-                           "rel_to_constant": self.config.rel_to_constant,
-                           "rel_t0_threshold": self.config.rel_t0_threshold}
-            with open(os.path.join(self.config.cache_path, 'config.json'), 'w') as f:
-                json.dump(config_data, f)
-
-
+            # also save the config parameters that were used for validating future loads
+            metadata_filename = file_name + '.json'
+            metadata_path = os.path.join(self.config.cache_path, metadata_filename)
+            # change this file name
+            with open(metadata_path, 'w') as f:
+                json.dump(self.validation, f)
 
     def get_epi_table(self) -> DataFrame:
         '''
         PREPARE EPIDEMIOLOGY TABLE
         '''
         print('Fetching epidemiology data')
-        cache_filename = "epidemiology_table.csv"
+        cache_filename = "epidemiology_table"
 
         epidemiology = self.load_from_cache(cache_filename)
         if epidemiology is not None:
@@ -174,7 +186,7 @@ class DataProvider:
 
     def get_epi_series(self, epidemiology: DataFrame, testing: DataFrame, wbi_table: DataFrame) -> DataFrame:
         print('Processing Epidemiological Time Series Data')
-        cache_filename = "epidemiology_series.csv"
+        cache_filename = "epidemiology_series"
 
         epidemiology_series = self.load_from_cache(cache_filename)
         if epidemiology_series is not None:
@@ -258,8 +270,12 @@ class DataProvider:
                 epi_data[epi_data['confirmed'] >= self.config.abs_t0_threshold]['date'].iloc[0]
             t0_relative = np.nan if len(
                 epi_data[
-                    ((epi_data['confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold]) == 0 else \
-                epi_data[((epi_data['confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold][
+                    ((epi_data[
+                          'confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold])\
+                                    == 0 else \
+                epi_data[((epi_data[
+                               'confirmed'] / population) * self.config.rel_to_constant) >=
+                         self.config.rel_t0_threshold][
                     'date'].iloc[0]
             # t0_k_dead represents day first k total dead was reported
             t0_1_dead = np.nan if len(epi_data[epi_data['dead'] >= 1]['date']) == 0 else \
@@ -338,7 +354,7 @@ class DataProvider:
 
     def get_gsi_table(self) -> DataFrame:
         print('Fetching government_response data')
-        cache_filename = "government_response_table.csv"
+        cache_filename = "government_response_table"
 
         government_response = self.load_from_cache(cache_filename)
         if government_response is not None:
@@ -364,7 +380,7 @@ class DataProvider:
 
     def get_wbi_table(self) -> DataFrame:
         print('Fetching world_bank data')
-        cache_filename = "world_bank_table.csv"
+        cache_filename = "world_bank_table"
 
         wbi_table = self.load_from_cache(cache_filename)
         if wbi_table is not None:
@@ -405,7 +421,7 @@ class DataProvider:
         '''
         PREPARE TESTING TABLE
         '''
-        cache_filename = "testing_table.csv"
+        cache_filename = "testing_table"
         testing = self.load_from_cache(cache_filename)
         if testing is not None:
             return testing
