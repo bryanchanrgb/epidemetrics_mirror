@@ -14,6 +14,7 @@ class Config:
     rel_prominence_max_threshold_dead = 50  # upper limit on relative prominencce
     rel_to_constant = 10000  # used as population reference for relative t0
     prominence_height_threshold = 0.7  # prominence must be above a percentage of the peak height
+    prominence_height_threshold_dead = 0.7  # prominence must be above a percentage of the peak height
     t_sep_a = 21
     v_sep_b = 10  # v separation for sub algorithm B
     d_match = 35  # matching window for undetected case waves based on death waves
