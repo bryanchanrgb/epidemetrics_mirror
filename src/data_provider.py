@@ -283,12 +283,8 @@ class DataProvider:
                 epi_data[epi_data['confirmed'] >= self.config.abs_t0_threshold]['date'].iloc[0]
             t0_relative = np.nan if len(
                 epi_data[
-                    ((epi_data[
-                          'confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold]) \
-                                    == 0 else \
-                epi_data[((epi_data[
-                               'confirmed'] / population) * self.config.rel_to_constant) >=
-                         self.config.rel_t0_threshold][
+                    ((epi_data['confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold]) == 0 else \
+                epi_data[((epi_data['confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold][
                     'date'].iloc[0]
             # t0_k_dead represents day first k total dead was reported
             t0_1_dead = np.nan if len(epi_data[epi_data['dead'] >= 1]['date']) == 0 else \
