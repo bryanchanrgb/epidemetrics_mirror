@@ -40,7 +40,7 @@ class Epidemetrics:
     def find_peaks(self, country: str, field: str) -> DataFrame:
         sub_a = self.algorithm_a.run(country=country, field=field)
         sub_b = self.algorithm_b.run(sub_a=sub_a, country=country, field=field)
-        sub_c = self.algorithm_c.run(sub_a=sub_a, sub_b=sub_b, country=country, field=field)
+        sub_c = self.algorithm_c.run(sub_b=sub_b, country=country, field=field)
 
         return sub_a, sub_b, sub_c
 

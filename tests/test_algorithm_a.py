@@ -18,11 +18,12 @@ class TestAlgorithmA:
 
     def test_1(self):
         input_data = [1, 10, 5, 7, 6, 20, 19]
+        field = 'new_per_day_smooth'
 
-        data_provider = ListDataProvider(input_data, x_scaling_factor=7)
+        data_provider = ListDataProvider(input_data, field=field, x_scaling_factor=7)
 
         algorithm_a = AlgorithmA(self.config, data_provider)
-        result = algorithm_a.run(country='TEST', field='value', plot=True)
+        result = algorithm_a.run(country='TEST', field=field, plot=True)
         y_positions = result["y_position"].to_list()
 
         expected_result = [10, 5, 20]

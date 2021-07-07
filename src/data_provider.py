@@ -436,7 +436,8 @@ class DataProvider:
 
 class ListDataProvider:
 
-    def __init__(self, data: List, x_scaling_factor: int = 7, country: str = 'TEST', country_population: int = 1000000):
+    def __init__(self, data: List, x_scaling_factor: int = 7, country: str = 'TEST', field: str = 'new_per_day_smooth',
+                 country_population: int = 1000000):
         # Rescale input data list
         data_size = len(data)
         rescale_length = data_size * x_scaling_factor - x_scaling_factor + 1
@@ -444,7 +445,7 @@ class ListDataProvider:
         arr_interp = interp.interp1d(np.arange(data_size), data)
         data_stretch = arr_interp(np.linspace(0, data_size - 1, rescale_length))
 
-        self.df = pd.DataFrame({'value': data_stretch})
+        self.df = pd.DataFrame({field: data_stretch})
         self.df['countrycode'] = country
         self.df['date'] = pd.date_range(start='1/1/2020', periods=len(self.df), freq='D')
 

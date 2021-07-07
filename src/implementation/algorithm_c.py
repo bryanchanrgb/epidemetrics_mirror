@@ -39,23 +39,17 @@ class AlgorithmC:
 
         return results
 
-    def run(self, sub_a: DataFrame, sub_b: DataFrame, country: str, field: str = 'new_per_day_smooth',
+    def run(self, sub_b: DataFrame, country: str, field: str = 'new_per_day_smooth',
             plot: bool = False) -> DataFrame:
         data = self.data_provider.get_series(country, field)
         population = self.data_provider.get_population(country)
         results = self.apply(data, sub_b, population, field, self.config)
         if plot:
-            self.plot(data, sub_a, sub_b, results, field)
+            self.plot(data, sub_b, results, field)
         return results
 
-    def plot(self, data: DataFrame, sub_a: DataFrame, sub_b: DataFrame, results: DataFrame, field: str):
-        fig, (ax0, ax1, ax2) = plt.subplots(nrows=1, ncols=3)
-        # plot peaks-trough pairs from sub_a
-        ax0.set_title('After Sub Algorithm A')
-        ax0.plot(data[field].values)
-        ax0.scatter(sub_a['location'].values,
-                    data[field].values[sub_a['location'].values.astype(int)], color='red', marker='o')
-        # plot peaks-trough pairs from sub_b
+    def plot(self, data: DataFrame, sub_b: DataFrame, results: DataFrame, field: str):
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
         ax1.set_title('After Sub Algorithm B')
         ax1.plot(data[field].values)
         ax1.scatter(sub_b['location'].values,

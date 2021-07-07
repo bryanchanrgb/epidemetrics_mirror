@@ -12,23 +12,24 @@ class AlgorithmA:
     def __init__(self, config: Config, data_provider: DataProvider):
         self.config = config
         self.data_provider = data_provider
+        self.data = None
 
     def init_country(self, country, field='new_per_day_smooth') -> DataFrame:
-        data = self.data_provider.get_series(country, field)
+        self.data = self.data_provider.get_series(country, field)
 
         # initialise prominence_updater to run when pairs are removed
-        prominence_updater = ProminenceUpdater(data, field)
+        prominence_updater = ProminenceUpdater(self.data, field)
 
         # identify initial list of peaks via find_peaks
-        peak = find_peaks(data[field].values, prominence=0, distance=1)
-        trough = find_peaks([-x for x in data[field].values], prominence=0, distance=1)
+        peak = find_peaks(self.data[field].values, prominence=0, distance=1)
+        trough = find_peaks([-x for x in self.data[field].values], prominence=0, distance=1)
 
         # collect into a single dataframe
-        df = pd.DataFrame(data=np.transpose([np.append(data.index[peak[0]], data.index[trough[0]]),
+        df = pd.DataFrame(data=np.transpose([np.append(self.data.index[peak[0]], self.data.index[trough[0]]),
                                              np.append(peak[1]['prominences'], trough[1]['prominences'])]),
                           columns=['location', 'prominence'])
         df['peak_ind'] = np.append([1] * len(peak[0]), [0] * len(trough[0]))
-        df.loc[:, 'y_position'] = data[field][df['location']].values
+        df.loc[:, 'y_position'] = self.data[field][df['location']].values
         df = df.sort_values(by='location').reset_index(drop=True)
         return df, prominence_updater
 
@@ -79,11 +80,11 @@ class AlgorithmA:
         data, prominence_updater = self.init_country(country, field=field)
         results = self.apply(data, prominence_updater, self.config.t_sep_a)
         if plot:
-            self.plot(data, results, field)
+            self.plot(results, field)
         return results
 
-    def plot(self, data: DataFrame, sub_a: DataFrame, field: str):
-        plt.plot(data[field].values)
-        plt.scatter(sub_a['location'].values, data[field].values[sub_a['location'].values.astype(int)],
+    def plot(self, sub_a: DataFrame, field: str):
+        plt.plot(self.data[field].values)
+        plt.scatter(sub_a['location'].values, self.data[field].values[sub_a['location'].values.astype(int)],
                     color='red', marker='o')
         plt.show()
