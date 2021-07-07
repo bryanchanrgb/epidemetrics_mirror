@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import datetime
 import psycopg2
-import resampy
 from tqdm import tqdm
 from csaps import csaps
 from typing import List
