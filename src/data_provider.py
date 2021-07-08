@@ -9,14 +9,13 @@ from csaps import csaps
 from typing import List
 import scipy.interpolate as interp
 import json
-
 from pandas import DataFrame
 
 
 class DataProvider:
     def __init__(self, config):
         self.source = 'WRD_WHO'
-        self.end_date = datetime.date(2021, 4, 1)
+        self.end_date = datetime.date(2021, 7, 1)
         self.ma_window = 7
         self.use_splines = False
         self.smooth = 0.001
@@ -40,15 +39,45 @@ class DataProvider:
         }
         self.config = config
         self.conn = None
-        self.validation = {"abs_t0_threshold": self.config.abs_t0_threshold,
-                           "rel_to_constant": self.config.rel_to_constant,
-                           "rel_t0_threshold": self.config.rel_t0_threshold,
-                           "end_date": self.end_date.strftime('%Y-%m-%d'),
-                           "ma_window": self.ma_window,
-                           "use_splines": self.use_splines,
-                           "smooth": self.smooth,
-                           "flags": self.flags,
-                           "wb_codes": self.wb_codes}
+
+    def validation(self, file_name, mode):
+        '''
+        CHECK CACHE CREATED UNDER SAME STATE
+        '''
+        parameters = {"abs_t0_threshold": self.config.abs_t0_threshold,
+                      "rel_to_constant": self.config.rel_to_constant,
+                      "rel_t0_threshold": self.config.rel_t0_threshold,
+                      "end_date": self.end_date.strftime('%Y-%m-%d'),
+                      "ma_window": self.ma_window,
+                      "use_splines": self.use_splines,
+                      "smooth": self.smooth,
+                      "flags": self.flags,
+                      "wb_codes": self.wb_codes}
+        metadata_filename = file_name + '.json'
+        metadata_path = os.path.join(self.config.cache_path, metadata_filename)
+
+        # when saving cache, store the parameters in a json file
+        if mode == 'save':
+            metadata_filename = file_name + '.json'
+            metadata_path = os.path.join(self.config.cache_path, metadata_filename)
+            with open(metadata_path, 'w') as f:
+                json.dump(parameters, f)
+            return None
+
+        # when loading cache, check that the parameters match the json file
+        elif mode == 'load':
+            try:
+                with open(metadata_path) as f:
+                    old_parameters = json.load(f)
+            except:
+                print('The cache could not be validated. The data will be reloaded')
+                return False
+            if parameters != old_parameters:
+                print('The parameters used to generate this cache may have changed. The data will be reloaded')
+            return (parameters == old_parameters)
+
+        else:
+            raise Exception
 
     def open_db_connection(self):
         '''
@@ -95,27 +124,12 @@ class DataProvider:
     def load_from_cache(self, file_name: str) -> DataFrame:
         cache_name = file_name + '.csv'
         full_path = os.path.join(self.config.cache_path, cache_name)
-        metadata_filename = file_name + '.json'
-        metadata_path = os.path.join(self.config.cache_path, metadata_filename)
-        if self.use_cache and os.path.exists(full_path):
-            # validate config data
-            try:
-                with open(metadata_path) as f:
-                    metadata = json.load(f)
-            except:
-                print('The cache could not be validated. The data will be reloaded')
-                return None
-            if self.validation != metadata:
-                print('The parameters used to generate this cache may have changed. The data will be reloaded')
-                return None
-            else:
-                print(f'Loading data from cache file: {full_path}')
-                df = pd.read_csv(full_path, encoding='utf-8')
-                if 'date' in df.columns:
-                    df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d').dt.date
-
+        if self.use_cache and os.path.exists(full_path) and self.validation(file_name, 'load'):
+            print(f'Loading data from cache file: {full_path}')
+            df = pd.read_csv(full_path, encoding='utf-8')
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d').dt.date
             return df
-
         return None
 
     def save_to_cache(self, df: DataFrame, file_name: str):
@@ -126,11 +140,7 @@ class DataProvider:
             pathlib.Path(os.path.dirname(full_path)).mkdir(parents=True, exist_ok=True)
             df.to_csv(full_path, encoding='utf-8')
             # also save the config parameters that were used for validating future loads
-            metadata_filename = file_name + '.json'
-            metadata_path = os.path.join(self.config.cache_path, metadata_filename)
-            # change this file name
-            with open(metadata_path, 'w') as f:
-                json.dump(self.validation, f)
+            self.validation(file_name, 'save')
 
     def get_epi_table(self) -> DataFrame:
         '''
@@ -156,6 +166,8 @@ class DataProvider:
         assert not epi_table[['countrycode', 'date']].duplicated().any()
         epidemiology = pd.DataFrame(columns=[
             'countrycode', 'country', 'date', 'confirmed', 'new_per_day', 'dead_per_day'])
+        # suppress pandas errors in this loop, where we generate ChainedAssignment warnings
+        pd.options.mode.chained_assignment = None
         for country in tqdm(epi_table['countrycode'].unique(), desc='Pre-processing Epidemiological Data'):
             data = epi_table[epi_table['countrycode'] == country].set_index('date')
             # cast all dates as datetime date to omit ambiguity
@@ -180,6 +192,7 @@ class DataProvider:
                 data['dead_per_day'].iloc[np.array(data[data['dead_per_day'] < 0].index) - 1]
             data['dead_per_day'] = data['dead_per_day'].fillna(method='bfill')
             epidemiology = pd.concat((epidemiology, data)).reset_index(drop=True)
+        pd.options.mode.chained_assignment = 'warn'
 
         self.save_to_cache(epidemiology, cache_filename)
         return epidemiology
@@ -271,7 +284,7 @@ class DataProvider:
             t0_relative = np.nan if len(
                 epi_data[
                     ((epi_data[
-                          'confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold])\
+                          'confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold]) \
                                     == 0 else \
                 epi_data[((epi_data[
                                'confirmed'] / population) * self.config.rel_to_constant) >=
