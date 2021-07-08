@@ -6,12 +6,9 @@ from dataclasses import dataclass, field
 class Config:
 
     rel_to_constant = 10000  # for calculating relative to the population
-    spike_sensitivity = 1.5
-    abs_t0_threshold = 1000
-    rel_t0_threshold = 0.05  # cases per rel_to_constant
-    rel_to_constant = 10000  # used as population reference for relative t0
 
     # for waves algorithm
+    spike_sensitivity = 1.5
     abs_prominence_threshold = 50  # minimum prominence
     rel_prominence_threshold = 0.1  # prominence relative to rel_to_constant
     rel_prominence_max_threshold = 500  # upper limit on relative prominence
@@ -23,6 +20,8 @@ class Config:
     t_sep_a = 21
 
     # for analysis
+    abs_t0_threshold = 1000
+    rel_t0_threshold = 0.05  # cases per rel_to_constant
     exclude_countries = ['CMR', 'COG', 'GNQ', 'BWA', 'ESH']  # countries with low quality data to be ignored
     class_1_threshold = 55  # minimum number of absolute cases to be considered going into first wave
     class_1_threshold_dead = 5
