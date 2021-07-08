@@ -8,14 +8,14 @@ from tqdm import tqdm
 from csaps import csaps
 from typing import List
 import scipy.interpolate as interp
-
+import json
 from pandas import DataFrame
 
 
 class DataProvider:
     def __init__(self, config):
         self.source = 'WRD_WHO'
-        self.end_date = datetime.date(2021, 4, 1)
+        self.end_date = datetime.date(2021, 7, 1)
         self.ma_window = 7
         self.use_splines = False
         self.smooth = 0.001
@@ -37,35 +37,62 @@ class DataProvider:
             'NY.GNP.PCAP.PP.KD': 'gni_per_capita',
             'SM.POP.NETM': 'net_migration'
         }
-        # convention - rel refers to metrics normalised by population, abs refers to no normalisation
-        self.abs_t0_threshold = 1000
-        self.abs_prominence_threshold = 55  # minimum prominence
-        self.abs_prominence_threshold_dead = 5  # minimum prominence for dead peak detection
-        self.rel_t0_threshold = 0.05  # cases per rel_to_constant
-        self.rel_prominence_threshold = 0.05  # prominence relative to rel_to_constant
-        self.rel_prominence_threshold_dead = 0.0015  # prominence threshold for dead rel_to_constant
-        self.rel_prominence_max_threshold = 500  # upper limit on relative prominence
-        self.rel_prominence_max_threshold_dead = 50  # upper limit on relative prominencce
-        self.rel_to_constant = 10000  # used as population reference for relative t0
-        self.prominence_height_threshold = 0.7  # prominence must be above a percentage of the peak height
-        self.t_sep_a = 21
         self.config = config
+        self.conn = None
+
+    def validation(self, file_name, mode):
+        '''
+        CHECK CACHE CREATED UNDER SAME STATE
+        '''
+        parameters = {"abs_t0_threshold": self.config.abs_t0_threshold,
+                      "rel_to_constant": self.config.rel_to_constant,
+                      "rel_t0_threshold": self.config.rel_t0_threshold,
+                      "end_date": self.end_date.strftime('%Y-%m-%d'),
+                      "ma_window": self.ma_window,
+                      "use_splines": self.use_splines,
+                      "smooth": self.smooth,
+                      "flags": self.flags,
+                      "wb_codes": self.wb_codes}
+        metadata_filename = file_name + '.json'
+        metadata_path = os.path.join(self.config.cache_path, metadata_filename)
+
+        # when saving cache, store the parameters in a json file
+        if mode == 'save':
+            metadata_filename = file_name + '.json'
+            metadata_path = os.path.join(self.config.cache_path, metadata_filename)
+            with open(metadata_path, 'w') as f:
+                json.dump(parameters, f)
+            return None
+
+        # when loading cache, check that the parameters match the json file
+        elif mode == 'load':
+            try:
+                with open(metadata_path) as f:
+                    old_parameters = json.load(f)
+            except:
+                print('The cache could not be validated. The data will be reloaded')
+                return False
+            if parameters != old_parameters:
+                print('The parameters used to generate this cache may have changed. The data will be reloaded')
+            return (parameters == old_parameters)
+
+        else:
+            raise Exception
 
     def open_db_connection(self):
         '''
         INITIALISE SERVER CONNECTION
         '''
-        return psycopg2.connect(
+        self.conn = psycopg2.connect(
             host='covid19db.org',
             port=5432,
             dbname='covid19',
             user='covid19',
             password='covid19')
+        return None
 
     def fetch_data(self, use_cache: bool = True):
         self.use_cache = use_cache
-        self.conn = self.open_db_connection()
-
         '''
         PULL/PROCESS DATA 
         '''
@@ -95,35 +122,39 @@ class DataProvider:
         return self.testing['countrycode'].unique()
 
     def load_from_cache(self, file_name: str) -> DataFrame:
-        full_path = os.path.join(self.config.cache_path, file_name)
-        if self.use_cache and os.path.exists(full_path):
+        cache_name = file_name + '.csv'
+        full_path = os.path.join(self.config.cache_path, cache_name)
+        if self.use_cache and os.path.exists(full_path) and self.validation(file_name, 'load'):
             print(f'Loading data from cache file: {full_path}')
             df = pd.read_csv(full_path, encoding='utf-8')
             if 'date' in df.columns:
                 df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d').dt.date
-
             return df
-
         return None
 
     def save_to_cache(self, df: DataFrame, file_name: str):
         if self.use_cache:
-            full_path = os.path.join(self.config.cache_path, file_name)
+            cache_name = file_name + '.csv'
+            full_path = os.path.join(self.config.cache_path, cache_name)
             print(f'Saving data to cache: {full_path}')
             pathlib.Path(os.path.dirname(full_path)).mkdir(parents=True, exist_ok=True)
             df.to_csv(full_path, encoding='utf-8')
+            # also save the config parameters that were used for validating future loads
+            self.validation(file_name, 'save')
 
     def get_epi_table(self) -> DataFrame:
         '''
         PREPARE EPIDEMIOLOGY TABLE
         '''
         print('Fetching epidemiology data')
-        cache_filename = "epidemiology_table.csv"
+        cache_filename = "epidemiology_table"
 
         epidemiology = self.load_from_cache(cache_filename)
         if epidemiology is not None:
             return epidemiology
 
+        if not self.conn:
+            self.open_db_connection()
         cols = 'countrycode, country, date, confirmed, dead'
         sql_command = 'SELECT ' + cols + \
                       ' FROM epidemiology WHERE adm_area_1 IS NULL AND source = %(source)s AND gid IS NOT NULL'
@@ -135,6 +166,8 @@ class DataProvider:
         assert not epi_table[['countrycode', 'date']].duplicated().any()
         epidemiology = pd.DataFrame(columns=[
             'countrycode', 'country', 'date', 'confirmed', 'new_per_day', 'dead_per_day'])
+        # suppress pandas errors in this loop, where we generate ChainedAssignment warnings
+        pd.options.mode.chained_assignment = None
         for country in tqdm(epi_table['countrycode'].unique(), desc='Pre-processing Epidemiological Data'):
             data = epi_table[epi_table['countrycode'] == country].set_index('date')
             # cast all dates as datetime date to omit ambiguity
@@ -159,13 +192,14 @@ class DataProvider:
                 data['dead_per_day'].iloc[np.array(data[data['dead_per_day'] < 0].index) - 1]
             data['dead_per_day'] = data['dead_per_day'].fillna(method='bfill')
             epidemiology = pd.concat((epidemiology, data)).reset_index(drop=True)
+        pd.options.mode.chained_assignment = 'warn'
 
         self.save_to_cache(epidemiology, cache_filename)
         return epidemiology
 
     def get_epi_series(self, epidemiology: DataFrame, testing: DataFrame, wbi_table: DataFrame) -> DataFrame:
         print('Processing Epidemiological Time Series Data')
-        cache_filename = "epidemiology_series.csv"
+        cache_filename = "epidemiology_series"
 
         epidemiology_series = self.load_from_cache(cache_filename)
         if epidemiology_series is not None:
@@ -245,12 +279,16 @@ class DataProvider:
                 wbi_table[wbi_table['countrycode'] == country]['value'].iloc[0]
             # two definitions of t0 use where appropriate
             # t0 absolute ~= 1000 total cases or t0 relative = 0.05 per rel_to_constant
-            t0 = np.nan if len(epi_data[epi_data['confirmed'] >= self.abs_t0_threshold]['date']) == 0 else \
-                epi_data[epi_data['confirmed'] >= self.abs_t0_threshold]['date'].iloc[0]
+            t0 = np.nan if len(epi_data[epi_data['confirmed'] >= self.config.abs_t0_threshold]['date']) == 0 else \
+                epi_data[epi_data['confirmed'] >= self.config.abs_t0_threshold]['date'].iloc[0]
             t0_relative = np.nan if len(
                 epi_data[
-                    ((epi_data['confirmed'] / population) * self.rel_to_constant) >= self.rel_t0_threshold]) == 0 else \
-                epi_data[((epi_data['confirmed'] / population) * self.rel_to_constant) >= self.rel_t0_threshold][
+                    ((epi_data[
+                          'confirmed'] / population) * self.config.rel_to_constant) >= self.config.rel_t0_threshold]) \
+                                    == 0 else \
+                epi_data[((epi_data[
+                               'confirmed'] / population) * self.config.rel_to_constant) >=
+                         self.config.rel_t0_threshold][
                     'date'].iloc[0]
             # t0_k_dead represents day first k total dead was reported
             t0_1_dead = np.nan if len(epi_data[epi_data['dead'] >= 1]['date']) == 0 else \
@@ -271,8 +309,8 @@ class DataProvider:
             days_since_t0_10_dead = np.repeat(np.nan, len(epi_data)) if pd.isnull(t0_10_dead) else \
                 np.array([(date - t0_10_dead).days for date in epi_data['date'].values])
             # again rel constant represents a population threhsold - 10,000 in the default case
-            new_cases_per_rel_constant = self.rel_to_constant * (ys / population)
-            new_deaths_per_rel_constant = self.rel_to_constant * (zs / population)
+            new_cases_per_rel_constant = self.config.rel_to_constant * (ys / population)
+            new_deaths_per_rel_constant = self.config.rel_to_constant * (zs / population)
             # compute case-death ascertaintment
             case_death_ascertainment = (epi_data['confirmed'].astype(int) /
                                         epi_data['dead'].astype(int).shift(-9).replace(0, np.nan)).values
@@ -329,7 +367,7 @@ class DataProvider:
 
     def get_gsi_table(self) -> DataFrame:
         print('Fetching government_response data')
-        cache_filename = "government_response_table.csv"
+        cache_filename = "government_response_table"
 
         government_response = self.load_from_cache(cache_filename)
         if government_response is not None:
@@ -338,6 +376,8 @@ class DataProvider:
         '''
         PREPARE GOVERNMENT RESPONSE TABLE
         '''
+        if not self.conn:
+            self.open_db_connection()
         cols = 'countrycode, country, date, stringency_index, ' + ', '.join(list(self.flags.keys()))
         sql_command = """SELECT """ + cols + """ FROM government_response"""
         gsi_table = pd.read_sql(sql_command, self.conn) \
@@ -353,7 +393,7 @@ class DataProvider:
 
     def get_wbi_table(self) -> DataFrame:
         print('Fetching world_bank data')
-        cache_filename = "world_bank_table.csv"
+        cache_filename = "world_bank_table"
 
         wbi_table = self.load_from_cache(cache_filename)
         if wbi_table is not None:
@@ -362,6 +402,8 @@ class DataProvider:
         '''
         PREPARE WORLD BANK STATISTICS
         '''
+        if not self.conn:
+            self.open_db_connection()
         sql_command = """SELECT countrycode, indicator_code, value 
                          FROM world_bank 
                          WHERE adm_area_1 IS NULL AND indicator_code IN %(indicator_code)s"""
@@ -392,7 +434,7 @@ class DataProvider:
         '''
         PREPARE TESTING TABLE
         '''
-        cache_filename = "testing_table.csv"
+        cache_filename = "testing_table"
         testing = self.load_from_cache(cache_filename)
         if testing is not None:
             return testing
