@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Config:
+    spike_sensitivity = 1.5
     abs_t0_threshold = 1000
     abs_prominence_threshold = 55  # minimum prominence
     abs_prominence_threshold_dead = 7  # minimum prominence for dead peak detection
