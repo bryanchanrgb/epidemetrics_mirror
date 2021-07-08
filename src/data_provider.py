@@ -473,8 +473,8 @@ class DataProvider:
 
 class ListDataProvider:
 
-    def __init__(self, data: List, x_scaling_factor: int = 7, country: str = 'TEST', field: str = 'new_per_day_smooth',
-                 country_population: int = 1000000):
+    def __init__(self, data: List, country: str = 'TEST', field: str = 'new_per_day_smooth',
+                 x_scaling_factor: int = 7, country_population: int = 1000000):
         # Rescale input data list
         data_size = len(data)
         rescale_length = data_size * x_scaling_factor - x_scaling_factor + 1

@@ -1,30 +1,30 @@
 import os
 import numpy as np
 from pandas import DataFrame
+from typing import Dict
 import matplotlib.pyplot as plt
 from implementation.config import Config
 from data_provider import DataProvider
 from implementation.trough_finder import TroughFinder
+from plot_helper import plot_e
 
 
 class AlgorithmE:
-    def __init__(self, config: Config, data_provider: DataProvider) -> DataFrame:
+    def __init__(self, config: Config, data_provider: DataProvider, country: str) -> DataFrame:
         self.config = config
+        self.country = country
         self.data_provider = data_provider
+        self.params = config.prominence_thresholds('new_per_day_smooth')
+        self.params['rel_to_constant'] = config.rel_to_constant
 
     @staticmethod
     def apply(data: DataFrame, cases_sub_b: DataFrame, cases_sub_c: DataFrame,
-              deaths_sub_c: DataFrame, population: int, config: Config) -> DataFrame:
+              deaths_sub_c: DataFrame, population: int, params: Dict) -> DataFrame:
 
         # set up prominence thresholds
-        field = 'new_per_day_smooth'
-        abs_prominence_threshold = config.prominence_thresholds(field)['abs_prominence_threshold']
-        rel_prominence_threshold = config.prominence_thresholds(field)['rel_prominence_threshold']
-        rel_prominence_max_threshold = config.prominence_thresholds(field)['rel_prominence_max_threshold']
-        prominence_height_threshold = config.prominence_thresholds(field)['prominence_height_threshold']
-        prominence_threshold = max(abs_prominence_threshold,
-                                   min(rel_prominence_threshold * population / config.rel_to_constant,
-                                       rel_prominence_max_threshold))
+        prominence_threshold = max(params['abs_prominence_threshold'],
+                                   min(params['rel_prominence_threshold'] * population / params['rel_to_constant'],
+                                       params['rel_prominence_max_threshold']))
 
         # when a wave of deaths ends, check if there is match between the number of peaks in both series.
         # if not, then add the most prominent peak for the output of sub-algorithm B in the self.d_match days before or after
@@ -53,42 +53,18 @@ class AlgorithmE:
         # next add back any troughs as in algorithm_c
         result_troughs = cases_sub_b[cases_sub_b.peak_ind == 0]
         results = results[results.peak_ind == 1]
-        results = TroughFinder.run(results,result_troughs,data,'new_per_day_smooth',prominence_threshold, prominence_height_threshold)
+        raw_data = data['new_per_day_smooth']
+        results = TroughFinder.run(results, result_troughs, raw_data, prominence_threshold,
+                                   params['prominence_height_threshold'])
 
         return results
 
-    def run(self, cases_sub_b: DataFrame, cases_sub_c: DataFrame, deaths_sub_c: DataFrame, country: str,
+    def run(self, cases_sub_b: DataFrame, cases_sub_c: DataFrame, deaths_sub_c: DataFrame,
             plot: bool = False) -> DataFrame:
-        data = self.data_provider.get_series(country, field='new_per_day_smooth')
-        deaths_data = self.data_provider.get_series(country, field='dead_per_day_smooth')
-        population = self.data_provider.get_population(country)
-        results = self.apply(data, cases_sub_b, cases_sub_c, deaths_sub_c, population, self.config)
+        data = self.data_provider.get_series(self.country, field='new_per_day_smooth')
+        deaths_data = self.data_provider.get_series(self.country, field='dead_per_day_smooth')
+        population = self.data_provider.get_population(self.country)
+        results = self.apply(data, cases_sub_b, cases_sub_c, deaths_sub_c, population, self.params)
         if plot:
-            self.plot(data, country, cases_sub_c, results, deaths_data, deaths_sub_c)
+            plot_e(data, self.country, cases_sub_c, results, deaths_data, deaths_sub_c, self.config.plot_path)
         return results
-
-    def plot(self, data: DataFrame, country: str, cases_sub_c: DataFrame, results: DataFrame,
-             deaths_data: DataFrame, deaths_sub_c: DataFrame):
-        fig, axs = plt.subplots(nrows=2, ncols=2)
-        # plot peaks after sub_c
-        axs[0, 0].set_title('After Sub Algorithm C & D')
-        axs[0, 0].plot(data['new_per_day_smooth'].values)
-        axs[0, 0].scatter(cases_sub_c['location'].values,
-                          data['new_per_day_smooth'].values[
-                              cases_sub_c['location'].values.astype(int)], color='red', marker='o')
-        # plot peaks from sub_e
-        axs[0, 1].set_title('After Sub Algorithm E')
-        axs[0, 1].plot(data['new_per_day_smooth'].values)
-        axs[0, 1].scatter(results['location'].values,
-                          data['new_per_day_smooth'].values[
-                              results['location'].values.astype(int)], color='red', marker='o')
-        # plot death peaks
-        axs[1, 1].set_title('Death Peaks')
-        axs[1, 1].plot(deaths_data['dead_per_day_smooth'].values)
-        axs[1, 1].scatter(deaths_sub_c['location'].values,
-                          deaths_data['dead_per_day_smooth'].values[
-                              deaths_sub_c['location'].values.astype(int)], color='red', marker='o')
-
-        fig.tight_layout()
-        plt.savefig(os.path.join(self.config.plot_path, country + '_algorithm_e.png'))
-        plt.close('all')

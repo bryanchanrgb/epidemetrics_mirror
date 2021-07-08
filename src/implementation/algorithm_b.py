@@ -1,18 +1,17 @@
 import numpy as np
-from pandas import DataFrame
-import matplotlib.pyplot as plt
+from pandas import DataFrame, Series
 from data_provider import DataProvider
 from implementation.config import Config
 from implementation.prominence_updater import ProminenceUpdater
 
 
 class AlgorithmB:
-    def __init__(self, config: Config, data_provider: DataProvider) -> DataFrame:
+    def __init__(self, config: Config) -> DataFrame:
         self.config = config
-        self.data_provider = data_provider
 
     @staticmethod
-    def apply(data: DataFrame, input_data_df: DataFrame, field: str, prominence_updater: ProminenceUpdater, config: Config) -> DataFrame:
+    def apply(raw_data: Series, input_data_df: DataFrame, prominence_updater: ProminenceUpdater,
+              config: Config) -> DataFrame:
 
         sub_b_flag = True
         # avoid overwriting sub_a when values replaced by t0 and t1
@@ -41,14 +40,14 @@ class AlgorithmB:
                     y_1 = df.loc[df['index'] == i + 1, 'y_position'].values[0]
                     # create boundaries t_0 and t_1 around the peak-trough pair
                     t_0 = max(np.floor((og_0 + og_1 - config.t_sep_a) / 2), 0)
-                    t_1 = min(np.floor((og_0 + og_1 + config.t_sep_a) / 2), data[field].index[-1])
+                    t_1 = min(np.floor((og_0 + og_1 + config.t_sep_a) / 2), raw_data.index[-1])
                     # store the original locations and values to restore them at the end
                     og_dict[len(og_dict)] = [og_0, t_0, og_1, t_1, y_0, y_1]
                     # reset the peak locations to the boundaries to be rechecked
                     df.loc[df['index'] == i, 'location'] = t_0
                     df.loc[df['index'] == i + 1, 'location'] = t_1
-                    df.loc[df['index'] == i, 'y_position'] = data[field].iloc[int(t_0)]
-                    df.loc[df['index'] == i + 1, 'y_position'] = data[field].values[int(t_1)]
+                    df.loc[df['index'] == i, 'y_position'] = raw_data.iloc[int(t_0)]
+                    df.loc[df['index'] == i + 1, 'y_position'] = raw_data.values[int(t_1)]
                     # run the resulting peaks for a prominence check
                     df = prominence_updater.run(df)
                     break
@@ -64,24 +63,8 @@ class AlgorithmB:
 
         return df
 
-    def run(self, input_data_df: DataFrame, country: str, field: str = 'new_per_day_smooth', prominence_updater: ProminenceUpdater = None, plot: bool = False) -> DataFrame:
-        data = self.data_provider.get_series(country, field)
-        output_data_df = self.apply(data, input_data_df, field, prominence_updater, self.config)
-        if plot:
-            self.plot(data, input_data_df, output_data_df, field)
+    def run(self, raw_data: Series, input_data_df: DataFrame,
+            prominence_updater: ProminenceUpdater = None) -> DataFrame:
+
+        output_data_df = self.apply(raw_data, input_data_df, prominence_updater, self.config)
         return output_data_df
-
-
-    def plot(self, data: DataFrame, after_sub_a: DataFrame, after_sub_b: DataFrame, field: str):
-        fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2, sharex='all')
-        # plot peaks-trough pairs from sub_a
-        ax0.set_title('After Sub Algorithm A')
-        ax0.plot(data[field].values)
-        ax0.scatter(after_sub_a['location'].values,
-                    data[field].values[after_sub_a['location'].values.astype(int)], color='red', marker='o')
-        # plot peaks-trough pairs from sub_b
-        ax1.set_title('After Sub Algorithm B')
-        ax1.plot(data[field].values)
-        ax1.scatter(after_sub_b['location'].values,
-                    data[field].values[after_sub_b['location'].values.astype(int)], color='red', marker='o')
-        plt.show()

@@ -2,20 +2,17 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 from scipy.signal import find_peaks
-import matplotlib.pyplot as plt
 from implementation.config import Config
 from implementation.prominence_updater import ProminenceUpdater
 from data_provider import DataProvider
 
 
 class AlgorithmA:
-    def __init__(self, config: Config, data_provider: DataProvider):
+    def __init__(self, config: Config):
         self.config = config
-        self.data_provider = data_provider
-        self.data = None
 
     @staticmethod
-    def delete_pairs(data, t_sep_a):
+    def delete_pairs(data: DataFrame, t_sep_a: int) -> DataFrame:
         if np.nanmin(data['duration']) < t_sep_a and len(data) >= 3:
             # extract waves of low duration
             df1 = data[data['duration'] < t_sep_a]
@@ -28,9 +25,9 @@ class AlgorithmA:
             # remove whichever adjacent candidate is a greater minimum, or a lesser maximum. If tied, remove the
             # earlier.
             if is_peak * (data.loc[i + 1, 'y_position'] - data.loc[i - 1, 'y_position']) >= 0:
-                data.drop(index=i+1, inplace=True)
+                data.drop(index=i + 1, inplace=True)
             else:
-                data.drop(index=i-1, inplace=True)
+                data.drop(index=i - 1, inplace=True)
         return data
 
     @staticmethod
@@ -57,15 +54,6 @@ class AlgorithmA:
         # results returns a set of peaks and troughs which are at least a minimum distance apart
         return data
 
-    def run(self, input_data_df: DataFrame, country: str, field: str = 'new_per_day_smooth', prominence_updater: ProminenceUpdater = None, plot: bool = False) -> DataFrame:
-        output_data_df = self.apply(input_data_df, prominence_updater, self.config.t_sep_a)
-        if plot:
-            self.plot(output_data_df, field)
+    def run(self, input_data_df: DataFrame, prominence_updater: ProminenceUpdater = None) -> DataFrame:
+        output_data_df = AlgorithmA.apply(input_data_df, prominence_updater, self.config.t_sep_a)
         return output_data_df
-
-    def plot(self, after_sub_a: DataFrame, field: str):
-        self.data = self.data_provider.get_series(country, field)
-        plt.plot(self.data[field].values)
-        plt.scatter(after_sub_a['location'].values, self.data[field].values[after_sub_a['location'].values.astype(int)],
-                    color='red', marker='o')
-        plt.show()

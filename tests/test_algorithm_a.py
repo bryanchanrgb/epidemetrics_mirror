@@ -8,6 +8,9 @@ from typing import List
 from implementation.config import Config
 from implementation.algorithm_a import AlgorithmA
 from data_provider import ListDataProvider
+from implementation.pre_algo import PreAlgo
+from implementation.prominence_updater import ProminenceUpdater
+from plot_helper import plot_results
 
 
 class TestAlgorithmA:
@@ -15,15 +18,21 @@ class TestAlgorithmA:
     @classmethod
     def setup_class(cls):
         cls.config = Config()
+        cls.country = 'TEST'
+        cls.field = 'new_per_day_smooth'
 
     def test_1(self):
         input_data = [1, 10, 5, 7, 6, 20, 19]
-        field = 'new_per_day_smooth'
 
-        data_provider = ListDataProvider(input_data, field=field, x_scaling_factor=7)
+        data_provider = ListDataProvider(input_data, self.country, self.field, x_scaling_factor=7)
 
-        algorithm_a = AlgorithmA(self.config, data_provider)
-        result = algorithm_a.run(country='TEST', field=field, plot=True)
+        pre_algo = PreAlgo(self.config, data_provider)
+        data, peaks_initial = pre_algo.init_country(self.country, self.field)
+        prominence_updater = ProminenceUpdater(data, self.field)
+
+        result = AlgorithmA(self.config).run(peaks_initial, prominence_updater)
+
+        plot_results(raw_data=data[self.field], peaks_before=peaks_initial, peaks_after=result)
         y_positions = result["y_position"].to_list()
 
         expected_result = [10, 5, 20]
