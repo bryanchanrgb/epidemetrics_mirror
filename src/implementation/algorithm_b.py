@@ -12,9 +12,7 @@ class AlgorithmB:
         self.data_provider = data_provider
 
     @staticmethod
-    def apply(data: DataFrame, sub_a: DataFrame, field: str, config: Config) -> DataFrame:
-        # initialise prominence_updater to run when checking pairs
-        prominence_updater = ProminenceUpdater(data, field)
+    def apply(data: DataFrame, sub_a: DataFrame, field: str, prominence_updater: ProminenceUpdater, config: Config) -> DataFrame:
 
         sub_b_flag = True
         # avoid overwriting sub_a when values replaced by t0 and t1
@@ -66,9 +64,9 @@ class AlgorithmB:
 
         return results
 
-    def run(self, sub_a: DataFrame, country: str, field: str = 'new_per_day_smooth', plot: bool = False) -> DataFrame:
+    def run(self, sub_a: DataFrame, country: str, field: str = 'new_per_day_smooth', prominence_updater: ProminenceUpdater = None, plot: bool = False) -> DataFrame:
         data = self.data_provider.get_series(country, field)
-        results = self.apply(data, sub_a, field, self.config)
+        results = self.apply(data, sub_a, field, prominence_updater, self.config)
         if plot:
             self.plot(data, sub_a, results, field)
         return results

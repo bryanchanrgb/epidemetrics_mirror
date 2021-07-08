@@ -10,6 +10,7 @@ from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 import json
 from data_provider import DataProvider
+from implementation.pre_algo import PreAlgo
 from implementation.algorithm_a import AlgorithmA
 from implementation.algorithm_b import AlgorithmB
 from implementation.algorithm_c import AlgorithmC
@@ -24,6 +25,7 @@ class Epidemetrics:
         self.prepare_output_dirs(self.config.plot_path)
         self.summary_output = dict()
 
+        self.pre_algo = PreAlgo(self.config, self.data_provider)
         self.algorithm_a = AlgorithmA(self.config, self.data_provider)
         self.algorithm_b = AlgorithmB(self.config, self.data_provider)
         self.algorithm_c = AlgorithmC(self.config, self.data_provider)
@@ -38,11 +40,12 @@ class Epidemetrics:
         Path(path).mkdir(parents=True, exist_ok=True)
 
     def find_peaks(self, country: str, field: str) -> DataFrame:
-        sub_a = self.algorithm_a.run(country=country, field=field)
-        sub_b = self.algorithm_b.run(sub_a=sub_a, country=country, field=field)
+        initial_data, spikes_removed, prominence_updater = self.pre_algo.run(country=country, field=field)
+        sub_a = self.algorithm_a.run(spikes_removed = spikes_removed, country=country, field=field, prominence_updater=prominence_updater)
+        sub_b = self.algorithm_b.run(sub_a=sub_a, country=country, field=field, prominence_updater=prominence_updater)
         sub_c = self.algorithm_c.run(sub_b=sub_b, country=country, field=field)
 
-        return sub_a, sub_b, sub_c
+        return initial_data, spikes_removed, sub_a, sub_b, sub_c
 
     def epi_find_peaks(self, country: str, plot: bool = False, save: bool = False) -> DataFrame:
         # match parameter tries to use death waves to detect case waves under sub_algorithm_e
@@ -50,22 +53,22 @@ class Epidemetrics:
         if len(cases) == 0:
             raise ValueError
 
-        cases_sub_a, cases_sub_b, cases_sub_c = self.find_peaks(country, field='new_per_day_smooth')
+        cases_pre_algo, cases_no_spikes, cases_sub_a, cases_sub_b, cases_sub_c = self.find_peaks(country, field='new_per_day_smooth')
 
         # compute equivalent series for deaths
         deaths = self.data_provider.get_series(country=country, field='dead_per_day_smooth')
         if len(deaths) == 0:
             raise ValueError
 
-        deaths_sub_a, deaths_sub_b, deaths_sub_c = self.find_peaks(country, field='dead_per_day_smooth')
+        deaths_pre_algo, deaths_no_spikes, deaths_sub_a, deaths_sub_b, deaths_sub_c = self.find_peaks(country, field='dead_per_day_smooth')
 
         # run sub algorithm e
         cases_sub_e = self.algorithm_e.run(cases_sub_b, cases_sub_c, deaths_sub_c, country=country,
                                            plot=plot)
         # compute plots
         if plot:
-            self.plot_peaks(cases, deaths, country, cases_sub_a, cases_sub_b, cases_sub_c,
-                            deaths_sub_a, deaths_sub_b, deaths_sub_c, save)
+            self.plot_peaks(cases, deaths, country, cases_pre_algo, cases_no_spikes, cases_sub_a, cases_sub_b, cases_sub_c,
+                            deaths_pre_algo, deaths_no_spikes, deaths_sub_a, deaths_sub_b, deaths_sub_c, save)
 
         summary = []
         for row, peak in cases_sub_e.iterrows():
@@ -88,19 +91,10 @@ class Epidemetrics:
         with open(os.path.join(self.config.plot_path, 'summary_output.json'), 'w') as f:
             json.dump(json_data, f)
 
-    def plot_peaks(self, cases, deaths, country, cases_sub_a, cases_sub_b, cases_sub_c,
-                   deaths_sub_a, deaths_sub_b, deaths_sub_c, save):
+    def plot_peaks(self, cases, deaths, country, cases_pre_algo, cases_no_spikes, cases_sub_a, cases_sub_b, cases_sub_c,
+                   deaths_pre_algo, deaths_no_spikes, deaths_sub_a, deaths_sub_b, deaths_sub_c, save):
 
-        peak = find_peaks(cases['new_per_day_smooth'].values, prominence=0, distance=1)
-        trough = find_peaks([-x for x in cases['new_per_day_smooth'].values], prominence=0, distance=1)
-        cases_pre_algo = pd.DataFrame(data=np.transpose(np.append(cases.index[peak[0]], cases.index[trough[0]])),
-                                      columns=['location'])
-        peak = find_peaks(deaths['dead_per_day_smooth'].values, prominence=0, distance=1)
-        trough = find_peaks([-x for x in deaths['dead_per_day_smooth'].values], prominence=0, distance=1)
-        deaths_pre_algo = pd.DataFrame(data=np.transpose(np.append(deaths.index[peak[0]], deaths.index[trough[0]])),
-                                       columns=['location'])
-
-        fig, axs = plt.subplots(nrows=2, ncols=4, sharex=True, figsize=(14, 7))
+        fig, axs = plt.subplots(nrows=2, ncols=5, sharex=True, figsize=(14, 7))
         plt.suptitle(country)
 
         axs[0, 0].set_title('Cases Before Algorithm')
@@ -111,29 +105,37 @@ class Epidemetrics:
         axs[0, 0].get_xaxis().set_visible(False)
         axs[0, 0].get_yaxis().set_visible(False)
 
-        axs[0, 1].set_title('Cases After Sub Algorithm A')
+        axs[0, 1].set_title('Cases After Spike Removal')
         axs[0, 1].plot(cases['new_per_day_smooth'].values)
-        axs[0, 1].scatter(cases_sub_a['location'].values,
+        axs[0, 1].scatter(cases_no_spikes['location'].values,
                           cases['new_per_day_smooth'].values[
-                              cases_sub_a['location'].values.astype(int)], color='red', marker='o')
-        axs[0, 1].get_xaxis().set_visible(False)
-        axs[0, 1].get_yaxis().set_visible(False)
-
-        axs[0, 2].set_title('Cases After Sub Algorithm B')
-        axs[0, 2].plot(cases['new_per_day_smooth'].values)
-        axs[0, 2].scatter(cases_sub_b['location'].values,
-                          cases['new_per_day_smooth'].values[
-                              cases_sub_b['location'].values.astype(int)], color='red', marker='o')
+                              cases_no_spikes['location'].values.astype(int)], color='red', marker='o')
         axs[0, 2].get_xaxis().set_visible(False)
         axs[0, 2].get_yaxis().set_visible(False)
 
-        axs[0, 3].set_title('Cases After Sub Algorithm C&D')
-        axs[0, 3].plot(cases['new_per_day_smooth'].values)
-        axs[0, 3].scatter(cases_sub_c['location'].values,
+        axs[0, 2].set_title('Cases After Sub Algorithm A')
+        axs[0, 2].plot(cases['new_per_day_smooth'].values)
+        axs[0, 2].scatter(cases_sub_a['location'].values,
                           cases['new_per_day_smooth'].values[
-                              cases_sub_c['location'].values.astype(int)], color='red', marker='o')
+                              cases_sub_a['location'].values.astype(int)], color='red', marker='o')
+        axs[0, 2].get_xaxis().set_visible(False)
+        axs[0, 2].get_yaxis().set_visible(False)
+
+        axs[0, 3].set_title('Cases After Sub Algorithm B')
+        axs[0, 3].plot(cases['new_per_day_smooth'].values)
+        axs[0, 3].scatter(cases_sub_b['location'].values,
+                          cases['new_per_day_smooth'].values[
+                              cases_sub_b['location'].values.astype(int)], color='red', marker='o')
         axs[0, 3].get_xaxis().set_visible(False)
         axs[0, 3].get_yaxis().set_visible(False)
+
+        axs[0, 4].set_title('Cases After Sub Algorithm C&D')
+        axs[0, 4].plot(cases['new_per_day_smooth'].values)
+        axs[0, 4].scatter(cases_sub_c['location'].values,
+                          cases['new_per_day_smooth'].values[
+                              cases_sub_c['location'].values.astype(int)], color='red', marker='o')
+        axs[0, 4].get_xaxis().set_visible(False)
+        axs[0, 4].get_yaxis().set_visible(False)
 
         axs[1, 0].set_title('Deaths Before Algorithm')
         axs[1, 0].plot(deaths['dead_per_day_smooth'].values)
@@ -143,29 +145,37 @@ class Epidemetrics:
         axs[1, 0].get_xaxis().set_visible(False)
         axs[1, 0].get_yaxis().set_visible(False)
 
-        axs[1, 1].set_title('Deaths After Sub Algorithm A')
+        axs[1, 1].set_title('Deaths After Spike Removal')
         axs[1, 1].plot(deaths['dead_per_day_smooth'].values)
-        axs[1, 1].scatter(deaths_sub_a['location'].values,
+        axs[1, 1].scatter(deaths_no_spikes['location'].values,
                           deaths['dead_per_day_smooth'].values[
-                              deaths_sub_a['location'].values.astype(int)], color='red', marker='o')
+                              deaths_no_spikes['location'].values.astype(int)], color='red', marker='o')
         axs[1, 1].get_xaxis().set_visible(False)
         axs[1, 1].get_yaxis().set_visible(False)
 
-        axs[1, 2].set_title('Deaths After Sub Algorithm B')
+        axs[1, 2].set_title('Deaths After Sub Algorithm A')
         axs[1, 2].plot(deaths['dead_per_day_smooth'].values)
-        axs[1, 2].scatter(deaths_sub_b['location'].values,
+        axs[1, 2].scatter(deaths_sub_a['location'].values,
                           deaths['dead_per_day_smooth'].values[
-                              deaths_sub_b['location'].values.astype(int)], color='red', marker='o')
+                              deaths_sub_a['location'].values.astype(int)], color='red', marker='o')
         axs[1, 2].get_xaxis().set_visible(False)
         axs[1, 2].get_yaxis().set_visible(False)
 
-        axs[1, 3].set_title('Deaths After Sub Algorithm C&D')
+        axs[1, 3].set_title('Deaths After Sub Algorithm B')
         axs[1, 3].plot(deaths['dead_per_day_smooth'].values)
-        axs[1, 3].scatter(deaths_sub_c['location'].values,
+        axs[1, 3].scatter(deaths_sub_b['location'].values,
                           deaths['dead_per_day_smooth'].values[
-                              deaths_sub_c['location'].values.astype(int)], color='red', marker='o')
+                              deaths_sub_b['location'].values.astype(int)], color='red', marker='o')
         axs[1, 3].get_xaxis().set_visible(False)
         axs[1, 3].get_yaxis().set_visible(False)
+
+        axs[1, 4].set_title('Deaths After Sub Algorithm C&D')
+        axs[1, 4].plot(deaths['dead_per_day_smooth'].values)
+        axs[1, 4].scatter(deaths_sub_c['location'].values,
+                          deaths['dead_per_day_smooth'].values[
+                              deaths_sub_c['location'].values.astype(int)], color='red', marker='o')
+        axs[1, 4].get_xaxis().set_visible(False)
+        axs[1, 4].get_yaxis().set_visible(False)
 
         fig.tight_layout()
 

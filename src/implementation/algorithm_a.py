@@ -14,25 +14,6 @@ class AlgorithmA:
         self.data_provider = data_provider
         self.data = None
 
-    def init_country(self, country, field='new_per_day_smooth') -> DataFrame:
-        self.data = self.data_provider.get_series(country, field)
-
-        # initialise prominence_updater to run when pairs are removed
-        prominence_updater = ProminenceUpdater(self.data, field)
-
-        # identify initial list of peaks via find_peaks
-        peak = find_peaks(self.data[field].values, prominence=0, distance=1)
-        trough = find_peaks([-x for x in self.data[field].values], prominence=0, distance=1)
-
-        # collect into a single dataframe
-        df = pd.DataFrame(data=np.transpose([np.append(self.data.index[peak[0]], self.data.index[trough[0]]),
-                                             np.append(peak[1]['prominences'], trough[1]['prominences'])]),
-                          columns=['location', 'prominence'])
-        df['peak_ind'] = np.append([1] * len(peak[0]), [0] * len(trough[0]))
-        df.loc[:, 'y_position'] = self.data[field][df['location']].values
-        df = df.sort_values(by='location').reset_index(drop=True)
-        return df, prominence_updater
-
     @staticmethod
     def delete_pairs(data, t_sep_a):
         if np.nanmin(data['duration']) < t_sep_a and len(data) >= 3:
@@ -76,9 +57,9 @@ class AlgorithmA:
         # results returns a set of peaks and troughs which are at least a minimum distance apart
         return data
 
-    def run(self, country: str, field: str = 'new_per_day_smooth', plot: bool = False) -> DataFrame:
-        data, prominence_updater = self.init_country(country, field=field)
-        results = self.apply(data, prominence_updater, self.config.t_sep_a)
+    def run(self, spikes_removed: DataFrame, country: str, field: str = 'new_per_day_smooth', prominence_updater: ProminenceUpdater = None, plot: bool = False) -> DataFrame:
+        self.data = self.data_provider.get_series(country, field)
+        results = self.apply(spikes_removed, prominence_updater, self.config.t_sep_a)
         if plot:
             self.plot(results, field)
         return results
