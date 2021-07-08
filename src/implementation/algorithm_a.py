@@ -57,15 +57,15 @@ class AlgorithmA:
         # results returns a set of peaks and troughs which are at least a minimum distance apart
         return data
 
-    def run(self, spikes_removed: DataFrame, country: str, field: str = 'new_per_day_smooth', prominence_updater: ProminenceUpdater = None, plot: bool = False) -> DataFrame:
-        self.data = self.data_provider.get_series(country, field)
-        results = self.apply(spikes_removed, prominence_updater, self.config.t_sep_a)
+    def run(self, input_data_df: DataFrame, country: str, field: str = 'new_per_day_smooth', prominence_updater: ProminenceUpdater = None, plot: bool = False) -> DataFrame:
+        output_data_df = self.apply(input_data_df, prominence_updater, self.config.t_sep_a)
         if plot:
-            self.plot(results, field)
-        return results
+            self.plot(output_data_df, field)
+        return output_data_df
 
-    def plot(self, sub_a: DataFrame, field: str):
+    def plot(self, after_sub_a: DataFrame, field: str):
+        self.data = self.data_provider.get_series(country, field)
         plt.plot(self.data[field].values)
-        plt.scatter(sub_a['location'].values, self.data[field].values[sub_a['location'].values.astype(int)],
+        plt.scatter(after_sub_a['location'].values, self.data[field].values[after_sub_a['location'].values.astype(int)],
                     color='red', marker='o')
         plt.show()

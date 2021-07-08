@@ -11,7 +11,7 @@ class AlgorithmC:
         self.data_provider = data_provider
 
     @staticmethod
-    def apply(data: DataFrame, sub_b: DataFrame, population: int, field: str, config: Config) -> DataFrame:
+    def apply(data: DataFrame, input_data_df: DataFrame, population: int, field: str, config: Config) -> DataFrame:
 
         abs_prominence_threshold = config.prominence_thresholds(field)['abs_prominence_threshold']
         rel_prominence_threshold = config.prominence_thresholds(field)['rel_prominence_threshold']
@@ -23,40 +23,40 @@ class AlgorithmC:
         prominence_threshold = max(abs_prominence_threshold,
                                    min(rel_prominence_threshold * population / config.rel_to_constant,
                                        rel_prominence_max_threshold))
-        results = sub_b.copy()
-        results = results.sort_values(by='location').reset_index(drop=True)
+        df = input_data_df.copy()
+        df = df.sort_values(by='location').reset_index(drop=True)
         # filter out troughs and peaks below prominence threshold
-        result_peaks = results[results['peak_ind'] == 1].reset_index(drop=True)
-        result_troughs = results[results['peak_ind'] == 0].reset_index(drop=True)
+        peaks = df[df['peak_ind'] == 1].reset_index(drop=True)
+        troughs = df[df['peak_ind'] == 0].reset_index(drop=True)
 
         # filter out a peak and its corresponding trough if the peak does not meet the prominence threshold
-        result_peaks_c = result_peaks[result_peaks['prominence'] >= prominence_threshold]
+        peaks_c = peaks[peaks['prominence'] >= prominence_threshold]
         # filter out relatively low prominent peaks
-        result_peaks_d = result_peaks_c[
-            (result_peaks_c['prominence'] >= prominence_height_threshold * result_peaks_c['y_position'])]
+        peaks_d = peaks_c[
+            (peaks_c['prominence'] >= prominence_height_threshold * peaks_c['y_position'])]
         # between each remaining peak, retain the trough with the lowest value
-        results = TroughFinder.run(result_peaks_d,result_troughs,data,field,prominence_threshold, prominence_height_threshold)
+        df = TroughFinder.run(peaks_d,troughs,data,field,prominence_threshold, prominence_height_threshold)
 
-        return results
+        return df
 
-    def run(self, sub_b: DataFrame, country: str, field: str = 'new_per_day_smooth',
+    def run(self, input_data_df: DataFrame, country: str, field: str = 'new_per_day_smooth',
             plot: bool = False) -> DataFrame:
         data = self.data_provider.get_series(country, field)
         population = self.data_provider.get_population(country)
-        results = self.apply(data, sub_b, population, field, self.config)
+        output_data_df = self.apply(data, input_data_df, population, field, self.config)
         if plot:
-            self.plot(data, sub_b, results, field)
-        return results
+            self.plot(data, input_data_df, output_data_df, field)
+        return output_data_df
 
-    def plot(self, data: DataFrame, sub_b: DataFrame, results: DataFrame, field: str):
+    def plot(self, data: DataFrame, after_sub_b: DataFrame, after_sub_c: DataFrame, field: str):
         fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
         ax1.set_title('After Sub Algorithm B')
         ax1.plot(data[field].values)
-        ax1.scatter(sub_b['location'].values,
-                    data[field].values[sub_b['location'].values.astype(int)], color='red', marker='o')
+        ax1.scatter(after_sub_b['location'].values,
+                    data[field].values[after_sub_b['location'].values.astype(int)], color='red', marker='o')
         # plot peaks from sub_c
         ax2.set_title('After Sub Algorithm C & D')
         ax2.plot(data[field].values)
-        ax2.scatter(results['location'].values,
-                    data[field].values[results['location'].values.astype(int)], color='red', marker='o')
+        ax2.scatter(after_sub_c['location'].values,
+                    data[field].values[after_sub_c['location'].values.astype(int)], color='red', marker='o')
         plt.show()

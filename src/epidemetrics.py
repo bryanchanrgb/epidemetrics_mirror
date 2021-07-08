@@ -40,12 +40,12 @@ class Epidemetrics:
         Path(path).mkdir(parents=True, exist_ok=True)
 
     def find_peaks(self, country: str, field: str) -> DataFrame:
-        initial_data, spikes_removed, prominence_updater = self.pre_algo.run(country=country, field=field)
-        sub_a = self.algorithm_a.run(spikes_removed = spikes_removed, country=country, field=field, prominence_updater=prominence_updater)
-        sub_b = self.algorithm_b.run(sub_a=sub_a, country=country, field=field, prominence_updater=prominence_updater)
-        sub_c = self.algorithm_c.run(sub_b=sub_b, country=country, field=field)
+        peaks_initial, peaks_cleaned, prominence_updater = self.pre_algo.run(country=country, field=field)
+        peaks_sub_a = self.algorithm_a.run(input_data_df= peaks_cleaned, country=country, field=field, prominence_updater=prominence_updater)
+        peaks_sub_b = self.algorithm_b.run(input_data_df=peaks_sub_a, country=country, field=field, prominence_updater=prominence_updater)
+        peaks_sub_c = self.algorithm_c.run(input_data_df=peaks_sub_b, country=country, field=field)
 
-        return initial_data, spikes_removed, sub_a, sub_b, sub_c
+        return peaks_initial, peaks_cleaned, peaks_sub_a, peaks_sub_b, peaks_sub_c
 
     def epi_find_peaks(self, country: str, plot: bool = False, save: bool = False) -> DataFrame:
         # match parameter tries to use death waves to detect case waves under sub_algorithm_e
@@ -53,22 +53,22 @@ class Epidemetrics:
         if len(cases) == 0:
             raise ValueError
 
-        cases_pre_algo, cases_no_spikes, cases_sub_a, cases_sub_b, cases_sub_c = self.find_peaks(country, field='new_per_day_smooth')
+        cases_initial, cases_cleaned, cases_sub_a, cases_sub_b, cases_sub_c = self.find_peaks(country, field='new_per_day_smooth')
 
         # compute equivalent series for deaths
         deaths = self.data_provider.get_series(country=country, field='dead_per_day_smooth')
         if len(deaths) == 0:
             raise ValueError
 
-        deaths_pre_algo, deaths_no_spikes, deaths_sub_a, deaths_sub_b, deaths_sub_c = self.find_peaks(country, field='dead_per_day_smooth')
+        deaths_initial, deaths_cleaned, deaths_sub_a, deaths_sub_b, deaths_sub_c = self.find_peaks(country, field='dead_per_day_smooth')
 
         # run sub algorithm e
         cases_sub_e = self.algorithm_e.run(cases_sub_b, cases_sub_c, deaths_sub_c, country=country,
                                            plot=plot)
         # compute plots
         if plot:
-            self.plot_peaks(cases, deaths, country, cases_pre_algo, cases_no_spikes, cases_sub_a, cases_sub_b, cases_sub_c,
-                            deaths_pre_algo, deaths_no_spikes, deaths_sub_a, deaths_sub_b, deaths_sub_c, save)
+            self.plot_peaks(cases, deaths, country, cases_initial, cases_cleaned, cases_sub_a, cases_sub_b, cases_sub_c,
+                            deaths_initial, deaths_cleaned, deaths_sub_a, deaths_sub_b, deaths_sub_c, save)
 
         summary = []
         for row, peak in cases_sub_e.iterrows():
@@ -91,25 +91,25 @@ class Epidemetrics:
         with open(os.path.join(self.config.plot_path, 'summary_output.json'), 'w') as f:
             json.dump(json_data, f)
 
-    def plot_peaks(self, cases, deaths, country, cases_pre_algo, cases_no_spikes, cases_sub_a, cases_sub_b, cases_sub_c,
-                   deaths_pre_algo, deaths_no_spikes, deaths_sub_a, deaths_sub_b, deaths_sub_c, save):
+    def plot_peaks(self, cases, deaths, country, cases_initial, cases_cleaned, cases_sub_a, cases_sub_b, cases_sub_c,
+                   deaths_initial, deaths_cleaned, deaths_sub_a, deaths_sub_b, deaths_sub_c, save):
 
         fig, axs = plt.subplots(nrows=2, ncols=5, sharex=True, figsize=(14, 7))
         plt.suptitle(country)
 
         axs[0, 0].set_title('Cases Before Algorithm')
         axs[0, 0].plot(cases['new_per_day_smooth'].values)
-        axs[0, 0].scatter(cases_pre_algo['location'].values,
+        axs[0, 0].scatter(cases_initial['location'].values,
                           cases['new_per_day_smooth'].values[
-                              cases_pre_algo['location'].values.astype(int)], color='red', marker='o')
+                              cases_initial['location'].values.astype(int)], color='red', marker='o')
         axs[0, 0].get_xaxis().set_visible(False)
         axs[0, 0].get_yaxis().set_visible(False)
 
         axs[0, 1].set_title('Cases After Spike Removal')
         axs[0, 1].plot(cases['new_per_day_smooth'].values)
-        axs[0, 1].scatter(cases_no_spikes['location'].values,
+        axs[0, 1].scatter(cases_cleaned['location'].values,
                           cases['new_per_day_smooth'].values[
-                              cases_no_spikes['location'].values.astype(int)], color='red', marker='o')
+                              cases_cleaned['location'].values.astype(int)], color='red', marker='o')
         axs[0, 2].get_xaxis().set_visible(False)
         axs[0, 2].get_yaxis().set_visible(False)
 
@@ -139,17 +139,17 @@ class Epidemetrics:
 
         axs[1, 0].set_title('Deaths Before Algorithm')
         axs[1, 0].plot(deaths['dead_per_day_smooth'].values)
-        axs[1, 0].scatter(deaths_pre_algo['location'].values,
+        axs[1, 0].scatter(deaths_initial['location'].values,
                           deaths['dead_per_day_smooth'].values[
-                              deaths_pre_algo['location'].values.astype(int)], color='red', marker='o')
+                              deaths_initial['location'].values.astype(int)], color='red', marker='o')
         axs[1, 0].get_xaxis().set_visible(False)
         axs[1, 0].get_yaxis().set_visible(False)
 
         axs[1, 1].set_title('Deaths After Spike Removal')
         axs[1, 1].plot(deaths['dead_per_day_smooth'].values)
-        axs[1, 1].scatter(deaths_no_spikes['location'].values,
+        axs[1, 1].scatter(deaths_cleaned['location'].values,
                           deaths['dead_per_day_smooth'].values[
-                              deaths_no_spikes['location'].values.astype(int)], color='red', marker='o')
+                              deaths_cleaned['location'].values.astype(int)], color='red', marker='o')
         axs[1, 1].get_xaxis().set_visible(False)
         axs[1, 1].get_yaxis().set_visible(False)
 
