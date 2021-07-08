@@ -21,7 +21,7 @@ class EpiPanel:
             # if the list of peaks_and_troughs is empty we get peak_class = 1 - check if this is accurate
             if peak_class == 1:
                 data = self.data_provider.get_series(country=country, field='new_per_day_smooth')
-                if np.nanmax(data['new_per_day_smooth']) < self.class_1_threshold:
+                if np.nanmax(data['new_per_day_smooth']) < self.config.class_1_threshold:
                     peak_class = 0
         else:
             return 0, None
