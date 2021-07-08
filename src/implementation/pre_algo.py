@@ -36,14 +36,16 @@ class PreAlgo:
     def clean_spikes(self, pre_algo, prominence_updater):
         # calculate the slopes of each min-max pair wrt log-scale
         data = pre_algo.copy()
-        data['slopes'] = abs(np.log(data['y_position'].replace(0, 1)).diff() / data['location'].diff())
+        min_non_zero = 1/self.data_provider.ma_window
+        data['log_y'] = np.log(data['y_position'].mask(data['y_position'] < min_non_zero, min_non_zero))
+        data['slopes'] = abs(data['log_y'].diff() / data['location'].diff())
         spike_cutoff = data['slopes'].mean() + self.config.spike_sensitivity * data['slopes'].std()
         while data['slopes'].max() > spike_cutoff:
             i = data.idxmax()['slopes']
             data.drop(index = [i-1, i], inplace=True)
             data.reset_index(drop=True, inplace=True)
-            data['slopes'] = abs(np.log(data['y_position'].replace(0, 1)).diff() / data['location'].diff())
-        data.drop(columns = 'slopes', inplace=True)
+            data['slopes'] = abs(data['log_y'].diff() / data['location'].diff())
+        data.drop(columns = ['log_y', 'slopes'], inplace=True)
         data = prominence_updater.run(data)
         return data
 
