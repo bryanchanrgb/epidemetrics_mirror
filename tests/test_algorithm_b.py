@@ -27,7 +27,7 @@ class TestAlgorithmB:
         data_provider = ListDataProvider(input_data, self.country, self.field, x_scaling_factor=7)
 
         data = data_provider.get_series(self.country, self.field)
-        peaks_initial = AlgorithmInit(None, None).init_country(data[self.field])
+        peaks_initial = AlgorithmInit().init_country(data[self.field])
         prominence_updater = ProminenceUpdater(data, self.field)
 
         sub_a = AlgorithmA(self.config).run(peaks_initial, prominence_updater)
