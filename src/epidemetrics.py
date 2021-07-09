@@ -12,7 +12,7 @@ import json
 
 from data_provider import DataProvider
 from implementation.algorithm_init import AlgorithmInit
-from implementation.algorithm_spike_cleaner import AlgorithmSpikeCleaner
+from implementation.algorithm_anomalies import AlgorithmAnomalyDetection
 from implementation.algorithm_a import AlgorithmA
 from implementation.algorithm_b import AlgorithmB
 from implementation.algorithm_c import AlgorithmC
@@ -58,7 +58,7 @@ class Epidemetrics:
 
         data, peaks_initial, prominence_updater = self.algorithm_init.run(country=country, field=field)
 
-        peaks_cleaned = AlgorithmSpikeCleaner(self.data_provider, self.spike_cutoff[field],
+        peaks_cleaned = AlgorithmAnomalyDetection(self.data_provider, self.spike_cutoff[field],
                                               self.config.spike_width).run(input_data_df=peaks_initial,
                                                                            prominence_updater=prominence_updater)
 

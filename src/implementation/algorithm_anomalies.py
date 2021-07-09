@@ -6,7 +6,7 @@ from implementation.prominence_updater import ProminenceUpdater
 from data_provider import DataProvider
 
 
-class AlgorithmSpikeCleaner:
+class AlgorithmAnomalyDetection:
     def __init__(self, data_provider: DataProvider, spike_cutoff: float, spike_width: float):
         self.spike_cutoff = spike_cutoff
         self.ma_window = data_provider.ma_window
@@ -50,6 +50,6 @@ class AlgorithmSpikeCleaner:
         return data
 
     def run(self, input_data_df: DataFrame, prominence_updater: ProminenceUpdater = None) -> DataFrame:
-        output_data_df = AlgorithmSpikeCleaner.apply(input_data_df, prominence_updater, self.spike_cutoff,
+        output_data_df = AlgorithmAnomalyDetection.apply(input_data_df, prominence_updater, self.spike_cutoff,
                                                      self.spike_width, self.ma_window)
         return output_data_df
