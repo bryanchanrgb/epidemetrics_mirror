@@ -8,7 +8,7 @@ from data_provider import DataProvider
 
 
 class AlgorithmInit:
-    def __init__(self, config: Config, data_provider: DataProvider):
+    def __init__(self, config: Config = None, data_provider: DataProvider = None):
         self.config = config
         self.data_provider = data_provider
 
