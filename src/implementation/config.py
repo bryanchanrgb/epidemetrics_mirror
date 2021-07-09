@@ -7,7 +7,8 @@ class Config:
     rel_to_constant = 10000  # for calculating relative to the population
 
     # for waves algorithm
-    spike_sensitivity = 1.5
+    spike_sensitivity = 1.5 # filter out spikes with this rate of growth / decline rel to sigma
+    spike_width = 1.5 # spikes must be no wider than this rel data_provider.ma_window
     abs_prominence_threshold = 50  # minimum prominence
     rel_prominence_threshold = 0.1  # prominence relative to rel_to_constant
     rel_prominence_max_threshold = 500  # upper limit on relative prominence
@@ -16,7 +17,7 @@ class Config:
     rel_prominence_threshold_dead = 0.014  # prominence threshold for dead rel_to_constant
     rel_prominence_max_threshold_dead = 70  # upper limit on relative prominencce
     prominence_height_threshold_dead = 0.5  # prominence must be above a percentage of the peak height
-    t_sep_a = 21
+    t_sep_a = 35
 
     # for analysis
     abs_t0_threshold = 1000

@@ -28,6 +28,7 @@ class Epidemetrics:
         self.prepare_output_dirs(self.config.plot_path)
         self.summary_output = dict()
         self.algorithm_init = AlgorithmInit(self.config, self.data_provider)
+        self.spike_cutoff = dict()
 
     def prepare_output_dirs(self, path: str):
         print(f'Preparing output directory: {path}')
@@ -37,13 +38,29 @@ class Epidemetrics:
             print(f"Error: {path}: {e.strerror}")
         Path(path).mkdir(parents=True, exist_ok=True)
 
+    def calibrate_anomaly_detection(self, countries, ma_window):
+        spike_cutoff = {'new_per_day_smooth': 0, 'dead_per_day_smooth': 0}
+        for field in spike_cutoff.keys():
+            all_slopes = np.array([])
+            for country in countries:
+                _, peaks_initial, _ = self.algorithm_init.run(country=country, field=field)
+                if isinstance(peaks_initial, pd.DataFrame):
+                    if not peaks_initial.empty:
+                        min_non_zero = 1 / ma_window
+                        peaks_initial['log_y'] = np.log(
+                            peaks_initial['y_position'].mask(peaks_initial['y_position'] < min_non_zero, min_non_zero))
+                        peaks_initial['slopes'] = peaks_initial['log_y'].diff() / peaks_initial['location'].diff()
+                        all_slopes = np.append(all_slopes, peaks_initial['slopes'].values)
+            spike_cutoff[field] = self.config.spike_sensitivity * np.nanstd(all_slopes).item()
+        self.spike_cutoff = spike_cutoff
+
     def find_peaks(self, country: str, field: str) -> DataFrame:
 
         data, peaks_initial, prominence_updater = self.algorithm_init.run(country=country, field=field)
 
-        peaks_cleaned = AlgorithmSpikeCleaner(self.config, self.data_provider).run(
-            input_data_df=peaks_initial,
-            prominence_updater=prominence_updater)
+        peaks_cleaned = AlgorithmSpikeCleaner(self.data_provider, self.spike_cutoff[field],
+                                              self.config.spike_width).run(input_data_df=peaks_initial,
+                                                                           prominence_updater=prominence_updater)
 
         peaks_sub_a = AlgorithmA(self.config).run(
             input_data_df=peaks_cleaned,
@@ -56,8 +73,7 @@ class Epidemetrics:
 
         peaks_sub_c = AlgorithmC(self.config, self.data_provider, country, field).run(
             raw_data=data[field],
-            input_data_df=peaks_sub_b,
-        )
+            input_data_df=peaks_sub_b)
 
         return peaks_initial, peaks_cleaned, peaks_sub_a, peaks_sub_b, peaks_sub_c
 

@@ -15,6 +15,7 @@ if __name__ == '__main__':
 
     epidemetrics = Epidemetrics(config, data_provider)
 
+    epidemetrics.calibrate_anomaly_detection(countries, data_provider.ma_window)
     t = tqdm(countries, desc='Finding peaks for all countries')
     for country in t:
         t.set_description(f"Finding peaks for: {country}")

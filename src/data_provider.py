@@ -16,7 +16,7 @@ class DataProvider:
     def __init__(self, config):
         self.source = 'WRD_WHO'
         self.end_date = datetime.date(2021, 7, 1)
-        self.ma_window = 7
+        self.ma_window = 14
         self.use_splines = False
         self.smooth = 0.001
         self.flags = {

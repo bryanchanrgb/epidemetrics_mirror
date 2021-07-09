@@ -30,6 +30,8 @@ class AlgorithmInit:
     def run(self, country: str, field: str = 'new_per_day_smooth', plot: bool = False) -> (
             DataFrame, DataFrame, ProminenceUpdater):
         data = self.data_provider.get_series(country, field)
+        if len(data) == 0:
+            return data, None, None
         pre_algo = AlgorithmInit.init_country(data[field])
         prominence_updater = ProminenceUpdater(data, field)
         return data, pre_algo, prominence_updater
