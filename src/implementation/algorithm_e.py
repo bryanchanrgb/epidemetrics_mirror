@@ -1,8 +1,6 @@
-import os
 import numpy as np
 from pandas import DataFrame
 from typing import Dict
-import matplotlib.pyplot as plt
 from implementation.config import Config
 from data_provider import DataProvider
 from implementation.trough_finder import TroughFinder
@@ -27,7 +25,8 @@ class AlgorithmE:
                                        params['rel_prominence_max_threshold']))
 
         # when a wave of deaths ends, check if there is match between the number of peaks in both series.
-        # if not, then add the most prominent peak for the output of sub-algorithm B in the self.d_match days before or after
+        # if not, then add the most prominent peak for the output of sub-algorithm B in the self.d_match days before
+        # or after
 
         death_peaks = deaths_sub_c[deaths_sub_c.peak_ind == 1].location
         death_troughs = deaths_sub_c[deaths_sub_c.peak_ind == 0].location

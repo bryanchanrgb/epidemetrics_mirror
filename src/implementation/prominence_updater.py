@@ -11,11 +11,10 @@ class ProminenceUpdater:
         self.initial_location = min(data.index) - 1
         self.terminal_location = max(data.index) + 1
         self.endpoints = pd.DataFrame([[self.initial_location, np.nan, self.initial_value, np.nan],
-                                  [self.terminal_location, np.nan, self.terminal_value, np.nan]],
-                                 columns=['location', 'prominence', 'y_position', 'peak_ind'])
+                                       [self.terminal_location, np.nan, self.terminal_value, np.nan]],
+                                      columns=['location', 'prominence', 'y_position', 'peak_ind'])
 
     def makeframe(self, data, peak, peak_properties, trough, trough_properties):
-
         peaks = data.loc[peak]
         peaks['prominence'] = peak_properties['prominences']
         peaks['peak_ind'].values[:] = 1
@@ -24,7 +23,7 @@ class ProminenceUpdater:
         troughs['prominence'] = trough_properties['prominences']
         troughs['peak_ind'].values[:] = 0
 
-        results = pd.concat([peaks,troughs])
+        results = pd.concat([peaks, troughs])
 
         results = results.sort_values(by='location').reset_index(drop=True)
         return results

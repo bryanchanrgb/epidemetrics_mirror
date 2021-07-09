@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Config:
-
     rel_to_constant = 10000  # for calculating relative to the population
 
     # for waves algorithm

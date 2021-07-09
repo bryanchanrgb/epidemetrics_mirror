@@ -9,8 +9,10 @@ from pandas import DataFrame
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 import json
+
 from data_provider import DataProvider
-from implementation.pre_algo import PreAlgo
+from implementation.algorithm_init import AlgorithmInit
+from implementation.algorithm_spike_cleaner import AlgorithmSpikeCleaner
 from implementation.algorithm_a import AlgorithmA
 from implementation.algorithm_b import AlgorithmB
 from implementation.algorithm_c import AlgorithmC
@@ -25,8 +27,7 @@ class Epidemetrics:
         self.data_provider = data_provider
         self.prepare_output_dirs(self.config.plot_path)
         self.summary_output = dict()
-
-        self.pre_algo = PreAlgo(self.config, self.data_provider)
+        self.algorithm_init = AlgorithmInit(self.config, self.data_provider)
 
     def prepare_output_dirs(self, path: str):
         print(f'Preparing output directory: {path}')
@@ -38,7 +39,11 @@ class Epidemetrics:
 
     def find_peaks(self, country: str, field: str) -> DataFrame:
 
-        data, peaks_initial, peaks_cleaned, prominence_updater = self.pre_algo.run(country=country, field=field)
+        data, peaks_initial, prominence_updater = self.algorithm_init.run(country=country, field=field)
+
+        peaks_cleaned = AlgorithmSpikeCleaner(self.config, self.data_provider).run(
+            input_data_df=peaks_initial,
+            prominence_updater=prominence_updater)
 
         peaks_sub_a = AlgorithmA(self.config).run(
             input_data_df=peaks_cleaned,
