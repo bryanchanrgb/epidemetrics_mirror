@@ -9,7 +9,7 @@ from implementation.algorithm_a import AlgorithmA
 from implementation.algorithm_b import AlgorithmB
 from implementation.algorithm_c import AlgorithmC
 from data_provider import ListDataProvider
-from implementation.pre_algo import PreAlgo
+from implementation.algorithm_init import AlgorithmInit
 from implementation.prominence_updater import ProminenceUpdater
 from plot_helper import plot_results
 
@@ -27,8 +27,8 @@ class TestAlgorithmC:
 
         data_provider = ListDataProvider(input_data, self.country, self.field, x_scaling_factor=14)
 
-        pre_algo = PreAlgo(self.config, data_provider)
-        data, peaks_initial = pre_algo.init_country(self.country, self.field)
+        data = data_provider.get_series(self.country, self.field)
+        peaks_initial = AlgorithmInit(None, None).init_country(data[self.field])
         prominence_updater = ProminenceUpdater(data, self.field)
 
         sub_a = AlgorithmA(self.config).run(peaks_initial, prominence_updater)
