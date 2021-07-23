@@ -59,8 +59,9 @@ class Epidemetrics:
         data, peaks_initial, prominence_updater = self.algorithm_init.run(country=country, field=field)
 
         peaks_cleaned = AlgorithmAnomalyDetection(self.data_provider, self.spike_cutoff[field],
-                                              self.config.spike_width).run(input_data_df=peaks_initial,
-                                                                           prominence_updater=prominence_updater)
+                                                  self.config.spike_width).run(input_data_df=peaks_initial,
+                                                                               prominence_updater=prominence_updater)\
+            if self.config.detect_spikes else peaks_initial
 
         peaks_sub_a = AlgorithmA(self.config).run(
             input_data_df=peaks_cleaned,
