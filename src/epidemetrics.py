@@ -2,23 +2,13 @@ import os
 import shutil
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-import datetime
 from pandas import DataFrame
-from scipy.signal import find_peaks
-import matplotlib.pyplot as plt
 import json
 
+import wavefinder as wf
+
 from data_provider import DataProvider
-from implementation.algorithm_init import AlgorithmInit
-from implementation.algorithm_anomalies import AlgorithmAnomalyDetection
-from implementation.algorithm_a import AlgorithmA
-from implementation.algorithm_b import AlgorithmB
-from implementation.algorithm_c import AlgorithmC
-from implementation.algorithm_e import AlgorithmE
-from implementation.config import Config
-from plot_helper import plot_peaks
+from config import Config
 
 
 class Epidemetrics:
@@ -27,10 +17,9 @@ class Epidemetrics:
         self.data_provider = data_provider
         self.prepare_output_dirs(self.config.plot_path)
         self.summary_output = dict()
-        self.algorithm_init = AlgorithmInit(self.config, self.data_provider)
-        self.spike_cutoff = dict()
 
-    def prepare_output_dirs(self, path: str):
+    @staticmethod
+    def prepare_output_dirs(path: str):
         print(f'Preparing output directory: {path}')
         try:
             shutil.rmtree(path)
@@ -38,73 +27,43 @@ class Epidemetrics:
             print(f"Error: {path}: {e.strerror}")
         Path(path).mkdir(parents=True, exist_ok=True)
 
-    def calibrate_anomaly_detection(self, countries, ma_window):
-        spike_cutoff = {'new_per_day_smooth': 0, 'dead_per_day_smooth': 0}
-        for field in spike_cutoff.keys():
-            all_slopes = np.array([])
-            for country in countries:
-                _, peaks_initial, _ = self.algorithm_init.run(country=country, field=field)
-                if isinstance(peaks_initial, pd.DataFrame):
-                    if not peaks_initial.empty:
-                        min_non_zero = 1 / ma_window
-                        peaks_initial['log_y'] = np.log(
-                            peaks_initial['y_position'].mask(peaks_initial['y_position'] < min_non_zero, min_non_zero))
-                        peaks_initial['slopes'] = peaks_initial['log_y'].diff() / peaks_initial['location'].diff()
-                        all_slopes = np.append(all_slopes, peaks_initial['slopes'].values)
-            spike_cutoff[field] = self.config.spike_sensitivity * np.nanstd(all_slopes).item()
-        self.spike_cutoff = spike_cutoff
+    def find_peaks(self, country: str, field: str) -> wf.WaveList:
 
-    def find_peaks(self, country: str, field: str) -> DataFrame:
+        data = self.data_provider.get_series(country=country, field=field)
+        data = data[field]
+        params = self.config.prominence_thresholds(field)
+        params['rel_to_constant'] = self.config.rel_to_constant
+        population = self.data_provider.get_population(country)
+        prominence_threshold = max(params['abs_prominence_threshold'],
+                                   min(params['rel_prominence_threshold'] * population / params['rel_to_constant'],
+                                       params['rel_prominence_max_threshold']))
+        series_name = 'Cases' if field == 'new_per_day_smooth' else 'Deaths'
 
-        data, peaks_initial, prominence_updater = self.algorithm_init.run(country=country, field=field)
+        wavelist = wf.WaveList(data, series_name, self.config.t_sep_a, prominence_threshold,
+                               params['prominence_height_threshold'])
 
-        peaks_cleaned = AlgorithmAnomalyDetection(self.data_provider, self.spike_cutoff[field],
-                                                  self.config.spike_width).run(input_data_df=peaks_initial,
-                                                                               prominence_updater=prominence_updater)\
-            if self.config.detect_spikes else peaks_initial
-
-        peaks_sub_a = AlgorithmA(self.config).run(
-            input_data_df=peaks_cleaned,
-            prominence_updater=prominence_updater)
-
-        peaks_sub_b = AlgorithmB(self.config).run(
-            raw_data=data[field],
-            input_data_df=peaks_sub_a,
-            prominence_updater=prominence_updater)
-
-        peaks_sub_c = AlgorithmC(self.config, self.data_provider, country, field).run(
-            raw_data=data[field],
-            input_data_df=peaks_sub_b)
-
-        return peaks_initial, peaks_cleaned, peaks_sub_a, peaks_sub_b, peaks_sub_c
+        return wavelist
 
     def epi_find_peaks(self, country: str, plot: bool = False, save: bool = False) -> DataFrame:
-        # match parameter tries to use death waves to detect case waves under sub_algorithm_e
         cases = self.data_provider.get_series(country=country, field='new_per_day_smooth')
         if len(cases) == 0:
             raise ValueError
+        case_wavelist = self.find_peaks(country, field='new_per_day_smooth')
 
-        cases_initial, cases_cleaned, cases_sub_a, cases_sub_b, cases_sub_c = self.find_peaks(
-            country, field='new_per_day_smooth')
-
-        # compute equivalent series for deaths
         deaths = self.data_provider.get_series(country=country, field='dead_per_day_smooth')
         if len(deaths) == 0:
             raise ValueError
+        deaths_wavelist = self.find_peaks(country, field='dead_per_day_smooth')
 
-        deaths_initial, deaths_cleaned, deaths_sub_a, deaths_sub_b, deaths_sub_c = self.find_peaks(
-            country, field='dead_per_day_smooth')
-
-        # run sub algorithm e
-        cases_sub_e = AlgorithmE(self.config, self.data_provider, country).run(
-            cases_sub_b, cases_sub_c, deaths_sub_c, plot=plot)
+        # run cross-validation (Sub Algorithm E) to find additional case waves from deaths waves
+        cases_sub_e = wf.WaveCrossValidator(country).run(
+            case_wavelist, deaths_wavelist, plot=plot, plot_path=self.config.plot_path)
 
         # compute plots
         if plot:
-            plot_peaks(cases, deaths, country, cases_initial, cases_cleaned, cases_sub_a, cases_sub_b, cases_sub_c,
-                       deaths_initial, deaths_cleaned, deaths_sub_a, deaths_sub_b, deaths_sub_c,
-                       self.config.plot_path, save)
+            wf.plot_peaks([case_wavelist, deaths_wavelist], country, self.config.plot_path, save)
 
+        # store output of cross-validation to self.summary_output
         summary = []
         for row, peak in cases_sub_e.iterrows():
             peak_data = dict({"index": row, "location": peak.location, "date": cases.iloc[int(peak.location)].date,
@@ -117,7 +76,7 @@ class Epidemetrics:
     def save_summary(self):
         json_data = dict({'data': []})
         for country, summary in self.summary_output.items():
-            country_summary = dict({'country': country, 'waves': []})
+            country_summary = dict({'country': country, 'numberOfWaves': len(summary), 'waves': []})
             for wave in summary:
                 copied_wave = wave.copy()
                 copied_wave['date'] = copied_wave['date'].strftime('%Y-%m-%d')

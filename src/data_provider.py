@@ -74,7 +74,7 @@ class DataProvider:
                 return False
             if parameters != old_parameters:
                 print('The parameters used to generate this cache may have changed. The data will be reloaded')
-            return (parameters == old_parameters)
+            return parameters == old_parameters
 
         else:
             raise Exception

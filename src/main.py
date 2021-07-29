@@ -2,9 +2,9 @@ import os
 from tqdm import tqdm
 from epidemetrics import Epidemetrics
 from data_provider import DataProvider
-from implementation.config import Config
+from config import Config
 from epipanel import EpiPanel
-from table_1 import Table_1
+from table_1 import Table1
 
 if __name__ == '__main__':
     config = Config(os.path.dirname(os.path.realpath(__file__)))
@@ -14,9 +14,6 @@ if __name__ == '__main__':
     countries = data_provider.get_countries()
 
     epidemetrics = Epidemetrics(config, data_provider)
-
-    if config.detect_spikes:
-        epidemetrics.calibrate_anomaly_detection(countries, data_provider.ma_window)
 
     t = tqdm(countries, desc='Finding peaks for all countries')
     for country in t:
@@ -31,5 +28,5 @@ if __name__ == '__main__':
 
     epi_panel = EpiPanel(config, data_provider, epidemetrics.summary_output).get_epi_panel()
 
-    table_1 = Table_1(config, epi_panel)
+    table_1 = Table1(config, epi_panel)
     table_1.table_1()

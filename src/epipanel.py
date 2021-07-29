@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict
 from data_provider import DataProvider
-from implementation.config import Config
+from config import Config
 
 
 class EpiPanel:
@@ -72,8 +72,8 @@ class EpiPanel:
             data['wave_duration_1'] = np.nan  # w
             data['wave_cfr_1'] = np.nan  # w
 
-            country_series = self.data_provider.epidemiology_series \
-                [self.data_provider.epidemiology_series['countrycode'] == country].reset_index(drop=True)
+            country_series = self.data_provider.epidemiology_series[
+                self.data_provider.epidemiology_series['countrycode'] == country].reset_index(drop=True)
             gsi_series = self.data_provider.gsi_table[
                 self.data_provider.gsi_table['countrycode'] == country].reset_index(
                 drop=True)
@@ -85,7 +85,7 @@ class EpiPanel:
                 continue
             # first populate non-wave characteristics
             data['country'] = country_series['country'].iloc[0]
-            data['class'], peaksAndTroughs = self._classify(country)
+            data['class'], peaks_and_troughs = self._classify(country)
             data['class_coarse'] = 1 if data['class'] <= 2 else (2 if data['class'] <= 4 else 3)
             data['population'] = self.data_provider.get_wbi_data(country, 'value')
             data['population_density'] = self.data_provider.get_wbi_data(country, 'population_density')
@@ -126,22 +126,22 @@ class EpiPanel:
 
             '''
             # response time is only defined for the first wave
-            if (len(gsi_series) > 0) and (type(peaksAndTroughs) == pd.core.frame.DataFrame) and len(peaksAndTroughs) 
+            if (len(gsi_series) > 0) and (type(peaks_and_troughs) == pd.core.frame.DataFrame) and len(peaks_and_troughs) 
             >= 1:
                 sorted_bases = np.sort(
-                    np.concatenate((peaksAndTroughs['left_base'].values, peaksAndTroughs[
+                    np.concatenate((peaks_and_troughs['left_base'].values, peaks_and_troughs[
                     'right_base'].values))).astype(int)
                 peak_start = country_series.dropna(
                         subset=['new_per_day_smooth'])['date'].iloc[
-                        sorted_bases[np.where(sorted_bases <= int(peaksAndTroughs['location'].iloc[0]))][-1]]
+                        sorted_bases[np.where(sorted_bases <= int(peaks_and_troughs['location'].iloc[0]))][-1]]
                 peak_end = country_series.dropna(
                         subset=['new_per_day_smooth'])['date'].iloc[
-                        sorted_bases[np.where(sorted_bases >= int(peaksAndTroughs['location'].iloc[0]))][0]]
+                        sorted_bases[np.where(sorted_bases >= int(peaks_and_troughs['location'].iloc[0]))][0]]
                 gsi_first_wave = gsi_series[(gsi_series['date'] <= peak_end) & (gsi_series['date'] >= peak_start)]\
                     .reset_index(drop=True)
                 data['stringency_response_time'] = \
                     (gsi_first_wave.iloc[gsi_first_wave['stringency_index'].argmax()]['date'] -  data['t0_1_dead']).days
-            elif (len(gsi_series) > 0) and (type(peaksAndTroughs) == pd.core.frame.DataFrame):
+            elif (len(gsi_series) > 0) and (type(peaks_and_troughs) == pd.core.frame.DataFrame):
                 data['stringency_response_time'] = (gsi_series.iloc[gsi_series['stringency_index'].argmax()]['date']
                                                    -  data['t0_1_dead']).days
             else:
@@ -161,12 +161,12 @@ class EpiPanel:
                                     data['rel_to_constant'] >= 10]['date'].iloc[0] - data['t0_1_dead']).days
 
             # for each wave we add characteristics
-            if (type(peaksAndTroughs) == list) and len(peaksAndTroughs) > 0:
-                for peak in peaksAndTroughs:
+            if (type(peaks_and_troughs) == list) and len(peaks_and_troughs) > 0:
+                for peak in peaks_and_troughs:
                     # only run this for peaks
                     if peak['peak_ind'] == 0:
                         continue
-                    endOfWaveFound = False
+                    end_of_wave_found = False
                     # wave number
                     i = int((peak['index'] + 2) / 2)
                     # data relating to the peak
@@ -180,13 +180,13 @@ class EpiPanel:
                             else \
                             country_series[country_series['confirmed'] >= 1]['date'].iloc[0]
                         data['wave_start_{}'.format(str(i))] = wave_start
-                    for trough in peaksAndTroughs:
+                    for trough in peaks_and_troughs:
                         if trough['index'] == peak['index'] - 1:
                             data['wave_start_{}'.format(str(i))] = trough['date']
                         elif trough['index'] == peak['index'] + 1:
                             data['wave_end_{}'.format(str(i))] = trough['date']
-                            endOfWaveFound = True
-                    if not endOfWaveFound:
+                            end_of_wave_found = True
+                    if not end_of_wave_found:
                         wave_end = np.nan if len(country_series[country_series['confirmed'] >= 1]['date']) == 0 \
                             else \
                             country_series[country_series['confirmed'] >= 1]['date'].iloc[-1]

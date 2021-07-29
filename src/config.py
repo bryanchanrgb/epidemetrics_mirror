@@ -7,9 +7,6 @@ class Config:
     rel_to_constant = 10000  # for calculating relative to the population
 
     # for waves algorithm
-    detect_spikes = False # filter out spikes
-    spike_sensitivity = 1.5 # filter out spikes with this rate of growth / decline rel to sigma
-    spike_width = 1.5 # spikes must be no wider than this rel data_provider.ma_window
     abs_prominence_threshold = 50  # minimum prominence
     rel_prominence_threshold = 0.1  # prominence relative to rel_to_constant
     rel_prominence_max_threshold = 500  # upper limit on relative prominence

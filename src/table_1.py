@@ -2,17 +2,18 @@ import os
 
 import pandas as pd
 import pingouin as pg
-from implementation.config import Config
+from config import Config
 
 
-class Table_1:
+class Table1:
     def __init__(self, config: Config, epi_panel: pd.core.frame.DataFrame):
         self.config = config
         self.epi_panel = epi_panel
 
     # pg.mwu abstracts the decision of less than or greater than
     # results after droping NaNs should be the same
-    def _mann_whitney(self, data, field='gni_per_capita'):
+    @staticmethod
+    def _mann_whitney(data, field='gni_per_capita'):
         x = data[data['class_coarse'] == 1][field].dropna().values
         y = data[~(data['class_coarse'] == 1)][field].dropna().values
         return pg.mwu(x, y, tail='one-sided')
