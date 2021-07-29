@@ -8,7 +8,7 @@ from data_provider import DataProvider
 from config import Config
 
 
-class EpiPanel:
+class WaveAnalysisPanel:
     def __init__(self, config: Config, data_provider: DataProvider, peaks_and_troughs: Dict):
         self.config = config
         self.peaks_and_troughs = peaks_and_troughs

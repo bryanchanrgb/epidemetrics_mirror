@@ -1,9 +1,38 @@
+"""
+NAME
+    trough_finder
+
+DESCRIPTION
+    This module provides a function which is used in wavefinder to locate troughs between peaks as well as after the
+    final peak
+
+FUNCTIONS
+    run
+"""
+
 from pandas import DataFrame, Series
 
 
 def run(peak_list: DataFrame, trough_list: DataFrame, raw_data: Series, prominence_threshold: float,
         prominence_height_threshold: float) -> DataFrame:
-    # between each remaining peak, retain the trough with the lowest value
+    """
+    Locates the deepest troughs in raw_data between and possibly after the peaks in peak_list from candidates in
+    trough_list.
+
+    Parameters:
+        peak_list (DataFrame): The set of peaks in the time series.
+        trough_list (DataFrame): A set of troughs in the time series, one of which is to be retained between each
+        consecutive pair of peaks.
+        raw_data (Series): The time series
+        prominence_threshold (float): The minimum prominence which a wave must have. Used for adding a final trough.
+        proportional_prominence_threshold (float): The minimum prominence which a peak must have, as a ratio of the
+        value at the peak. Used for adding a final trough.
+
+    Returns:
+        run(peak_list, trough_list, raw_data, prominence_threshold, proportional_prominence_threshold): A DataFrame
+        containing the final list of peaks and troughs.
+    """
+
     peak_list = peak_list.sort_values(by='location').reset_index(drop=True)
     results = peak_list
     for i in peak_list.index:

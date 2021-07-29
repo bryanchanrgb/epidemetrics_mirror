@@ -1,3 +1,15 @@
+"""
+NAME
+    algorithm_init
+
+DESCRIPTION
+    This module provides an initial list of peaks and troughs along with the ProminenceUpdater to WaveList.
+
+FUNCTIONS
+    run
+    init_peaks_and_troughs
+"""
+
 import numpy as np
 from pandas import Series, DataFrame
 from scipy.signal import find_peaks
@@ -5,8 +17,18 @@ from scipy.signal import find_peaks
 from wavefinder.utils.prominence_updater import ProminenceUpdater
 
 
-def init_country(data: Series) -> DataFrame:
-    # identify initial list of peaks via find_peaks
+def init_peaks_and_troughs(data: Series) -> DataFrame:
+    """
+    Identifies an initial list of peaks and troughs using scipy.signal.find_peaks.
+
+    Parameters:
+        data (Series): The original data from which the peaks and troughs are to be identified.
+
+    Returns:
+        init_peaks_and_troughs(data): The list of all peaks and troughs in data, with their location, prominence and
+        value.
+    """
+
     peak = find_peaks(data.values, prominence=0, distance=1)
     trough = find_peaks([-x for x in data.values], prominence=0, distance=1)
 
@@ -19,9 +41,20 @@ def init_country(data: Series) -> DataFrame:
     df = df.sort_values(by='location').reset_index(drop=True)
     return df
 
+
 def run(data) -> (DataFrame, ProminenceUpdater):
+    """
+    Identifies the peaks and troughs and initialises the ProminenceUpdater.
+
+    Parameters:
+        data (Series): The original data from which the peaks and troughs are to be identified.
+
+    Returns:
+        run(data): A tuple made up of the DataFrame of peaks and troughs and the ProminenceUpdater for data.
+    """
+
     if len(data) == 0:
         return data, None, None
-    pre_algo = init_country(data)
+    pre_algo = init_peaks_and_troughs(data)
     prominence_updater = ProminenceUpdater(data)
     return pre_algo, prominence_updater

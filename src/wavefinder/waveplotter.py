@@ -1,3 +1,15 @@
+"""
+NAME
+    waveplotter
+
+DESCRIPTION
+    This module provides functions to plot several WaveList objects or plot the result of a WaveCrossValidator.
+
+FUNCTIONS
+    plot_cross_validator
+    plot_peaks
+"""
+
 import os
 from pandas import DataFrame
 import matplotlib.pyplot as plt
@@ -5,8 +17,20 @@ import matplotlib.pyplot as plt
 from wavefinder.wavelist import WaveList
 
 
-def plot_cross_validator(input_wavelist: WaveList, reference_wavelist: WaveList, filename: str, results: DataFrame,
+def plot_cross_validator(input_wavelist: WaveList, reference_wavelist: WaveList, results: DataFrame, filename: str,
                          plot_path: str):
+    """
+    Plots how additional peaks are imputed in input_wavelist from reference_wavelist by WaveCrossValidator
+
+    Parameters:
+        input_wavelist (WaveList): The original WaveList objects in which additional peaks and troughs are to be
+        imputed.
+        reference_wavelist (WaveList): The reference WaveList from which additional peaks and troughs are to be drawn.
+        results (DataFrame): The peaks and troughs found in the input_wavelist after cross-validation.
+        filename (str): The filename to save the plot.
+        plot_path (str): The path to save the plot.
+    """
+
     fig, axs = plt.subplots(nrows=2, ncols=2)
     # plot peaks after sub_c
     axs[0, 0].set_title('Peaks in Original Series')
@@ -32,7 +56,17 @@ def plot_cross_validator(input_wavelist: WaveList, reference_wavelist: WaveList,
     plt.close('all')
 
 
-def plot_peaks(wavelists: list, title: str, plot_path: str, save: bool):
+def plot_peaks(wavelists: list, title: str, save: bool, plot_path: str):
+    """
+    Plots the peaks and troughs found in one or more WaveList at each step of the algorithm
+
+    Parameters:
+        wavelists (Lst): A list of WaveList objects, or alternatively a single WaveList
+        title (str): The title to place on the plot, which is also used as the filename
+        save (bool): Whether to save the plot.
+        plot_path (str): The path to save the plot.
+    """
+
     # if a single WaveList is passed, package it in a list so the method works
     if isinstance(wavelists, WaveList):
         wavelists = [wavelists]

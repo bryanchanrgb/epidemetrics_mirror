@@ -4,7 +4,7 @@ from wavefinder.utils.prominence_updater import ProminenceUpdater
 import wavefinder.subalgorithms.algorithm_init as algorithm_init
 import wavefinder.subalgorithms.algorithm_a as algorithm_a
 import wavefinder.subalgorithms.algorithm_b as algorithm_b
-import wavefinder.subalgorithms.algorithm_c as algorithm_c
+import wavefinder.subalgorithms.algorithm_c_and_d as algorithm_c_and_d
 from plot_helper import plot_results
 
 
@@ -22,7 +22,7 @@ class TestAlgorithmC:
         data_provider = ListDataProvider(input_data, self.country, self.field, x_scaling_factor=7)
 
         data = data_provider.get_series(self.country, self.field)[self.field]
-        peaks_initial = algorithm_init.init_country(data)
+        peaks_initial = algorithm_init.init_peaks_and_troughs(data)
         prominence_updater = ProminenceUpdater(data)
 
         params = self.config.prominence_thresholds(self.field)
@@ -44,7 +44,7 @@ class TestAlgorithmC:
             prominence_updater=prominence_updater,
             t_sep_a=self.config.t_sep_a)
 
-        result = algorithm_c.run(
+        result = algorithm_c_and_d.run(
             raw_data=data,
             input_data_df=sub_b,
             prominence_threshold=prominence_threshold,

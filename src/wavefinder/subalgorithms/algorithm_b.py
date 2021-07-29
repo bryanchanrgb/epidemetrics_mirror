@@ -1,3 +1,14 @@
+"""
+NAME
+    algorithm_b
+
+DESCRIPTION
+    This module provides Sub-Algorithm B to WaveList in order to merge short transient features.
+
+FUNCTIONS
+    run
+"""
+
 import numpy as np
 from pandas import DataFrame, Series
 
@@ -5,7 +16,20 @@ from wavefinder.utils.prominence_updater import ProminenceUpdater
 
 
 def run(raw_data: Series, input_data_df: DataFrame,
-    prominence_updater: ProminenceUpdater, t_sep_a: int) -> DataFrame:
+        prominence_updater: ProminenceUpdater, t_sep_a: int) -> DataFrame:
+    """
+    Identifies pairs of minima and maxima separated by less than t_sep_a/2 and merges them if they are transient
+
+    Parameters:
+        raw_data (Series): The original data from which the peaks and troughs are identified
+        input_data_df (DataFrame): The list of peaks and troughs to be merged.
+        prominence_updater (ProminenceUpdater): An object to recalculate prominence of peaks and troughs after each
+        deletion.
+        t_sep_a (int): Threshold specifying which features should be investigated.
+
+    Returns:
+        run(raw_data, input_data_df, prominence_updater, t_sep_a): The list of peaks and troughs after merging.
+    """
 
     # flag will be dropped once no pair is found
     sub_b_flag = True

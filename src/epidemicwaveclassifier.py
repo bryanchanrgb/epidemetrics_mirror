@@ -11,7 +11,7 @@ from data_provider import DataProvider
 from config import Config
 
 
-class Epidemetrics:
+class EpidemicWaveClassifier:
     def __init__(self, config: Config, data_provider: DataProvider):
         self.config = config
         self.data_provider = data_provider
@@ -56,22 +56,22 @@ class Epidemetrics:
         deaths_wavelist = self.find_peaks(country, field='dead_per_day_smooth')
 
         # run cross-validation (Sub Algorithm E) to find additional case waves from deaths waves
-        cases_sub_e = wf.WaveCrossValidator(country).run(
+        cross_validated_cases = wf.WaveCrossValidator(country).run(
             case_wavelist, deaths_wavelist, plot=plot, plot_path=self.config.plot_path)
 
         # compute plots
         if plot:
-            wf.plot_peaks([case_wavelist, deaths_wavelist], country, self.config.plot_path, save)
+            wf.plot_peaks([case_wavelist, deaths_wavelist], country, save, self.config.plot_path)
 
         # store output of cross-validation to self.summary_output
         summary = []
-        for row, peak in cases_sub_e.iterrows():
+        for row, peak in cross_validated_cases.iterrows():
             peak_data = dict({"index": row, "location": peak.location, "date": cases.iloc[int(peak.location)].date,
                               "peak_ind": peak.peak_ind, "y_position": peak.y_position})
             summary.append(peak_data)
         self.summary_output[country] = summary
 
-        return cases_sub_e
+        return cross_validated_cases
 
     def save_summary(self):
         json_data = dict({'data': []})

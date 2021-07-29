@@ -1,4 +1,18 @@
+# Description
+
+This repository contains all the code necessary to replicate the work in our paper "Epidemiological waves - types, drivers and modulators in the COVID-19 pandemic".
+
+It provides a Python package `wavefinder` in the directory `src/wavefinder` to identify "waves" in time series.
+
+This is used by the Python modules in the `src` directory to classify epidemic waves in time series of cases of and deaths due to COVID-19 and create a csv file summarising the results.
+
+The `R` directory contains R code used to analyse the results.
+
+The figures in the paper were generated with [FILL IN]
+
 # How to run
+
+The csv file is built with the Python code in the `src` directory, which can be run with the following.
 
 ```
 docker-compose build
@@ -11,6 +25,8 @@ cd ./src
 python3 ./main.py
 ```
 
+*Add information here on how to run the rest of it.*
+
 # How to run tests
 ```
 docker-compose -f ./docker-compose.test.yml up --build
@@ -19,7 +35,60 @@ or
 ```
 python -m pytest tests 
 ```
-# Epidemetrics
+
+# Wavefinder
+
+The `wavefinder` package, found in `src\wavefinder` provides two classes and two associated plotting functions. 
+
+## WaveList
+
+The `WaveList` class implements an algorithm to
+identify the waves in time series. Calling
+`wavelist = WaveList(raw_data, series_name, t_sep_a, prominence_threshold, prominence_height_threshold)`
+will initialise a WaveList object from the time series `raw_data`.
+The time series is processed by the Sub-Algorithms contained in `src\wavefinder\subalgorithms` and described in our paper.
+The identified waves can then be accessed through `wavelist.waves`, with interim steps in the algorithm also accessible.
+These waves will all have duration at least `t_sep_a`, prominence at least `prominence_threshold`, and at each peak the prominence will be at least `prominence_height_threshold` multiplied by the value at the peak. 
+
+## WaveCrossValidator
+
+The `WaveCrossValidator` class implements an algorithm to impute the presence of waves
+in one time series from those in a second.
+Calling `WaveCrossValidator(country).run(original_wavelist, reference_wavelist, plot, plot_path)`
+will inspect `original_wavelist.waves` to determine whether a peak exists for every 
+wave in `reference_wavelist.waves`. If a peak is not found, it will attempt to recover one from
+an interim step in the algorithm, `original_wavelist.peaks_sub_b`. 
+It returns a DataFrame containing the revised list of peaks and troughs for `original_wavelist`.
+If `plot = True` the function `plot_cross_validator` will plot the outcome.
+
+## Plotting functions
+
+The package also provides two plotting functions, `plot_peaks` and `plot_cross_validator`.
+
+Calling `plot_peaks(wavelists, title, save, plot_path)` with a list of `WaveList` objects
+will plot the peaks and troughs identified in each `WaveList` under the title `title` and optionally
+save it to `plot_path` with the filename `title.png`.
+
+Calling `plot_cross_validator(input_wavelist, reference_wavelist, results, filename, plot_path)`
+with `results = WaveCrossValidator(country).run(original_wavelist, reference_wavelist, plot, plot_path)`
+will produce a plot showing how `WaveCrossValidator` added peaks to the `input_wavelist` in order to better align it with the `reference_wavelist`.
+
+# Application to epidemic waves of COVID-19
+
+In `src` the `wavefinder` package is used to identify waves in epidemiological time series.
+
+The `DataProvider` class obtains and preprocesses data from the OxCOVID19 Database and from Our World in Data.
+
+The `EpidemicWaveClassifier` class uses `wavefinder` to identify waves in the time series of cases and deaths for various countries. The parameters used by `wavefinder` are set in the `Config` dataclass.
+
+The `WaveAnalysisPanel` class collects epidemiological information for each country on a wave-by-wave basis to make it available for analysis.
+
+Analysis of this data is carried out using the `Table1` class (to generate Table 1 in our manuscript) as well as through the code located in the `R` directory.
+
+
+
+
+# Old readme retained to assist in editing
 
 The code has been redesigned and older versions of the scripts can be found
 within the archive folder. Running the `generate_table.py` script will download
