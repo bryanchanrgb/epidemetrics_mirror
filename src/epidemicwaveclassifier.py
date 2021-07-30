@@ -56,8 +56,8 @@ class EpidemicWaveClassifier:
         deaths_wavelist = self.find_peaks(country, field='dead_per_day_smooth')
 
         # run cross-validation (Sub Algorithm E) to find additional case waves from deaths waves
-        cross_validated_cases = wf.WaveCrossValidator(country).run(
-            case_wavelist, deaths_wavelist, plot=plot, plot_path=self.config.plot_path)
+        cross_validated_cases = case_wavelist.cross_validate(
+            deaths_wavelist, plot=plot, plot_path=self.config.plot_path, title=country)
 
         # compute plots
         if plot:
