@@ -1,0 +1,15 @@
+version: "3.2"
+services:
+  epidemetrics:
+    build: .
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./cache:/cache
+      - ./plots:/plots
+      - ./data:/data
+
+
+
