@@ -1,6 +1,5 @@
 import os
 from tqdm import tqdm
-
 import numpy as np
 import pandas as pd
 from typing import Dict
@@ -17,7 +16,7 @@ class WaveAnalysisPanel:
     def _classify(self, country):
         if country not in self.config.exclude_countries:
             peaks_and_troughs = self.peaks_and_troughs.get(country)
-            peak_class = len(self.peaks_and_troughs) + 1 if peaks_and_troughs else 0
+            peak_class = len(peaks_and_troughs) + 1 if peaks_and_troughs else 0
             # if the list of peaks_and_troughs is empty we get peak_class = 1 - check if this is accurate
             if peak_class == 1:
                 data = self.data_provider.get_series(country=country, field='new_per_day_smooth')
