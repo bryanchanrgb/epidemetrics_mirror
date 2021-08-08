@@ -7,20 +7,20 @@ class Config:
     rel_to_constant = 10000  # for calculating relative to the population
 
     # for waves algorithm
-    abs_prominence_threshold = 50  # minimum prominence
-    rel_prominence_threshold = 0.1  # prominence relative to rel_to_constant
+    abs_prominence_threshold = 45  # minimum prominence
+    rel_prominence_threshold = 0.033  # prominence relative to rel_to_constant
     rel_prominence_max_threshold = 500  # upper limit on relative prominence
-    prominence_height_threshold = 0.5  # prominence must be above a percentage of the peak height
+    prominence_height_threshold = 0.61  # prominence must be above a percentage of the peak height
     abs_prominence_threshold_dead = 7  # minimum prominence for dead peak detection
-    rel_prominence_threshold_dead = 0.014  # prominence threshold for dead rel_to_constant
+    rel_prominence_threshold_dead = 0.01  # prominence threshold for dead rel_to_constant
     rel_prominence_max_threshold_dead = 70  # upper limit on relative prominencce
-    prominence_height_threshold_dead = 0.5  # prominence must be above a percentage of the peak height
+    prominence_height_threshold_dead = 0.65  # prominence must be above a percentage of the peak height
     t_sep_a = 35
 
     # for analysis
     abs_t0_threshold = 1000
     rel_t0_threshold = 0.05  # cases per rel_to_constant
-    exclude_countries = ['CMR', 'COG', 'GNQ', 'BWA', 'ESH']  # countries with low quality data to be ignored
+    exclude_countries = []  # countries with low quality data to be ignored
     class_1_threshold = 55  # minimum number of absolute cases to be considered going into first wave
     class_1_threshold_dead = 5
     debug_death_lag = 9  # death lag for case-death ascertainment

@@ -119,7 +119,7 @@ class DataProvider:
         return self.get_wbi_data(country, 'value')
 
     def get_countries(self):
-        return self.testing['countrycode'].unique()
+        return self.epidemiology['countrycode'].unique()
 
     def load_from_cache(self, file_name: str) -> DataFrame:
         cache_name = file_name + '.csv'
